@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package simple_demo;
+
+message InputData {
+    double value = 1;
+}
+
+message ConfigureCommand {
+    bool enabled = 1;
+}
+
+message ConfigureResult {
+    bool enabled = 1;
+}
+
+message CalculateCommand {
+    int32 id = 1;
+    double value = 2;
+}
+
+message CalculateResult {
+    int32 id = 1;
+    double result = 2;
+}
+
+message OutstandingCommandsQuery {
+}
+
+message OutstandingCommandsResult {
+    repeated int32 ids = 1;
+}
+
+message ClearCommands {
+    repeated int32 ids = 1;
+}
+
+message ClearCommandsResult {
+    repeated int32 ids = 1;
+}
