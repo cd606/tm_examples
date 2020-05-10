@@ -1,5 +1,5 @@
 #ifndef DH_FACILITY_HPP_
-#define DH_FACILITY_CPP_
+#define DH_FACILITY_HPP_
 
 #include <memory>
 #include <array>
