@@ -1,4 +1,6 @@
 subdir('proto')
 subdir('external_logic')
 subdir('program_logic')
-subdir('executables')
+subdir('plain_executables')
+subdir('security_logic')
+subdir('secure_executables')
