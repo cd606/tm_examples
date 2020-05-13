@@ -36,7 +36,7 @@ using namespace simple_demo;
 
 void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
-        infra::CheckTimeComponent<true>,
+        infra::CheckTimeComponent<false>,
         basic::TrivialBoostLoggingComponent,
         basic::real_time_clock::ClockComponent,
         transport::BoostUUIDComponent,
