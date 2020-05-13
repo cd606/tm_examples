@@ -18,6 +18,8 @@
 #include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
@@ -35,7 +37,7 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast or rabbitmq")
+        ("transport", value<std::string>(), "mcast, zmq or rabbitmq")
         ("address", value<std::string>(), "the address to republish on")
         ("input", value<std::string>(), "input from this file")
         ("speed", value<double>(), "republish speed factor, default 1.0")
@@ -55,8 +57,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq") {
-        std::cerr << "Transport must be mcast or rabbitmq!\n";
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq") {
+        std::cerr << "Transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("address")) {
@@ -173,7 +175,8 @@ int main(int argc, char **argv) {
             basic::real_time_clock::ClockComponent,
             transport::BoostUUIDComponent,
             transport::rabbitmq::RabbitMQComponent,
-            transport::multicast::MulticastComponent
+            transport::multicast::MulticastComponent,
+            transport::zeromq::ZeroMQComponent
         >;
         using Monad = infra::RealTimeMonad<TheEnvironment>;
         using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
@@ -216,8 +219,15 @@ int main(int argc, char **argv) {
                 transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
                 ::createExporter(address)
             :
-                transport::multicast::MulticastImporterExporter<TheEnvironment>
-                ::createExporter(address)
+                (
+                    (transport == "mcast")
+                ?
+                    transport::multicast::MulticastImporterExporter<TheEnvironment>
+                    ::createExporter(address)
+                :
+                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                    ::createExporter(address)
+                )
             ;
 
         r.exportItem("publisher", publisher

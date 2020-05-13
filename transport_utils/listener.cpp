@@ -13,6 +13,8 @@
 #include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -24,8 +26,8 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast or rabbitmq")
-        ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex")
+        ("transport", value<std::string>(), "mcast, zmq or rabbitmq")
+        ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast and zmq, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex")
         ("address", value<std::string>(), "the address to listen on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
         ("printPerMessage", "whether to print per message")
@@ -43,8 +45,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq") {
-        std::cerr << "Transport must be mcast or rabbitmq!\n";
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq") {
+        std::cerr << "Transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
     std::string rabbitMQTopic;
@@ -53,6 +55,11 @@ int main(int argc, char **argv) {
         , std::string
         , std::regex
     > multicastTopic;
+    std::variant<
+        transport::zeromq::ZeroMQComponent::NoTopicSelection
+        , std::string
+        , std::regex
+    > zeroMQTopic;
     if (transport == "rabbitmq") {
         if (!vm.count("topic")) {
             rabbitMQTopic = "#";
@@ -68,6 +75,17 @@ int main(int argc, char **argv) {
                 multicastTopic = std::regex {topic.substr(2, topic.length()-3)};
             } else {
                 multicastTopic = topic;
+            }
+        }
+    } else if (transport == "zmq") {
+        if (!vm.count("topic")) {
+            zeroMQTopic = transport::zeromq::ZeroMQComponent::NoTopicSelection {};
+        } else {
+            std::string topic = vm["topic"].as<std::string>();
+            if (boost::starts_with(topic, "r/") && boost::ends_with(topic, "/") && topic.length() > 3) {
+                zeroMQTopic = std::regex {topic.substr(2, topic.length()-3)};
+            } else {
+                zeroMQTopic = topic;
             }
         }
     }
@@ -94,7 +112,8 @@ int main(int argc, char **argv) {
         basic::real_time_clock::ClockComponent,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
-        transport::multicast::MulticastComponent
+        transport::multicast::MulticastComponent,
+        transport::zeromq::ZeroMQComponent
     >;
 
     using M = infra::RealTimeMonad<TheEnvironment>;
@@ -110,8 +129,15 @@ int main(int argc, char **argv) {
                 transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
                 ::createImporter(address, rabbitMQTopic)
             :
-                transport::multicast::MulticastImporterExporter<TheEnvironment>
-                ::createImporter(address, multicastTopic)
+                (
+                    (transport == "mcast")
+                ?
+                    transport::multicast::MulticastImporterExporter<TheEnvironment>
+                    ::createImporter(address, multicastTopic)
+                :
+                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                    ::createImporter(address, zeroMQTopic)
+                )
             ;
 
         struct SharedState {

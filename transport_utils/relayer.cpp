@@ -14,6 +14,8 @@
 #include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -28,9 +30,9 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("incomingTransport", value<std::string>(), "mcast or rabbitmq")
+        ("incomingTransport", value<std::string>(), "mcast, zmq or rabbitmq")
         ("incomingAddress", value<std::string>(), "the address to listen on")
-        ("outgoingTransport", value<std::string>(), "mcast or rabbitmq")
+        ("outgoingTransport", value<std::string>(), "mcast, zmq or rabbitmq")
         ("outgoingAddress", value<std::string>(), "the address to publish on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
     ;
@@ -47,8 +49,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string incomingTransport = vm["incomingTransport"].as<std::string>();
-    if (incomingTransport != "mcast" && incomingTransport != "rabbitmq") {
-        std::cerr << "Incoming transport must be mcast or rabbitmq!\n";
+    if (incomingTransport != "mcast" && incomingTransport != "rabbitmq" && incomingTransport != "zmq") {
+        std::cerr << "Incoming transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("incomingAddress")) {
@@ -61,8 +63,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string outgoingTransport = vm["outgoingTransport"].as<std::string>();
-    if (outgoingTransport != "mcast" && outgoingTransport != "rabbitmq") {
-        std::cerr << "Outgoing transport must be mcast or rabbitmq!\n";
+    if (outgoingTransport != "mcast" && outgoingTransport != "rabbitmq" && outgoingTransport != "zmq") {
+        std::cerr << "Outgoing transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("outgoingAddress")) {
@@ -82,7 +84,8 @@ int main(int argc, char **argv) {
         basic::real_time_clock::ClockComponent,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
-        transport::multicast::MulticastComponent
+        transport::multicast::MulticastComponent,
+        transport::zeromq::ZeroMQComponent
     >;
 
     using M = infra::RealTimeMonad<TheEnvironment>;
@@ -98,8 +101,15 @@ int main(int argc, char **argv) {
                 transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
                 ::createImporter(incomingAddress, "#")
             :
-                transport::multicast::MulticastImporterExporter<TheEnvironment>
-                ::createImporter(incomingAddress, transport::multicast::MulticastComponent::NoTopicSelection {})
+                (
+                    (incomingTransport == "mcast")
+                ?
+                    transport::multicast::MulticastImporterExporter<TheEnvironment>
+                    ::createImporter(incomingAddress, transport::multicast::MulticastComponent::NoTopicSelection {})
+                :
+                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                    ::createImporter(incomingAddress, transport::zeromq::ZeroMQComponent::NoTopicSelection {})
+                )
             ;
 
         auto exporter =
@@ -108,8 +118,15 @@ int main(int argc, char **argv) {
                 transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
                 ::createExporter(outgoingAddress)
             :
-                transport::multicast::MulticastImporterExporter<TheEnvironment>
-                ::createExporter(outgoingAddress)
+                (
+                    (outgoingTransport == "mcast")
+                ?
+                    transport::multicast::MulticastImporterExporter<TheEnvironment>
+                    ::createExporter(outgoingAddress)
+                :
+                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                    ::createExporter(outgoingAddress)
+                )
             ;
 
         r.exportItem("exporter", exporter, r.importItem("importer", importer));
