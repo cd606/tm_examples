@@ -20,6 +20,10 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
+#if ENABLE_REDIS_SUPPORT
+#include <tm_kit/transport/redis/RedisComponent.hpp>
+#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#endif
 
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
@@ -37,7 +41,11 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast, zmq or rabbitmq")
+#if ENABLE_REDIS_SUPPORT
+        ("transport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+#else 
+        ("transport", value<std::string>(), "mcast, zmq or rabbitmq")   
+#endif
         ("address", value<std::string>(), "the address to republish on")
         ("input", value<std::string>(), "input from this file")
         ("speed", value<double>(), "republish speed factor, default 1.0")
@@ -57,10 +65,17 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
+#if ENABLE_REDIS_SUPPORT
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis") {
+        std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
+        return 1;
+    }
+#else 
     if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq") {
         std::cerr << "Transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
+#endif
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
         return 1;
@@ -177,6 +192,9 @@ int main(int argc, char **argv) {
             transport::rabbitmq::RabbitMQComponent,
             transport::multicast::MulticastComponent,
             transport::zeromq::ZeroMQComponent
+#if ENABLE_REDIS_SUPPORT
+            , transport::redis::RedisComponent
+#endif
         >;
         using Monad = infra::RealTimeMonad<TheEnvironment>;
         using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
@@ -225,8 +243,19 @@ int main(int argc, char **argv) {
                     transport::multicast::MulticastImporterExporter<TheEnvironment>
                     ::createExporter(address)
                 :
-                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                    ::createExporter(address)
+#if ENABLE_REDIS_SUPPORT
+                    (
+                        (transport == "zmq")
+                    ?
+#endif
+                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                        ::createExporter(address)
+#if ENABLE_REDIS_SUPPORT
+                    :
+                        transport::redis::RedisImporterExporter<TheEnvironment>
+                        ::createExporter(address)                   
+                    )
+#endif
                 )
             ;
 

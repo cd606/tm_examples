@@ -16,6 +16,10 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
+#if ENABLE_REDIS_SUPPORT
+#include <tm_kit/transport/redis/RedisComponent.hpp>
+#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#endif
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -30,8 +34,13 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
+#if ENABLE_REDIS_SUPPORT
+        ("transport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast and zmq, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex, for redis, it can be a wildcard")
+#else
         ("transport", value<std::string>(), "mcast, zmq or rabbitmq")
-        ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex")
+        ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast and zmq, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex")
+#endif
         ("address", value<std::string>(), "the address to listen on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
         ("output", value<std::string>(), "output to this file")
@@ -49,10 +58,17 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
+#if ENABLE_REDIS_SUPPORT
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis") {
+        std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
+        return 1;
+    }
+#else 
     if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq") {
         std::cerr << "Transport must be mcast, zmq or rabbitmq!\n";
         return 1;
     }
+#endif
     std::string rabbitMQTopic;
     std::variant<
         transport::multicast::MulticastComponent::NoTopicSelection
@@ -64,6 +80,9 @@ int main(int argc, char **argv) {
         , std::string
         , std::regex
     > zeroMQTopic;
+#if ENABLE_REDIS_SUPPORT
+    std::string redisTopic;
+#endif
     if (transport == "rabbitmq") {
         if (!vm.count("topic")) {
             rabbitMQTopic = "#";
@@ -92,6 +111,14 @@ int main(int argc, char **argv) {
                 zeroMQTopic = topic;
             }
         }
+#if ENABLE_REDIS_SUPPORT
+    } else if (transport == "redis") {
+        if (!vm.count("topic")) {
+            redisTopic = "*";
+        } else {
+            redisTopic = vm["topic"].as<std::string>();
+        }
+#endif
     }
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
@@ -115,6 +142,9 @@ int main(int argc, char **argv) {
         transport::rabbitmq::RabbitMQComponent,
         transport::multicast::MulticastComponent,
         transport::zeromq::ZeroMQComponent
+#if ENABLE_REDIS_SUPPORT
+        , transport::redis::RedisComponent
+#endif
     >;
 
     using M = infra::RealTimeMonad<TheEnvironment>;
@@ -138,8 +168,19 @@ int main(int argc, char **argv) {
                     transport::multicast::MulticastImporterExporter<TheEnvironment>
                     ::createImporter(address, multicastTopic)
                 :
-                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                    ::createImporter(address, zeroMQTopic)
+#if ENABLE_REDIS_SUPPORT
+                    (
+                        (transport == "zmq")
+                    ?
+#endif
+                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                        ::createImporter(address, zeroMQTopic)
+#if ENABLE_REDIS_SUPPORT
+                    :
+                        transport::redis::RedisImporterExporter<TheEnvironment>
+                        ::createImporter(address, redisTopic)                   
+                    )
+#endif
                 )
             ;
 

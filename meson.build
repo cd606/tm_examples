@@ -7,7 +7,8 @@ tm_transport_dep = dependency('tm_kit_transport')
 thread_dep = dependency('threads')
 protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
-common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep]
+redis_dep = [dependency('hiredis', required: get_option('redis')), dependency('redox', required: get_option('redis'))]
+common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep]
 
 protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
