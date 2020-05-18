@@ -12,6 +12,9 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/redis/RedisComponent.hpp>
+#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/hana/functional/curry.hpp>
@@ -35,7 +38,8 @@ using TheEnvironment = infra::Environment<
     transport::BoostUUIDComponent,
     ServerSideSignatureAndAESBasedIdentityCheckerComponent<CalculateCommand>,
     ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
-    transport::rabbitmq::RabbitMQComponent
+    transport::rabbitmq::RabbitMQComponent,
+    transport::redis::RedisComponent
 >;
 using M = infra::RealTimeMonad<TheEnvironment>;
 
@@ -102,10 +106,9 @@ int main(int argc, char **argv) {
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("facility", facility);
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacility(
-        r, facility, transport::ConnectionLocator::parse("localhost::guest:guest:test_queue"), "wrapper_"
+    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacility(
+        r, facility, transport::ConnectionLocator::parse("localhost:6379:::test_queue"), "wrapper_"
         , std::nullopt //hook
-        , true //encode final flag
     );
 
     DHServerSideCombination<infra::MonadRunner<M>,CalculateCommand>(

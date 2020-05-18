@@ -20,6 +20,11 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
+#include <tm_kit/transport/redis/RedisComponent.hpp>
+#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -48,7 +53,9 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
         ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
-        transport::rabbitmq::RabbitMQComponent
+        transport::rabbitmq::RabbitMQComponent,
+        transport::zeromq::ZeroMQComponent,
+        transport::redis::RedisComponent
     >;
     using M = infra::RealTimeMonad<TheEnvironment>;
     using R = infra::MonadRunner<M>;
@@ -108,9 +115,9 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
 
     R r(&env);
 
-    auto importer = transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+    auto importer = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedImporter<InputData>(
-        transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]")
+        transport::ConnectionLocator::parse("localhost:12345")
         , "input.data"
     );
     auto removeTopic = M::liftPure<basic::TypedDataWithTopic<InputData>>(
@@ -163,9 +170,9 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
             , "calculator_dh.restarted"
         );
         
-        auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
+        auto facility = transport::redis::RedisOnOrderFacility<TheEnvironment>
                     ::WithIdentity<std::string>::createTypedRPCOnOrderFacility<CalculateCommand, CalculateResult>(
-                        transport::ConnectionLocator::parse("localhost::guest:guest:test_queue")
+                        transport::ConnectionLocator::parse("localhost:6379:::test_queue")
                     );
         r.registerOnOrderFacility("facility", facility);
         calc = R::facilityConnector(facility);

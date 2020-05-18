@@ -9,8 +9,8 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/external_logic/DataSource.hpp"
@@ -26,7 +26,7 @@ using TheEnvironment = infra::Environment<
     basic::TrivialBoostLoggingComponent,
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,
-    transport::rabbitmq::RabbitMQComponent
+    transport::zeromq::ZeroMQComponent
 >;
 using M = infra::RealTimeMonad<TheEnvironment>;
 
@@ -53,9 +53,9 @@ int main(int argc, char **argv) {
 
     auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
 
-    auto publisher = transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+    auto publisher = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedExporter<InputData>(
-        transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]")
+        transport::ConnectionLocator::parse("localhost:12345")
     );
 
     auto source = M::importer(new DataSourceImporter());

@@ -19,6 +19,8 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -43,7 +45,8 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ClearCommands>,
-        transport::rabbitmq::RabbitMQComponent
+        transport::rabbitmq::RabbitMQComponent,
+        transport::zeromq::ZeroMQComponent
     >;
     using M = infra::RealTimeMonad<TheEnvironment>;
     using R = infra::MonadRunner<M>;
@@ -67,9 +70,9 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
     }
     R r(&env);
 
-    auto importer = transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+    auto importer = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedImporter<InputData>(
-        transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]")
+        transport::ConnectionLocator::parse("localhost:12345")
         , "input.data"
     );
     auto removeTopic = M::liftPure<basic::TypedDataWithTopic<InputData>>(
