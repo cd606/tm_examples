@@ -115,8 +115,8 @@ export class TMHelper {
             return new Uint8Array(ret);
         } else {
             let inputBuffer = Buffer.from(input);
-            let b = Buffer.alloc(8);
-            b.writeBigUInt64LE(BigInt(this.plain_name_length));
+            let b = Buffer.alloc(4);
+            b.writeUInt32LE(this.plain_name_length);
             let ret = Buffer.concat([b, Buffer.from(this.plain_name, 'ascii'), inputBuffer]);
             return new Uint8Array(ret);
         }
