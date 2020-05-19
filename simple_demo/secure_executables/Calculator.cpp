@@ -9,9 +9,11 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
+/*
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+*/
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
@@ -38,7 +40,7 @@ using TheEnvironment = infra::Environment<
     transport::BoostUUIDComponent,
     ServerSideSignatureAndAESBasedIdentityCheckerComponent<CalculateCommand>,
     ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
-    transport::rabbitmq::RabbitMQComponent,
+    //transport::rabbitmq::RabbitMQComponent,
     transport::redis::RedisComponent
 >;
 using M = infra::RealTimeMonad<TheEnvironment>;
@@ -111,6 +113,7 @@ int main(int argc, char **argv) {
         , std::nullopt //hook
     );
 
+    /*
     DHServerSideCombination<
         infra::MonadRunner<M>
         , CalculateCommand
@@ -121,6 +124,18 @@ int main(int argc, char **argv) {
         , my_prv_key
         , "localhost::guest:guest:test_dh_queue"
         , "localhost::guest:guest:amq.topic[durable=true]"
+        , "calculator_dh.restarted"
+    );*/
+    DHServerSideCombination<
+        infra::MonadRunner<M>
+        , CalculateCommand
+        , transport::redis::RedisImporterExporter<TheEnvironment>
+        , transport::redis::RedisOnOrderFacility<TheEnvironment>
+    >(
+        r
+        , my_prv_key
+        , "localhost:6379:::test_dh_queue"
+        , "localhost:6379"
         , "calculator_dh.restarted"
     );
     r.finalize();

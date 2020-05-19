@@ -28,10 +28,6 @@ template <
             ,typename R::EnvironmentType>            
         &&
         std::is_base_of_v<
-            transport::rabbitmq::RabbitMQComponent
-            ,typename R::EnvironmentType>
-        &&
-        std::is_base_of_v<
             ServerSideSignatureAndAESBasedIdentityCheckerComponent<CommandToBeSecured>
             ,typename R::EnvironmentType>
         &&

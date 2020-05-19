@@ -160,6 +160,7 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
         );
 
         std::shared_ptr<DHClientHelper> dhClientHelper;
+        /*
         DHClientSideCombination<
             R
             , CalculateCommand
@@ -172,6 +173,20 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
             , calculate_server_public_key
             , "localhost::guest:guest:test_dh_queue"
             , "localhost::guest:guest:amq.topic[durable=true]"
+            , "calculator_dh.restarted"
+        );*/
+        DHClientSideCombination<
+            R
+            , CalculateCommand
+            , transport::redis::RedisImporterExporter<TheEnvironment>
+            , transport::redis::RedisOnOrderFacility<TheEnvironment>
+        >(
+            r 
+            , *mutexPtr
+            , dhClientHelperPtr
+            , calculate_server_public_key
+            , "localhost:6379:::test_dh_queue"
+            , "localhost:6379"
             , "calculator_dh.restarted"
         );
         
