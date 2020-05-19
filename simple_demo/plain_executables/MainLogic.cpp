@@ -102,26 +102,23 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
     MainLogicInput<R> combinationInput {
         r.execute(removeTopic, r.importItem(importer))
         , calc
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
             transport::ConnectionLocator::parse("localhost::guest:guest:test_config_queue")
             , "cfg_wrapper_"
             , std::nullopt //no hook
-            , true //encode final flag
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithoutIdentity::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithoutIdentity::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
             transport::ConnectionLocator::parse("localhost::guest:guest:test_query_queue")
             , "query_wrapper_"
             , std::nullopt //no hook
-            , true //encode final flag
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::facilityWrapper
             <ClearCommands,ClearCommandsResult>(
             transport::ConnectionLocator::parse("localhost::guest:guest:test_clear_queue")
             , "clear_cmd_wrapper_"
             , std::nullopt //no hook
-            , true //encode final flag
         )
     };
     MainLogicCombination(r, env, std::move(combinationInput));

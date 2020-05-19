@@ -76,7 +76,7 @@ void DHServerSideCombination(
         boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
     };
 
-    transport::rabbitmq::RabbitMQOnOrderFacility<Env>::template WithIdentity<std::string>::template wrapOnOrderFacility
+    transport::rabbitmq::RabbitMQOnOrderFacility<Env,true>::template WithIdentity<std::string>::template wrapOnOrderFacility
         <DHHelperCommand, DHHelperReply>(
           r 
         , facility
@@ -85,7 +85,6 @@ void DHServerSideCombination(
         , transport::ByteDataHookPair {
             signHook, emptyHook
         } //the outgoing data is signed, the incoming data does not need extra hook
-        , true //encode final flag
     );
 
     auto oneShot = basic::real_time_clock::ClockImporter<Env>::template createOneShotClockConstImporter<basic::TypedDataWithTopic<DHHelperRestarted>>(
