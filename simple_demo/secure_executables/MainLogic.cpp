@@ -160,7 +160,12 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
         );
 
         std::shared_ptr<DHClientHelper> dhClientHelper;
-        DHClientSideCombination<R,CalculateCommand>(
+        DHClientSideCombination<
+            R
+            , CalculateCommand
+            , transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+            , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
+        >(
             r 
             , *mutexPtr
             , dhClientHelperPtr

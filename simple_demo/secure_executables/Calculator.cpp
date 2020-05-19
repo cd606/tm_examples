@@ -111,7 +111,12 @@ int main(int argc, char **argv) {
         , std::nullopt //hook
     );
 
-    DHServerSideCombination<infra::MonadRunner<M>,CalculateCommand>(
+    DHServerSideCombination<
+        infra::MonadRunner<M>
+        , CalculateCommand
+        , transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
+    >(
         r
         , my_prv_key
         , "localhost::guest:guest:test_dh_queue"

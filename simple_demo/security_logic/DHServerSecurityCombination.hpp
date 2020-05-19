@@ -15,15 +15,13 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
-
 using namespace dev::cd606::tm;
 
 template <
     class R
     , class CommandToBeSecured
+    , class ImporterExporterTransport
+    , class OnOrderFacilityTransport
     , std::enable_if_t<
         std::is_base_of_v<
             basic::real_time_clock::ClockComponent
@@ -76,7 +74,7 @@ void DHServerSideCombination(
         boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
     };
 
-    transport::rabbitmq::RabbitMQOnOrderFacility<Env,true>::template WithIdentity<std::string>::template wrapOnOrderFacility
+    OnOrderFacilityTransport::template WithIdentity<std::string>::template wrapOnOrderFacility
         <DHHelperCommand, DHHelperReply>(
           r 
         , facility
@@ -92,7 +90,7 @@ void DHServerSideCombination(
         , basic::TypedDataWithTopic<DHHelperRestarted> {dhRestartTopic, DHHelperRestarted {}}
     );
 
-    auto restartPublisher = transport::rabbitmq::RabbitMQImporterExporter<Env>::template createTypedExporter
+    auto restartPublisher = ImporterExporterTransport::template createTypedExporter
         <DHHelperRestarted>(
         transport::ConnectionLocator::parse(dhRestartExchangeLocator)
         , signHook

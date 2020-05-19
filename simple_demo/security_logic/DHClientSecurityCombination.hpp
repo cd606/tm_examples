@@ -15,15 +15,13 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
-
 using namespace dev::cd606::tm;
 
 template <
     class R
     , class CommandToBeSecured
+    , class ImporterExporterTransport
+    , class OnOrderFacilityTransport
     , std::enable_if_t<
         std::is_base_of_v<
             basic::real_time_clock::ClockComponent
@@ -74,7 +72,7 @@ void DHClientSideCombination(
         }
     };
 
-    auto restartListener = transport::rabbitmq::template RabbitMQImporterExporter<Env>
+    auto restartListener = ImporterExporterTransport
                         ::template createTypedImporter<DHHelperRestarted>(
         transport::ConnectionLocator::parse(dhRestartExchangeLocator)
         , dhRestartTopic
@@ -103,13 +101,13 @@ void DHClientSideCombination(
             return infra::withtime_utils::keyify<DHHelperCommand, Env>(dhClientHelper->buildCommand());
         }
     );
-    auto dhHandler = M::template simpleExporter<typename M::template KeyedData<DHHelperCommand, DHHelperReply>>(
-        [&dhClientHelper,&dhClientHelperMutex](typename M::template InnerData<typename M::template KeyedData<DHHelperCommand, DHHelperReply>> &&data) {
+    auto dhHandler = M::template pureExporter<typename M::template KeyedData<DHHelperCommand, DHHelperReply>>(
+        [&dhClientHelper,&dhClientHelperMutex](typename M::template KeyedData<DHHelperCommand, DHHelperReply> &&data) {
             std::lock_guard<std::mutex> _(dhClientHelperMutex);
-            dhClientHelper->process(std::move(data.timedData.value.data));
+            dhClientHelper->process(std::move(data.data));
         }
     );
-    auto dhFacility = transport::rabbitmq::template RabbitMQOnOrderFacility<Env>
+    auto dhFacility = OnOrderFacilityTransport
                     ::template WithIdentity<std::string>
                     ::template createTypedRPCOnOrderFacility<DHHelperCommand, DHHelperReply>(
         transport::ConnectionLocator::parse(dhQueueLocator)
