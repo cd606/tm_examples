@@ -52,14 +52,21 @@ public:
             std::lock_guard<std::mutex> _(mutex_);
             idLookup_.insert({std::get<1>(data.timedData.value.key()).id(), data.timedData.value.id()});
         }
-        calc_.request(std::get<1>(data.timedData.value.key()));
+        auto const &req = std::get<1>(data.timedData.value.key());
+        CalculatorInput input {
+            req.id(), req.value()
+        };
+        calc_.request(input);
     }
-    virtual void onCalculateResult(CalculateResult const &result) override final {
+    virtual void onCalculateResult(CalculatorOutput const &result) override final {
         TheEnvironment::IDType envID;
-        bool isFinalResponse = (result.result() <= 0);
+        CalculateResult res;
+        res.set_id(result.id);
+        res.set_result(result.output);
+        bool isFinalResponse = (res.result() <= 0);
         {
             std::lock_guard<std::mutex> _(mutex_);
-            auto iter = idLookup_.find(result.id());
+            auto iter = idLookup_.find(res.id());
             if (iter == idLookup_.end()) {
                 return;
             }
@@ -68,7 +75,7 @@ public:
                 idLookup_.erase(iter);
             }
         }
-        publish(env_, M::Key<CalculateResult> {envID, result}, isFinalResponse);
+        publish(env_, M::Key<CalculateResult> {envID, res}, isFinalResponse);
     }
 };
 

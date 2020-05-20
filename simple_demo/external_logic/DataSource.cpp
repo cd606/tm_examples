@@ -17,9 +17,7 @@ private:
         boost::random::uniform_real_distribution dist(0.0, 100.0);
         while (running_) {
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            simple_demo::InputData d;
-            d.set_value(dist(rng));
-            listener_->onData(d);
+            listener_->onData(DataFromSource {dist(rng)});
         }
     }
 public:

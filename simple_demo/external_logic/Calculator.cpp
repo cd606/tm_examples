@@ -13,7 +13,7 @@ private:
     CalculateResultListener *listener_;
     std::thread th_;
     std::atomic<bool> running_;
-    std::list<std::tuple<simple_demo::CalculateCommand,int>> incoming_, processing_;
+    std::list<std::tuple<CalculatorInput,int>> incoming_, processing_;
     std::mutex mutex_;
     std::condition_variable cond_;
     void run() {
@@ -33,12 +33,12 @@ private:
                 lock.unlock();
             }
             for (auto const &cmd : processing_) {
-                simple_demo::CalculateResult res;
-                res.set_id(std::get<0>(cmd).id());
+                CalculatorOutput res;
+                res.id = std::get<0>(cmd).id;
                 if (std::get<1>(cmd) == 1) {
-                    res.set_result(std::get<0>(cmd).value()*2.0);
+                    res.output = std::get<0>(cmd).input*2.0;
                 } else {
-                    res.set_result(-1.0);
+                    res.output = -1.0;
                 }
                 listener_->onCalculateResult(res);
             }
@@ -61,7 +61,7 @@ public:
         running_ = true;
         th_ = std::thread(&CalculatorImpl::run, this);
     }
-    void request(simple_demo::CalculateCommand const &cmd, int count) {
+    void request(CalculatorInput const &cmd, int count) {
         if (running_) {
             {
                 std::lock_guard<std::mutex> _(mutex_);
@@ -77,7 +77,7 @@ Calculator::~Calculator() {}
 void Calculator::start(CalculateResultListener *listener) {
     impl_->start(listener);
 }
-void Calculator::request(simple_demo::CalculateCommand const &cmd) {
+void Calculator::request(CalculatorInput const &cmd) {
     std::thread([this,cmd]() {
         impl_->request(cmd, 1);
         std::this_thread::sleep_for(std::chrono::seconds(2));

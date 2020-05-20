@@ -2,13 +2,16 @@
 #define DATA_SOURCE_HPP_
 
 #include <memory>
-#include "defs.pb.h"
+
+struct DataFromSource {
+    double value;
+};
 
 class DataSourceImpl;
 
 class DataSourceListener {
 public:
-    virtual void onData(simple_demo::InputData const &) = 0;
+    virtual void onData(DataFromSource const &) = 0;
     virtual ~DataSourceListener() {}
 };
 

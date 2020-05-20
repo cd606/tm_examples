@@ -2,11 +2,19 @@
 #define CALCULATOR_HPP_
 
 #include <memory>
-#include "defs.pb.h"
+
+struct CalculatorInput {
+    int id;
+    double input;
+};
+struct CalculatorOutput {
+    int id;
+    double output;
+};
 
 class CalculateResultListener {
 public:
-    virtual void onCalculateResult(simple_demo::CalculateResult const &) = 0;
+    virtual void onCalculateResult(CalculatorOutput const &) = 0;
     virtual ~CalculateResultListener() {}
 };
 
@@ -19,7 +27,7 @@ public:
     Calculator();
     ~Calculator();
     void start(CalculateResultListener *listener);
-    void request(simple_demo::CalculateCommand const &cmd);
+    void request(CalculatorInput const &cmd);
 };
 
 #endif

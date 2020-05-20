@@ -41,8 +41,9 @@ public:
         env_ = env;
         source_.start(this);
     }
-    virtual void onData(InputData const &data) override final {
-        InputData dataCopy = data;
+    virtual void onData(DataFromSource const &data) override final {
+        InputData dataCopy;
+        dataCopy.set_value(data.value);
         publish(M::pureInnerData<InputData>(env_, std::move(dataCopy), false));
     }
 };
