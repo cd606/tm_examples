@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
         TheEnvironment env;
         infra::MonadRunner<Monad> r(&env);
         
-        auto importer = FileComponent::createImporter<std::chrono::microseconds>(
+        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
             ifs, 
             {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
             {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
         );
         infra::MonadRunner<Monad> r(&env);
         
-        auto importer = FileComponent::createImporter<std::chrono::microseconds>(
+        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
             ifs, 
             {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
             {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}

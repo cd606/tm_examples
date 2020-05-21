@@ -162,7 +162,7 @@ void run_backtest(std::string const &inputFile, std::optional<std::string> gener
 
     using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<M>;
 
-    auto importer = FileComponent::createImporter<std::chrono::microseconds>(
+    auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
         ifs, 
         {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
         {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}

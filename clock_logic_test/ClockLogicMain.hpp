@@ -46,7 +46,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         auto addTopic = basic::SerializationActions<M>::template addConstTopic<std::string>("data.main");
         auto serialize = basic::SerializationActions<M>::template serialize<std::string>();
         
-        auto fileSink = FileComponent::template createExporter<std::chrono::microseconds>(
+        auto fileSink = FileComponent::template createExporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
             fileOutput,
             {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
             {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}

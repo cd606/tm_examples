@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
 
         auto fileWriter =
             basic::ByteDataWithTopicRecordFileImporterExporter<M>
-            ::createExporter<std::chrono::microseconds>(
+            ::createExporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
                 ofs
                 , {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67}
                 , {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
