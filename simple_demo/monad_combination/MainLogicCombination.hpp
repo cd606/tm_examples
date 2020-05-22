@@ -32,9 +32,9 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
             , simple_demo::CalculateResult
         >(
             boost::hana::curry<4>(std::mem_fn(&MainLogic::runLogic))(mainLogicPtr.get())
-            , false //don't create a separate thread
-            , dev::cd606::tm::infra::FanInParamMask("01") //only the first input (InputData) is required
-        ); 
+            , dev::cd606::tm::infra::LiftParameters<std::chrono::system_clock::time_point>()
+                .RequireMask(dev::cd606::tm::infra::FanInParamMask("01")) //only the first input (InputData) is required
+        );
     auto cmd = r.execute("logic", logic, std::move(input.dataSource));
     auto extract = M::template liftPure<
             typename M::template KeyedData<
