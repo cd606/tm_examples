@@ -34,6 +34,15 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
             boost::hana::curry<4>(std::mem_fn(&MainLogic::runLogic))(mainLogicPtr.get())
             , dev::cd606::tm::infra::LiftParameters<std::chrono::system_clock::time_point>()
                 .RequireMask(dev::cd606::tm::infra::FanInParamMask("01")) //only the first input (InputData) is required
+                .DelaySimulator(
+                    [](int which, std::chrono::system_clock::time_point const &) -> std::chrono::system_clock::duration {
+                        if (which == 0) {
+                            return std::chrono::milliseconds(100);
+                        } else {
+                            return std::chrono::milliseconds(0);
+                        }
+                    }
+                )
         );
     auto cmd = r.execute("logic", logic, std::move(input.dataSource));
     auto extract = M::template liftPure<
