@@ -22,9 +22,11 @@ private:
             avgTime_ = std::get<0>(input);
             avgFactor_ = 1.0;
             avg_ = std::get<1>(input).value();
+            logger_("This is the first data received, we just use it to start averaging, so not creating command");
             return std::nullopt;
         }
         if (std::get<0>(input) < *avgTime_) {
+            logger_("Time going backwards, not handling");
             return std::nullopt;
         }
         auto decayTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::get<0>(input)-(*avgTime_)).count();

@@ -39,8 +39,7 @@ using namespace simple_demo;
 void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
-        basic::TrivialBoostLoggingComponent,
-        basic::real_time_clock::ClockComponent,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
@@ -148,8 +147,7 @@ void run_virtual(std::string const &calibrateTime, int calibrateAfter, double sp
 void run_backtest(std::string const &inputFile, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
-        basic::TrivialBoostLoggingComponent,
-        basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
         infra::IntIDComponent<>
     >;
     using M = infra::SinglePassIterationMonad<TheEnvironment>;

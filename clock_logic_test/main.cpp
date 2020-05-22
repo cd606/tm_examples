@@ -4,6 +4,7 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeMonad.hpp>
 #include <tm_kit/infra/SinglePassIterationMonad.hpp>
+#include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
@@ -23,8 +24,7 @@ using namespace dev::cd606::tm;
 void real_time_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
-        basic::TrivialBoostLoggingComponent,
-        basic::real_time_clock::ClockComponent,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent
     >;
     using Monad = infra::RealTimeMonad<TheEnvironment>;
@@ -69,9 +69,11 @@ void real_time_run(std::ostream &fileOutput) {
 void single_pass_iteration_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
-        basic::TrivialBoostLoggingComponent,
-        basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
-        transport::BoostUUIDComponent
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<
+            basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
+            , false
+        >,
+        infra::IntIDComponent<uint32_t>
     >;
     using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
 

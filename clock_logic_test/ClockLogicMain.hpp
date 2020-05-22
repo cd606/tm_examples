@@ -54,12 +54,12 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
 
         auto exporter = M::template simpleExporter<std::string>([](typename M::template InnerData<std::string> &&s) {
             std::ostringstream oss;
-            oss << s;
+            oss << s.timedData;
             s.environment->log(LogLevel::Info, oss.str());
         });
         auto exporter2 = M::template simpleExporter<typename M::template KeyedData<std::string,std::string>>([](typename M::template InnerData<typename M::template KeyedData<std::string,std::string>> &&s) {
             std::ostringstream oss;
-            oss << s;
+            oss << s.timedData;
             s.environment->log(LogLevel::Info, oss.str());
         });
 

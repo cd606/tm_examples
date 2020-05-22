@@ -43,8 +43,8 @@ int main(int argc, char **argv) {
         ("address", value<std::string>(), "the address to republish on")
         ("input", value<std::string>(), "input from this file")
         ("speed", value<double>(), "republish speed factor, default 1.0")
-        ("calibratePointHistorical", value<std::string>(), "calibrate time point (for historical data), format is HH:MM")
-        ("calibratePointActual", value<std::string>(), "calibrate time point (for actual clock), format is HH:MM, or +N (where N is count of minutes)")
+        ("calibratePointHistorical", value<std::string>(), "calibrate time point (for historical data), format is HH:MM[:SS]")
+        ("calibratePointActual", value<std::string>(), "calibrate time point (for actual clock), format is HH:MM (no second!), or +N (where N is count of minutes)")
     ;
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -82,20 +82,25 @@ int main(int argc, char **argv) {
         return 1;
     }
     auto calibratePointHistorical = boost::trim_copy(vm["calibratePointHistorical"].as<std::string>());
-    if (calibratePointHistorical.length() != 5 && calibratePointHistorical[2] != ':') {
-        std::cerr << "Historical calibrate point must be in HH:MM format!\n";
+    if ((calibratePointHistorical.length() != 5 && calibratePointHistorical.length() != 8) || calibratePointHistorical[2] != ':') {
+        std::cerr << "Historical calibrate point must be in HH:MM[:SS] format!\n";
         return 1;
     }
-    int hour_hist, min_hist;
+    int hour_hist, min_hist, sec_hist;
     try {
         hour_hist = boost::lexical_cast<int>(calibratePointHistorical.substr(0,2));
         min_hist = boost::lexical_cast<int>(calibratePointHistorical.substr(3,2));
+        if (calibratePointHistorical.length() == 8) {
+            sec_hist = boost::lexical_cast<int>(calibratePointHistorical.substr(6,2));
+        } else {
+            sec_hist = 0;
+        }
     } catch (boost::bad_lexical_cast const &) {
-        std::cerr << "Historical calibrate point must be in HH:MM format!\n";
+        std::cerr << "Historical calibrate point must be in HH:MM[:SS] format!\n";
         return 1;
     }
-    if (hour_hist < 0 || hour_hist >= 24 || min_hist < 0 || min_hist >= 60) {
-        std::cerr << "Historical calibrate point must be in HH:MM format!\n";
+    if (hour_hist < 0 || hour_hist >= 24 || min_hist < 0 || min_hist >= 60 || sec_hist < 0 || sec_hist >= 60) {
+        std::cerr << "Historical calibrate point must be in HH:MM[:SS] format!\n";
         return 1;
     }
     if (!vm.count("calibratePointActual")) {
@@ -113,7 +118,7 @@ int main(int argc, char **argv) {
         }
     }
     if (!calibrateActualMinutes) {
-        if (calibratePointActual.length() != 5 && calibratePointActual[2] != ':') {
+        if (calibratePointActual.length() != 5 || calibratePointActual[2] != ':') {
             std::cerr << "Actual calibrate point must be in HH:MM or +N format!\n";
             return 1;
         }      
@@ -191,7 +196,9 @@ int main(int argc, char **argv) {
             << std::setw(2) << std::setfill('0') << hour_hist
             << ':'
             << std::setw(2) << std::setfill('0') << min_hist
-            << ":00.000";
+            << ':'
+            << std::setw(2) << std::setfill('0') << sec_hist
+            << ".000";
         TheEnvironment::ClockSettings settings;
         if (calibrateActualMinutes) {
             settings = TheEnvironment::clockSettingsWithStartPointCorrespondingToNextAlignment(
