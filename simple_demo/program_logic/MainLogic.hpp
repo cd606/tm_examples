@@ -28,4 +28,44 @@ public:
     simple_demo::ClearCommandsResult clearCommands(std::tuple<std::string, simple_demo::ClearCommands> &&);
 };
 
+class ExponentialAverageImpl;
+
+class ExponentialAverage {
+private:
+    std::unique_ptr<ExponentialAverageImpl> impl_;
+public:
+    ExponentialAverage(double decaySpeed);
+    ~ExponentialAverage();
+    ExponentialAverage(ExponentialAverage &&);
+    ExponentialAverage &operator=(ExponentialAverage &&);
+    void add(std::tuple<std::chrono::system_clock::time_point, double> &&);
+    std::optional<double> readResult() const;
+};
+
+class MainLogic2Impl;
+
+class MainLogic2 {
+private:
+    std::unique_ptr<MainLogic2Impl> impl_;
+public:
+    struct MainLogicInput {
+        double originalInput;
+        double movingAverage;
+    }; 
+    MainLogic2(std::function<void(std::string const &)> logger);
+    ~MainLogic2();
+    MainLogic2(MainLogic2 const &) = delete;
+    MainLogic2 &operator=(MainLogic2 const &) = delete;
+    MainLogic2(MainLogic2 &&);
+    MainLogic2 &operator=(MainLogic2 &&);
+    std::optional<simple_demo::CalculateCommand> runLogic(
+        int which
+        , MainLogicInput &&input
+        , simple_demo::CalculateResult &&result
+    );
+    simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);
+    simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&);
+    simple_demo::ClearCommandsResult clearCommands(std::tuple<std::string, simple_demo::ClearCommands> &&);
+};
+
 #endif

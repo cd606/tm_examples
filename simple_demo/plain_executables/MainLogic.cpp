@@ -36,7 +36,7 @@
 using namespace dev::cd606::tm;
 using namespace simple_demo;
 
-void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
+void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
@@ -120,7 +120,7 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
             , std::nullopt //no hook
         )
     };
-    MainLogicCombination(r, env, std::move(combinationInput));
+    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
@@ -136,15 +136,15 @@ void run_real_or_virtual(bool isReal, std::string const &calibrateTime, int cali
     });
 }
 
-void run_real(std::optional<std::string> generateGraphOnlyWithThisFile) {
-    run_real_or_virtual(true, "", 0, 0.0, generateGraphOnlyWithThisFile);
+void run_real(LogicChoice logicChoice, std::optional<std::string> generateGraphOnlyWithThisFile) {
+    run_real_or_virtual(logicChoice, true, "", 0, 0.0, generateGraphOnlyWithThisFile);
 }
 
-void run_virtual(std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
-    run_real_or_virtual(false, calibrateTime, calibrateAfter, speed, generateGraphOnlyWithThisFile);
+void run_virtual(LogicChoice logicChoice, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
+    run_real_or_virtual(logicChoice, false, calibrateTime, calibrateAfter, speed, generateGraphOnlyWithThisFile);
 }
 
-void run_backtest(std::string const &inputFile, std::optional<std::string> generateGraphOnlyWithThisFile) {
+void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
@@ -200,7 +200,7 @@ void run_backtest(std::string const &inputFile, std::optional<std::string> gener
         , std::nullopt
         , std::nullopt
     };
-    MainLogicCombination(r, env, std::move(combinationInput));
+    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
@@ -214,7 +214,7 @@ void run_backtest(std::string const &inputFile, std::optional<std::string> gener
     infra::terminationController(infra::ImmediatelyTerminate {});
 }
 
-void run_typecheck(std::optional<std::string> generateGraphOnlyWithThisFile) {
+void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         basic::TrivialBoostLoggingComponent,
@@ -249,7 +249,7 @@ void run_typecheck(std::optional<std::string> generateGraphOnlyWithThisFile) {
         , std::nullopt
     };
     
-    MainLogicCombination(r, env, std::move(combinationInput));
+    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
@@ -275,6 +275,7 @@ int main(int argc, char **argv) {
         ("calibrate_after", po::value<int>(), "calibrate with virtual time after these minutes")
         ("speed", po::value<double>(), "virtual time speed (default 1.0)")
         ("generate_graph_only", po::value<std::string>(), "generate graph to this file and exit")
+        ("logic_choice", po::value<int>(), "logic choice (1 or 2, default 1)")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -314,9 +315,24 @@ int main(int argc, char **argv) {
         generateGraphOnlyWithThisFile = vm["generate_graph_only"].as<std::string>();
     }
 
+    LogicChoice logicChoice = LogicChoice::One;
+    if (vm.count("logic_choice")) {
+        switch (vm["logic_choice"].as<int>()) {
+        case 1:
+            logicChoice = LogicChoice::One;
+            break;
+        case 2:
+            logicChoice = LogicChoice::Two;
+            break;
+        default:
+            std::cerr << "Logic choice must be 1 or 2.\n";
+            return 1;
+        }
+    }
+
     switch (mode) {
     case Real:
-        run_real(generateGraphOnlyWithThisFile);
+        run_real(logicChoice, generateGraphOnlyWithThisFile);
         break;
     case Virtual:
         {
@@ -332,7 +348,7 @@ int main(int argc, char **argv) {
             if (vm.count("speed")) {
                 speed = vm["speed"].as<double>();
             }
-            run_virtual(vm["calibrate_time"].as<std::string>(), vm["calibrate_after"].as<int>(), speed, generateGraphOnlyWithThisFile);
+            run_virtual(logicChoice, vm["calibrate_time"].as<std::string>(), vm["calibrate_after"].as<int>(), speed, generateGraphOnlyWithThisFile);
         }
         break;
     case Backtest:
@@ -341,11 +357,11 @@ int main(int argc, char **argv) {
                 std::cerr << "Please provide input file\n";
                 return 1;
             }
-            run_backtest(vm["input_file"].as<std::string>(), generateGraphOnlyWithThisFile);
+            run_backtest(logicChoice, vm["input_file"].as<std::string>(), generateGraphOnlyWithThisFile);
         }
         break;
     case Typecheck:
-        run_typecheck(generateGraphOnlyWithThisFile);
+        run_typecheck(logicChoice, generateGraphOnlyWithThisFile);
         break;
     default:
         return 0;
