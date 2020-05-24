@@ -111,22 +111,45 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
         );
         r.preservePointer(mainLogicPtr);
 
-        auto extractDouble = M::template liftPure<simple_demo::InputData>(
+        auto extractDouble = dev::cd606::tm::infra::KleisliUtils<M>
+            ::template liftPure<simple_demo::InputData>(
             [](simple_demo::InputData &&d) -> double {
                 return d.value();
             }
         );
+        auto duplicator = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
+            ::template duplicateInput<double>();
         auto exponentialAverage = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
-            ::template wholeHistoryActionWithInputAttached<double>(
+            ::template wholeHistoryKleisli<double>(
             ExponentialAverage(std::log(0.5))
         );
-        auto assembleMainLogicInput = M::template liftPure<std::tuple<double,double>>(
-            [](std::tuple<double,double> &&x) -> MainLogic2::MainLogicInput {
-                return {std::get<0>(x), std::get<1>(x)};
+        auto exponentialAverageWithInputAttached = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
+            ::template preserveLeft<double, double>(std::move(exponentialAverage));
+        auto filterValue = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
+            ::template pureFilter<std::tuple<double, double>>(
+            [](std::tuple<double,double> const &input) -> bool {
+                return std::get<0>(input) >= 1.05*std::get<1>(input);
             }
         );
+        auto assembleMainLogicInput = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
+            ::template dropRight<double,double>();
+        auto upToMainLogicInputKleisli =
+            dev::cd606::tm::infra::KleisliUtils<M>::template compose<simple_demo::InputData>(
+                std::move(extractDouble)
+                , dev::cd606::tm::infra::KleisliUtils<M>::template compose<double>(
+                    std::move(duplicator)
+                    , dev::cd606::tm::infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                        std::move(exponentialAverageWithInputAttached)
+                        , dev::cd606::tm::infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                            std::move(filterValue)
+                            , std::move(assembleMainLogicInput)
+                        )
+                    )
+                )
+            );
+        auto upToMainLogicInput = M::template kleisli<simple_demo::InputData>(std::move(upToMainLogicInputKleisli));
         auto logic = M::template liftMaybe2<
-                MainLogic2::MainLogicInput
+                double
                 , simple_demo::CalculateResult
             >(
                 boost::hana::curry<4>(std::mem_fn(&MainLogic2::runLogic))(mainLogicPtr.get())
@@ -142,10 +165,7 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
                         }
                     )
             );
-        auto cmd = r.execute("logic", logic, 
-                    r.execute("assemble", assembleMainLogicInput, 
-                        r.execute("exponentialAvg", exponentialAverage, 
-                            r.execute("extractDouble", extractDouble, std::move(input.dataSource)))));
+        auto cmd = r.execute("logic", logic, r.execute("upToMainLogicInput", upToMainLogicInput, std::move(input.dataSource)));
 
         auto extractResult = M::template liftPure<
                 typename M::template KeyedData<

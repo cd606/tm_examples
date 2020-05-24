@@ -48,10 +48,6 @@ class MainLogic2 {
 private:
     std::unique_ptr<MainLogic2Impl> impl_;
 public:
-    struct MainLogicInput {
-        double originalInput;
-        double movingAverage;
-    }; 
     MainLogic2(std::function<void(std::string const &)> logger);
     ~MainLogic2();
     MainLogic2(MainLogic2 const &) = delete;
@@ -60,7 +56,7 @@ public:
     MainLogic2 &operator=(MainLogic2 &&);
     std::optional<simple_demo::CalculateCommand> runLogic(
         int which
-        , MainLogicInput &&input
+        , double &&input
         , simple_demo::CalculateResult &&result
     );
     simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);

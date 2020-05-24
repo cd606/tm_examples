@@ -207,31 +207,24 @@ private:
     bool enabled_;
     int32_t idCounter_;
 
-    std::optional<simple_demo::CalculateCommand> handleInput(MainLogic2::MainLogicInput &&input) {
-        if (input.originalInput >= input.movingAverage*1.05) {
-            std::lock_guard<std::mutex> _(mutex_);            
-            if (!enabled_) {
-                logger_("Not enabled, not sending new command");
-                return std::nullopt;
-            }
-            if (outstandingCommands_.size() >= 2) {
-                logger_("Too many outstanding commands, not sending new command");
-                return std::nullopt;
-            }
-            simple_demo::CalculateCommand cmd;
-            cmd.set_id(++idCounter_);
-            cmd.set_value(input.originalInput);
-            std::ostringstream oss;
-            oss << "Created new command " << idCounter_ << " for " << input.originalInput;
-            logger_(oss.str());
-            outstandingCommands_.insert(cmd.id());
-            return cmd;
-        } else {
-            std::ostringstream oss;
-            oss << "Not creating new command for " << input.originalInput << " because the avg is " << input.movingAverage;
-            logger_(oss.str());
+    std::optional<simple_demo::CalculateCommand> handleInput(double input) {
+        std::lock_guard<std::mutex> _(mutex_);            
+        if (!enabled_) {
+            logger_("Not enabled, not sending new command");
             return std::nullopt;
         }
+        if (outstandingCommands_.size() >= 2) {
+            logger_("Too many outstanding commands, not sending new command");
+            return std::nullopt;
+        }
+        simple_demo::CalculateCommand cmd;
+        cmd.set_id(++idCounter_);
+        cmd.set_value(input);
+        std::ostringstream oss;
+        oss << "Created new command " << idCounter_ << " for " << input;
+        logger_(oss.str());
+        outstandingCommands_.insert(cmd.id());
+        return cmd;
     }
 
     void handleResult(simple_demo::CalculateResult &&result) {
@@ -255,12 +248,12 @@ public:
     ~MainLogic2Impl() = default;
     std::optional<simple_demo::CalculateCommand> runLogic(
         int which
-        , MainLogic2::MainLogicInput &&input
+        , double input
         , simple_demo::CalculateResult &&result
     ) {
         switch (which) {
         case 0:
-            return handleInput(std::move(input));
+            return handleInput(input);
         case 1:
             handleResult(std::move(result));
             return std::nullopt;
@@ -316,10 +309,10 @@ MainLogic2::MainLogic2(MainLogic2 &&) = default;
 MainLogic2 &MainLogic2::operator=(MainLogic2 &&) = default;
 std::optional<simple_demo::CalculateCommand> MainLogic2::runLogic(
     int which
-    , MainLogic2::MainLogicInput &&input
+    , double &&input
     , simple_demo::CalculateResult &&result
 ) {
-    return impl_->runLogic(which, std::move(input), std::move(result));
+    return impl_->runLogic(which, input, std::move(result));
 }
 simple_demo::ConfigureResult MainLogic2::configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
     return impl_->configure(std::move(cmd));
