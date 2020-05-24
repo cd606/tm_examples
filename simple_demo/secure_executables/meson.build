@@ -12,9 +12,16 @@ tm_simple_demo_secure_calculator_exec = executable(
     , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_external_logic_lib, tm_simple_demo_security_logic_lib]
     , dependencies: [common_deps]
 )
+tm_simple_demo_secure_main_logic_exec_cpp_flag = []
+if build_machine.system() == 'windows' 
+    if host_machine.cpu_family() == 'x86'
+        tm_simple_demo_secure_main_logic_exec_cpp_flag += ['/bigobj']
+    endif
+endif
 tm_simple_demo_secure_main_logic_exec = executable(
     'main_logic'
     , ['MainLogic.cpp', test_gen_out]
+    , cpp_args: tm_simple_demo_secure_main_logic_exec_cpp_flag
     , include_directories: inc
     , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_program_logic_lib, tm_simple_demo_security_logic_lib]
     , dependencies: [common_deps, tm_simple_demo_boost_dep]
