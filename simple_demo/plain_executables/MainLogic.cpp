@@ -99,8 +99,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     }
     
     MainLogicInput<R> combinationInput {
-        r.execute(removeTopic, r.importItem(importer))
-        , calc
+        calc
         , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
             transport::ConnectionLocator::parse("localhost::guest:guest:test_config_queue")
@@ -120,7 +119,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             , std::nullopt //no hook
         )
     };
-    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    r.connect(r.execute(removeTopic, r.importItem(importer)), mainLogicOutput.dataSink);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
@@ -191,8 +191,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
     );
 
     MainLogicInput<R> combinationInput {
-        dataInput.clone()
-        , &(MockCalculatorCombination<
+        &(MockCalculatorCombination<
                 R
                 ,basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
             >::service)
@@ -200,7 +199,8 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
         , std::nullopt
         , std::nullopt
     };
-    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    r.connect(dataInput.clone(), mainLogicOutput.dataSink);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
@@ -242,14 +242,14 @@ void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateG
     r.registerOnOrderFacility("facility", facility);
 
     MainLogicInput<R> combinationInput {
-        r.importItem(importer)
-        , r.facilityConnector(facility)
+        r.facilityConnector(facility)
         , std::nullopt
         , std::nullopt
         , std::nullopt
     };
     
-    MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    r.connect(r.importItem(importer), mainLogicOutput.dataSink);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);

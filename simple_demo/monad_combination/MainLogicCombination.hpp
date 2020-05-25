@@ -9,11 +9,16 @@
 template <class R>
 struct MainLogicInput {
     using M = typename R::MonadType;
-    typename R::template Source<simple_demo::InputData> dataSource;
     typename R::template FacilitioidConnector<simple_demo::CalculateCommand, simple_demo::CalculateResult> commandConnector;
     typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ConfigureCommand>, simple_demo::ConfigureResult> configWrapper;
     typename R::template FacilityWrapper<simple_demo::OutstandingCommandsQuery, simple_demo::OutstandingCommandsResult> queryWrapper;
     typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ClearCommands>, simple_demo::ClearCommandsResult> clearCommandsWrapper;
+};
+
+template <class R>
+struct MainLogicOutput {
+    using M = typename R::MonadType;
+    typename R::template Sink<simple_demo::InputData> dataSink;
 };
 
 enum class LogicChoice {
@@ -21,7 +26,7 @@ enum class LogicChoice {
 };
 
 template <class R>
-inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLogicInput<R> &&input, LogicChoice logicChoice) {
+inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLogicInput<R> &&input, LogicChoice logicChoice) {
     using M = typename R::MonadType;
     using namespace std::placeholders;
 
@@ -50,7 +55,7 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
                         }
                     )
             );
-        auto cmd = r.execute("logic", logic, std::move(input.dataSource));
+        auto cmd = r.actionAsSource("logic", logic);
 
         auto extractResult = M::template liftPure<
                 typename M::template KeyedData<
@@ -102,6 +107,10 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
             (*input.clearCommandsWrapper)(r, clearCommandsFacility);
             r.markStateSharing(clearCommandsFacility, logic, "outstanding_cmds");
         }
+
+        return MainLogicOutput<R> {
+            r.actionAsSink_2_0(logic)
+        };
 
     } else if (logicChoice == LogicChoice::Two) {
         auto mainLogicPtr = std::make_shared<MainLogic2>(
@@ -165,7 +174,7 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
                         }
                     )
             );
-        auto cmd = r.execute("logic", logic, r.execute("upToMainLogicInput", upToMainLogicInput, std::move(input.dataSource)));
+        auto cmd = r.execute("logic", logic, r.actionAsSource("upToMainLogicInput", upToMainLogicInput));
 
         auto extractResult = M::template liftPure<
                 typename M::template KeyedData<
@@ -217,8 +226,13 @@ inline void MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLog
             (*input.clearCommandsWrapper)(r, clearCommandsFacility);
             r.markStateSharing(clearCommandsFacility, logic, "outstanding_cmds");
         }
+        
+        return MainLogicOutput<R> {
+            r.actionAsSink(upToMainLogicInput)
+        };
+    } else {
+        throw "Invalid logic choice";
     }
-
     
 }
 
