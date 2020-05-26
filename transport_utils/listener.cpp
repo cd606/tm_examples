@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
         ("address", value<std::string>(), "the address to listen on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
         ("printPerMessage", "whether to print per message")
+        ("messageIsText", "when printing message, whether we are sure that the message is text")
     ;
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -114,6 +115,7 @@ int main(int argc, char **argv) {
         std::cerr << "This program must do something, either print summary message per period or print info per message\n";
         return 1;
     }
+    bool messageIsText = vm.count("messageIsText");
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
@@ -164,10 +166,16 @@ int main(int argc, char **argv) {
         };
         std::shared_ptr<SharedState> sharedState = std::make_shared<SharedState>();
 
-        auto perMessage = M::simpleExporter<basic::ByteDataWithTopic>([sharedState,printPerMessage](M::InnerData<basic::ByteDataWithTopic> &&data) {
+        auto perMessage = M::simpleExporter<basic::ByteDataWithTopic>([sharedState,printPerMessage,messageIsText](M::InnerData<basic::ByteDataWithTopic> &&data) {
             if (printPerMessage) {
                 std::ostringstream oss;
-                oss << data.timedData.value;
+                if (messageIsText) {
+                    oss << "topic='" << data.timedData.value.topic
+                        << "',content='" << data.timedData.value.content
+                        << "'";
+                } else {
+                    oss << data.timedData.value;
+                }
                 data.environment->log(infra::LogLevel::Info, oss.str());
             }
             {
