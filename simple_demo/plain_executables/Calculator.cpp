@@ -12,6 +12,7 @@
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -30,7 +31,8 @@ using TheEnvironment = infra::Environment<
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,
     transport::ServerSideSimpleIdentityCheckerComponent<std::string,CalculateCommand>,
-    transport::rabbitmq::RabbitMQComponent
+    transport::rabbitmq::RabbitMQComponent,
+    transport::HeartbeatAndAlertComponent
 >;
 using M = infra::RealTimeMonad<TheEnvironment>;
 
@@ -39,24 +41,37 @@ private:
     TheEnvironment *env_;
     Calculator calc_;
     std::unordered_map<int, TheEnvironment::IDType> idLookup_;
+    int count_;
     std::mutex mutex_;
 public:
-    CalculatorFacility() : env_(nullptr), calc_(), mutex_() {}
+    CalculatorFacility() : env_(nullptr), calc_(), idLookup_(), count_(0), mutex_() {}
     ~CalculatorFacility() {}
     virtual void start(TheEnvironment *env) override final {
         env_ = env;
         calc_.start(this);
+        env->sendAlert("simple_demo.plain_executables.calculator.info", infra::LogLevel::Info, "Calculator started");
     }
     virtual void handle(M::InnerData<M::Key<std::tuple<std::string, CalculateCommand>>> &&data) override final {
+        int countCopy, outstandingCountCopy;
         {
             std::lock_guard<std::mutex> _(mutex_);
+            ++count_;
             idLookup_.insert({std::get<1>(data.timedData.value.key()).id(), data.timedData.value.id()});
+            countCopy = count_;
+            outstandingCountCopy = idLookup_.size();
         }
         auto const &req = std::get<1>(data.timedData.value.key());
         CalculatorInput input {
             req.id(), req.value()
         };
         calc_.request(input);
+        std::ostringstream oss;
+        oss << "Total " << countCopy << " requests, outstanding " << outstandingCountCopy << " requests";
+        data.environment->setStatus(
+            "calculator_body"
+            , transport::HeartbeatMessage::Status::Good
+            , oss.str()
+        );
     }
     virtual void onCalculateResult(CalculatorOutput const &result) override final {
         TheEnvironment::IDType envID;
@@ -81,6 +96,11 @@ public:
 
 int main(int argc, char **argv) {
     TheEnvironment env;
+    
+    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
+        (&env, "simple_demo plain Calculator", transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]"));
+    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
+
     infra::MonadRunner<M> r(&env);
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
@@ -89,6 +109,8 @@ int main(int argc, char **argv) {
         r, facility, transport::ConnectionLocator::parse("localhost::guest:guest:test_queue"), "wrapper_"
         , std::nullopt //hook
     );
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.calculator.heartbeat", std::chrono::seconds(10));
 
     r.finalize();
 
