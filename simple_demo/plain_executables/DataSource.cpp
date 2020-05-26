@@ -11,7 +11,9 @@
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
-#include <tm_kit/transport/HeartbeatComponent.hpp>
+#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
+#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/external_logic/DataSource.hpp"
@@ -28,7 +30,8 @@ using TheEnvironment = infra::Environment<
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,
     transport::zeromq::ZeroMQComponent,
-    transport::HeartbeatComponent
+    transport::rabbitmq::RabbitMQComponent,
+    transport::HeartbeatAndAlertComponent
 >;
 using M = infra::RealTimeMonad<TheEnvironment>;
 
@@ -42,6 +45,7 @@ public:
     virtual void start(TheEnvironment *env) override final {
         env_ = env;
         source_.start(this);
+        env->sendAlert("simple_demo.data_source.info", infra::LogLevel::Info, "Data source started");
     }
     virtual void onData(DataFromSource const &data) override final {
         InputData dataCopy;
@@ -52,9 +56,11 @@ public:
 
 int main(int argc, char **argv) {
     TheEnvironment env;
-    transport::HeartbeatComponentInitializer<TheEnvironment,transport::zeromq::ZeroMQComponent>()
-        (&env, "simple_demo DataSource", transport::ConnectionLocator::parse("localhost:23456"));
+    
+    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
+        (&env, "simple_demo DataSource", transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]"));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
+
     infra::MonadRunner<M> r(&env);
 
     auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
@@ -70,7 +76,7 @@ int main(int argc, char **argv) {
         , r.execute("addTopic", addTopic
             , r.importItem("source", source)));
 
-    transport::attachHeartbeatComponent(r, &env, "simple_demo.data_source.heartbeat", std::chrono::seconds(10));
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.data_source.heartbeat", std::chrono::seconds(10));
 
     r.finalize();
 
