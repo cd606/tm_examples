@@ -180,6 +180,7 @@ export class TMHelper {
             , Buffer.from(sendBuffer)
             , {
                 correlationId : correlationId
+                , contentEncoding: 'with_final'
                 , replyTo: queue.queue
             }
         );
