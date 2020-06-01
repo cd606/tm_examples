@@ -21,9 +21,7 @@ tm_simple_demo_calculator_exec = executable(
 )
 tm_simple_demo_main_logic_exec_cpp_flag = []
 if build_machine.system() == 'windows' 
-    if host_machine.cpu_family() == 'x86'
-        tm_simple_demo_main_logic_exec_cpp_flag += ['/bigobj']
-    endif
+    tm_simple_demo_main_logic_exec_cpp_flag += ['/bigobj']
 endif
 tm_simple_demo_main_logic_exec = executable(
     'main_logic'
