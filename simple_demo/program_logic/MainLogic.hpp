@@ -4,6 +4,7 @@
 #include <optional>
 #include <memory>
 #include <functional>
+#include <chrono>
 #include "defs.pb.h"
 
 class MainLogicImpl;
