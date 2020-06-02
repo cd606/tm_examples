@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
     );
 
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "simple_demo secure Calculator", transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]"));
+        (&env, "simple_demo secure Calculator", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
     infra::MonadRunner<M> r(&env);
@@ -149,8 +149,8 @@ int main(int argc, char **argv) {
     >(
         r
         , my_prv_key
-        , "localhost::guest:guest:test_dh_queue"
-        , "localhost::guest:guest:amq.topic[durable=true]"
+        , "127.0.0.1::guest:guest:test_dh_queue"
+        , "127.0.0.1::guest:guest:amq.topic[durable=true]"
         , "calculator_dh.restarted"
     );*/
     DHServerSideCombination<

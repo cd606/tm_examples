@@ -87,7 +87,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     if (isReal) {
         auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
                     ::WithIdentity<std::string>::createTypedRPCOnOrderFacility<CalculateCommand, CalculateResult>(
-                        transport::ConnectionLocator::parse("localhost::guest:guest:test_queue")
+                        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_queue")
                     );
         r.registerOnOrderFacility("facility", facility);
         calc = R::facilityConnector(facility);
@@ -102,19 +102,19 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         calc
         , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
-            transport::ConnectionLocator::parse("localhost::guest:guest:test_config_queue")
+            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_config_queue")
             , "cfg_wrapper_"
             , std::nullopt //no hook
         )
         , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithoutIdentity::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
-            transport::ConnectionLocator::parse("localhost::guest:guest:test_query_queue")
+            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_query_queue")
             , "query_wrapper_"
             , std::nullopt //no hook
         )
         , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::facilityWrapper
             <ClearCommands,ClearCommandsResult>(
-            transport::ConnectionLocator::parse("localhost::guest:guest:test_clear_queue")
+            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_clear_queue")
             , "clear_cmd_wrapper_"
             , std::nullopt //no hook
         )

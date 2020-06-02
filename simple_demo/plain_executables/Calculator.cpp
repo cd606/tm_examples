@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
     TheEnvironment env;
     
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "simple_demo plain Calculator", transport::ConnectionLocator::parse("localhost::guest:guest:amq.topic[durable=true]"));
+        (&env, "simple_demo plain Calculator", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
     infra::MonadRunner<M> r(&env);
@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("facility", facility);
     transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment,true>::WithIdentity<std::string>::wrapOnOrderFacility(
-        r, facility, transport::ConnectionLocator::parse("localhost::guest:guest:test_queue"), "wrapper_"
+        r, facility, transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_queue"), "wrapper_"
         , std::nullopt //hook
     );
 
