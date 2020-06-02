@@ -14,7 +14,7 @@ protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
   arguments : ['--proto_path=@CURRENT_SOURCE_DIR@', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
 
-#add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
+add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
 subdir('clock_logic_test')
 subdir('transport_utils')
