@@ -178,7 +178,13 @@ int main(int argc, char **argv) {
     TheEnvironment env;
     env.VP::operator=(VP {vm["version_file"].as<std::string>()});
     env.THComponent::operator=(THComponent {
-        std::make_unique<soci::session>(soci::sqlite3, vm["db_file"].as<std::string>())
+        std::make_unique<soci::session>(
+#ifdef _MSC_VER
+            *soci::factory_sqlite3()
+#else
+            soci::sqlite3
+#endif
+            , vm["db_file"].as<std::string>())
         , [&env](std::string const &s) {
             env.log(infra::LogLevel::Info, s);
         }
