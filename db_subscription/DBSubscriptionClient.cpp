@@ -189,8 +189,8 @@ int main(int argc, char **argv) {
 
     auto exporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         [](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
-            auto id = std::move(data.timedData.value.key.id());
-            auto input = std::move(data.timedData.value.key.key());
+            auto id = data.timedData.value.key.id();
+            auto input = data.timedData.value.key.key();
             auto output = std::move(data.timedData.value.data);
             bool isFinal = data.timedData.finalFlag;
             auto *env = data.environment;
