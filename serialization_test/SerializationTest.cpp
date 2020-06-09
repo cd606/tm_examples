@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
                 >>
             >
             , GroupedVersionedData<std::string, int64_t, double>
+            , bool
         >
     ;
     char buf[5] = {0x1, 0x2, 0x3, 0x4, 0x5};
@@ -63,6 +64,7 @@ int main(int argc, char **argv) {
         , GroupedVersionedData<std::string, int64_t, double> {
             "group1", 20, 1111.11
         }
+        , true
     };
     auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
@@ -114,6 +116,7 @@ int main(int argc, char **argv) {
             << std::get<6>(data).groupID 
             << "," << std::get<6>(data).version 
             << "," << std::get<6>(data).data << "}\n";
+        std::cout << "\t, " << (std::get<7>(data)?"true":"false") << "\n";
         std::cout << "}\n";
     } else {
         std::cout << "Decode failure\n";
