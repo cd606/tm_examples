@@ -2,6 +2,7 @@ import {load, Root, Message, Type} from "protobufjs"
 import * as amqp from 'amqplib'
 import {v4 as uuidv4} from "uuid"
 import {eddsa as EDDSA} from "elliptic"
+import * as cbor from 'cbor'
 
 export class TMHelper {
     private static parseLocator(locator : string) {
@@ -115,9 +116,7 @@ export class TMHelper {
             return new Uint8Array(ret);
         } else {
             let inputBuffer = Buffer.from(input);
-            let b = Buffer.alloc(4);
-            b.writeUInt32LE(this.plain_name_length);
-            let ret = Buffer.concat([b, Buffer.from(this.plain_name, 'ascii'), inputBuffer]);
+            let ret = cbor.encode([this.plain_name, inputBuffer]);
             return new Uint8Array(ret);
         }
     }
