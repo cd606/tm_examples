@@ -1,5 +1,5 @@
-#include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/infra/WithTimeData.hpp>
+#include <tm_kit/basic/ByteData.hpp>
 #include <iostream>
 #include <iomanip>
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
             , double
             , std::string
             , std::unique_ptr<ByteData>
-            , ConstType<5>
+            , VoidStruct //ConstType<5>
             , std::variant<
                 std::vector<uint16_t>
                 , std::optional<SingleLayerWrapper<
@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
             >
             , GroupedVersionedData<std::string, int64_t, double>
             , bool
+            , std::map<std::string, int32_t>
         >
     ;
     char buf[5] = {0x1, 0x2, 0x3, 0x4, 0x5};
@@ -47,7 +48,7 @@ int main(int argc, char **argv) {
                 std::string {buf, buf+5}
             }
         )
-        , ConstType<5> {}
+        , VoidStruct {}//ConstType<5> {}
         /*
         , std::vector<uint16_t> {
             10000, 11000, 12000
@@ -65,6 +66,10 @@ int main(int argc, char **argv) {
             "group1", 20, 1111.11
         }
         , true
+        , std::map<std::string, int32_t> {
+            {"a", 5}
+            , {"b", 6}
+        }
     };
     auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
@@ -117,6 +122,11 @@ int main(int argc, char **argv) {
             << "," << std::get<6>(data).version 
             << "," << std::get<6>(data).data << "}\n";
         std::cout << "\t, " << (std::get<7>(data)?"true":"false") << "\n";
+        std::cout << "\t, {";
+        for (auto const &item : std::get<8>(data)) {
+            std::cout << "{'" << item.first << "'," << item.second << "} ";
+        }
+        std::cout << "}\n";
         std::cout << "}\n";
     } else {
         std::cout << "Decode failure\n";
