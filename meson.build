@@ -16,9 +16,9 @@ protobuf_gen = generator(protoc, \
 
 add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
-#subdir('clock_logic_test')
-#subdir('transport_utils')
-#subdir('simple_demo')
-#subdir('db_subscription')
+subdir('clock_logic_test')
+subdir('transport_utils')
+subdir('simple_demo')
+subdir('db_subscription')
 subdir('db_one_list_subscription')
 subdir('serialization_test')
