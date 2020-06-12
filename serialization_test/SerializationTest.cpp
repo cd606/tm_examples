@@ -6,26 +6,13 @@
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
 
-void printBytes(ByteData const &b) {
-    std::cout << "[";
-    for (size_t ii=0; ii<b.content.length(); ++ii) {
-        if (ii > 0) {
-            std::cout << ", ";
-        }
-        std::cout << "0x" << std::hex << std::setw(2) 
-            << std::setfill('0') << static_cast<uint16_t>(static_cast<uint8_t>(b.content[ii]))
-            << std::dec;
-    }
-    std::cout << "] (" << b.content.length() << " bytes)";
-}
-
 int main(int argc, char **argv) {
     using TestType = 
         std::tuple<
             int32_t
             , double
             , std::string
-            , std::unique_ptr<ByteData>
+            , std::unique_ptr<ByteDataWithTopic>
             , VoidStruct //ConstType<5>
             , std::variant<
                 std::vector<uint16_t>
@@ -43,9 +30,10 @@ int main(int argc, char **argv) {
         -5
         , 2.3E7
         , "this is a test"
-        , std::make_unique<ByteData>(
-            ByteData {
-                std::string {buf, buf+5}
+        , std::make_unique<ByteDataWithTopic>(
+            ByteDataWithTopic {
+                "test.topic"
+                , std::string {buf, buf+5}
             }
         )
         , VoidStruct {}//ConstType<5> {}
@@ -73,7 +61,7 @@ int main(int argc, char **argv) {
     };
     auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
-    printBytes(ByteData {encoded});
+    bytedata_utils::printByteDataDetails(std::cout, ByteData {encoded});
     std::cout << "\n";
     auto decoded = bytedata_utils::RunDeserializer<CBOR<TestType>>::apply(encoded);
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
@@ -85,8 +73,9 @@ int main(int argc, char **argv) {
         std::cout << "\t" << std::get<0>(data) << "\n"
             << "\t, " << std::get<1>(data) << "\n"
             << "\t, '" << std::get<2>(data) << "'\n";
-        std::cout << "\t, ";
-        printBytes(*(std::get<3>(data)));
+        std::cout << "\t, {'" << std::get<3>(data)->topic << "',";
+        bytedata_utils::printByteDataDetails(std::cout, ByteData {std::get<3>(data)->content});
+        std::cout << "}";
         std::cout << "\n";
         std::cout << "\t, {}\n";
         std::cout << "\t, ";
