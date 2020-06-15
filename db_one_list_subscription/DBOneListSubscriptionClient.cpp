@@ -153,14 +153,16 @@ int main(int argc, char **argv) {
     auto insertIntoFlow = M::kleisli<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         basic::CommonFlowUtilComponents<M>::idFunc<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>()
     );
-    auto extractor = basic::CommonFlowUtilComponents<M>::extractDataFromKeyedData<TI::BasicFacilityInput,TI::FacilityOutput>();
+    auto extractor = basic::CommonFlowUtilComponents<M>::extractIDAndDataFromKeyedData<TI::BasicFacilityInput,TI::FacilityOutput>();
     auto convertToData = 
-        infra::KleisliUtils<M>::liftMaybe<TI::FacilityOutput>(
-            basic::transaction::TITransactionFacilityOutputToData<
-                M, Key, Data, int64_t
-                , true //mutex protected
-                , DataSummary, CheckSummary, DataDelta, ApplyDelta
-            >()
+        basic::CommonFlowUtilComponents<M>::withKey<TI::FacilityOutput>(
+            infra::KleisliUtils<M>::liftMaybe<TI::FacilityOutput>(
+                basic::transaction::TITransactionFacilityOutputToData<
+                    M, Key, Data, int64_t
+                    , true //mutex protected
+                    , DataSummary, CheckSummary, DataDelta, ApplyDelta
+                >()
+            )
         );
     auto extractAndConvert = 
         M::kleisli<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
@@ -169,10 +171,10 @@ int main(int argc, char **argv) {
             )
         );
 
-    auto dataExporter = M::pureExporter<TI::OneValue>(
-        [&env,&dbOneListData](TI::OneValue &&data) {
+    auto dataExporter = M::pureExporter<M::Key<TI::OneValue>>(
+        [&env,&dbOneListData](M::Key<TI::OneValue> &&data) {
             std::ostringstream oss;
-            TI::OneValue tr = std::move(data);
+            TI::OneValue tr = std::move(data.key());
             if (tr.data) {
                 dbOneListData = *(tr.data);
                 oss << "Current data: [";
@@ -185,6 +187,7 @@ int main(int argc, char **argv) {
                 oss << "]";
                 oss << " (size: " << dbOneListData.size() << ")";
                 oss << " (version: " << tr.version << ")";
+                oss << " (id: " << data.id() << ")";
             } else {
                 oss << "Current data was deleted";
             }
