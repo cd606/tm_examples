@@ -297,11 +297,8 @@ int main(int argc, char **argv) {
         }
     );
 
-    auto keyify = M::liftPure<TI::BasicFacilityInput>(
-        [](TI::BasicFacilityInput &&x) {
-            return infra::withtime_utils::keyify
-                <TI::BasicFacilityInput,TheEnvironment>(std::move(x));
-        }
+    auto keyify = M::kleisli<TI::BasicFacilityInput>(
+        basic::CommonFlowUtilComponents<M>::keyify<TI::BasicFacilityInput>()
     );
 
     r.placeOrderWithFacility(
