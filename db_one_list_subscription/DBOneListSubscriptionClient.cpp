@@ -148,8 +148,6 @@ int main(int argc, char **argv) {
     );
     r.registerOnOrderFacility("facility", facility);
 
-    Data dbOneListData;
-
     auto insertIntoFlow = M::kleisli<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         basic::CommonFlowUtilComponents<M>::idFunc<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>()
     );
@@ -172,20 +170,19 @@ int main(int argc, char **argv) {
         );
 
     auto dataExporter = M::pureExporter<M::Key<TI::OneValue>>(
-        [&env,&dbOneListData](M::Key<TI::OneValue> &&data) {
+        [&env](M::Key<TI::OneValue> &&data) {
             std::ostringstream oss;
-            TI::OneValue tr = std::move(data.key());
+            TI::OneValue tr = data.key();
             if (tr.data) {
-                dbOneListData = *(tr.data);
                 oss << "Current data: [";
-                for (auto const &item : dbOneListData) {
+                for (auto const &item : *(tr.data)) {
                     oss << "{name:'" << item.first.name << "'"
                             << ",amount:" << item.second.amount
                             << ",stat:" << item.second.stat
                             << "} ";
                 }
                 oss << "]";
-                oss << " (size: " << dbOneListData.size() << ")";
+                oss << " (size: " << tr.data->size() << ")";
                 oss << " (version: " << tr.version << ")";
                 oss << " (id: " << data.id() << ")";
             } else {
@@ -196,7 +193,7 @@ int main(int argc, char **argv) {
     );
 
     auto otherExporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
-        [&dbOneListData](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
+        [](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
             auto id = data.timedData.value.key.id();
             auto input = data.timedData.value.key.key();
             auto output = std::move(data.timedData.value.data);
