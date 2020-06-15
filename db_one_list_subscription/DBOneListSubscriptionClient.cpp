@@ -9,6 +9,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/SingleKeyTransactionInterface.hpp>
+#include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -149,7 +150,49 @@ int main(int argc, char **argv) {
 
     Data dbOneListData;
 
-    auto exporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
+    auto insertIntoFlow = M::kleisli<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
+        basic::CommonFlowUtilComponents<M>::idFunc<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>()
+    );
+    auto extractor = basic::CommonFlowUtilComponents<M>::extractDataFromKeyedData<TI::BasicFacilityInput,TI::FacilityOutput>();
+    auto convertToData = 
+        infra::KleisliUtils<M>::liftMaybe<TI::FacilityOutput>(
+            basic::transaction::TITransactionFacilityOutputToData<
+                M, Key, Data, int64_t
+                , true //mutex protected
+                , DataSummary, CheckSummary, DataDelta, ApplyDelta
+            >()
+        );
+    auto extractAndConvert = 
+        M::kleisli<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
+            infra::KleisliUtils<M>::compose<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
+                std::move(extractor), std::move(convertToData)
+            )
+        );
+
+    auto dataExporter = M::pureExporter<TI::OneValue>(
+        [&env,&dbOneListData](TI::OneValue &&data) {
+            std::ostringstream oss;
+            TI::OneValue tr = std::move(data);
+            if (tr.data) {
+                dbOneListData = *(tr.data);
+                oss << "Current data: [";
+                for (auto const &item : dbOneListData) {
+                    oss << "{name:'" << item.first.name << "'"
+                            << ",amount:" << item.second.amount
+                            << ",stat:" << item.second.stat
+                            << "} ";
+                }
+                oss << "]";
+                oss << " (size: " << dbOneListData.size() << ")";
+                oss << " (version: " << tr.version << ")";
+            } else {
+                oss << "Current data was deleted";
+            }
+            env.log(infra::LogLevel::Info, oss.str());
+        }
+    );
+
+    auto otherExporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         [&dbOneListData](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
             auto id = data.timedData.value.key.id();
             auto input = data.timedData.value.key.key();
@@ -202,54 +245,7 @@ int main(int argc, char **argv) {
                     env->log(infra::LogLevel::Info, oss.str());
                 }
                 break;
-            case 3:
-                {
-                    std::ostringstream oss;
-                    TI::OneValue const &tr = std::get<3>(output.value);
-                    if (tr.data) {
-                        dbOneListData = *(tr.data);
-                        oss << "Got data snapshot: [";
-                        for (auto const &item : dbOneListData) {
-                            oss << "{name:'" << item.first.name << "'"
-                                    << ",amount:" << item.second.amount
-                                    << ",stat:" << item.second.stat
-                                    << "} ";
-                        }
-                        oss << "]";
-                        oss << " (size: " << dbOneListData.size() << ")";
-                        oss << " (version: " << tr.version << ")";
-                        oss << " (my_id: " << env->id_to_string(id) << ")";
-                    } else {
-                        oss << "Got empty data";
-                        oss << " (my_id: " << env->id_to_string(id) << ")";
-                    }
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 4:
-                {
-                    std::ostringstream oss;
-                    TI::OneDelta const &tr = std::get<4>(output.value);
-                    ApplyDelta()(dbOneListData, tr.data);
-                    oss << "Got data delta: [";
-                    for (auto const &item : dbOneListData) {
-                        oss << "{name:'" << item.first.name << "'"
-                                << ",amount:" << item.second.amount
-                                << ",stat:" << item.second.stat
-                                << "} ";
-                    }
-                    oss << "]";
-                    oss << " (size: " << dbOneListData.size() << ")";
-                    oss << " (version: " << tr.version << ")";
-                    oss << " (my_id: " << env->id_to_string(id) << ")";
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                }
+            default:
                 break;
             }
             if (isFinal) {
@@ -313,8 +309,12 @@ int main(int argc, char **argv) {
             r.execute("createCommand", createCommand, 
                 r.importItem("importer", importer)))
         , facility
-        , r.exporterAsSink("exporter", exporter)
+        , r.actionAsSink("insertIntoFlow", insertIntoFlow)
     );
+    r.exportItem("dataExporter", dataExporter,
+        r.execute("extractAndConvert", extractAndConvert, r.actionAsSource(insertIntoFlow))
+    );
+    r.exportItem("otherExporter", otherExporter, r.actionAsSource(insertIntoFlow));
     
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
