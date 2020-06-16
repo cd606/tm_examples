@@ -4,6 +4,7 @@
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <iostream>
+#include <cmath>
 
 #define DBKeyFields \
     ((std::string, name))
@@ -15,6 +16,13 @@
 namespace db_one_list_subscription {
     TM_BASIC_CBOR_CAPABLE_STRUCT(db_key, DBKeyFields);
     TM_BASIC_CBOR_CAPABLE_STRUCT(db_data, DBDataFields);
+
+    inline bool operator==(db_key const &k1, db_key const &k2) {
+        return k1.name == k2.name;
+    }
+    inline bool operator==(db_data const &d1, db_data const &d2) {
+        return d1.amount == d2.amount && std::fabs(d1.stat-d2.stat) < 1.0E-10;
+    }
 }
 
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(db_one_list_subscription::db_key, DBKeyFields);

@@ -1,6 +1,5 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/BasicWithTimeMonad.hpp>
 #include <tm_kit/infra/RealTimeMonad.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
