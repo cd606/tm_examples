@@ -126,6 +126,9 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                     case 2:
                         oss << "Got transaction failure by precondition for " << env->id_to_string(id);
                         break;
+                    case 3:
+                        oss << "Got transaction handled asynchronously for " << env->id_to_string(id);
+                        break;
                     default:
                         oss << "Got unknown transaction failure for " << env->id_to_string(id);
                         break;
