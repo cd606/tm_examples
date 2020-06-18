@@ -8,6 +8,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/SingleKeyTransactionInterface.hpp>
+#include <tm_kit/basic/transaction/TITransactionFacilityOutputToData.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
@@ -215,7 +216,7 @@ int main(int argc, char **argv) {
                         oss << "Got transaction failure by precondition for " << env->id_to_string(id);
                         break;
                     case 3:
-                        oss << "Got transaction handled asynchronously for " << env->id_to_string(id);
+                        oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         break;
                     default:
                         oss << "Got unknown transaction failure for " << env->id_to_string(id);

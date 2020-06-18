@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
                         oss << "Got transaction failure by precondition for " << env->id_to_string(id);
                         break;
                     case 3:
-                        oss << "Got transaction handled asynchronously for " << env->id_to_string(id);
+                        oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         break;
                     default:
                         oss << "Got unknown transaction failure for " << env->id_to_string(id);
@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
                     std::ostringstream oss;
                     TI::OneValue const &tr = std::get<3>(output.value);
                     if (tr.data) {
-                        oss << "Got insert/update: [name='" << tr.groupID << "'"
+                        oss << "Got insert: [name='" << tr.groupID << "'"
                             << ",value1="<< tr.data->value1()
                             << ",value2='" << tr.data->value2() << "'"
                             << ",version=" << tr.version
@@ -258,6 +258,21 @@ int main(int argc, char **argv) {
                             << ",version=" << tr.version
                             << "] for " << env->id_to_string(id);
                     }
+                    if (isFinal) {
+                        oss << " [F]";
+                    }
+                    env->log(infra::LogLevel::Info, oss.str());
+                }
+                break;
+            case 4:
+                {
+                    std::ostringstream oss;
+                    TI::OneDelta const &tr = std::get<4>(output.value);
+                    oss << "Got update: [name='" << tr.groupID << "'"
+                        << ",value1="<< tr.data.value1()
+                        << ",value2='" << tr.data.value2() << "'"
+                        << ",version=" << tr.version
+                        << "] for " << env->id_to_string(id);
                     if (isFinal) {
                         oss << " [F]";
                     }

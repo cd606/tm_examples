@@ -12,6 +12,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/transaction/SingleKeyLocalTransactionHandlerComponent.hpp>
 #include <tm_kit/basic/transaction/SingleKeyLocalStorageTransactionBroker.hpp>
+#include <tm_kit/basic/transaction/TITransactionFacilityOutputToData.hpp>
 #include <tm_kit/basic/transaction/InMemoryVersionProviderComponent.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
@@ -127,7 +128,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                         oss << "Got transaction failure by precondition for " << env->id_to_string(id);
                         break;
                     case 3:
-                        oss << "Got transaction handled asynchronously for " << env->id_to_string(id);
+                        oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         break;
                     default:
                         oss << "Got unknown transaction failure for " << env->id_to_string(id);
