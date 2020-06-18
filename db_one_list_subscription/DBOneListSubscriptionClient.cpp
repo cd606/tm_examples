@@ -195,51 +195,40 @@ int main(int argc, char **argv) {
     auto otherExporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         [](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
             auto id = data.timedData.value.key.id();
-            auto input = data.timedData.value.key.key();
             auto output = std::move(data.timedData.value.data);
             bool isFinal = data.timedData.finalFlag;
             auto *env = data.environment;
 
-            switch (output.value.index()) {
-            case 0:
-                {
-                    TI::TransactionResult const &tr = std::get<0>(output.value);
+            std::visit([env,isFinal,&id](auto const &o) {
+                using T = std::decay_t<decltype(o)>;
+                if constexpr (std::is_same_v<TI::TransactionResult,T>) {
                     std::ostringstream oss;
-                    switch (tr.index()) {
-                    case 0:
-                        oss << "Got transaction success for " << env->id_to_string(id);
-                        break;
-                    case 1:
-                        oss << "Got transaction failure by permission for " << env->id_to_string(id);
-                        break;
-                    case 2:
-                        oss << "Got transaction failure by precondition for " << env->id_to_string(id);
-                        break;
-                    case 3:
-                        oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
-                        break;
-                    default:
-                        oss << "Got unknown transaction failure for " << env->id_to_string(id);
-                        break;
-                    }
+                    std::visit([env,&id,&oss](auto const &tr) {
+                        using T1 = std::decay_t<decltype(tr)>;
+                        if constexpr (std::is_same_v<TI::TransactionSuccess, T1>) {
+                            oss << "Got transaction success for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailurePermission, T1>) {
+                            oss << "Got transaction failure by permission for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailurePrecondition, T1>) {
+                            oss << "Got transaction failure by precondition for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionQueuedAsynchronously, T1>) {
+                            oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
+                        } else {
+                            oss << "Got unknown transaction failure for " << env->id_to_string(id);
+                        }
+                    }, o);
                     if (isFinal) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 1:
-                {
+                } else if constexpr (std::is_same_v<TI::SubscriptionAck, T>) {
                     std::ostringstream oss;
                     oss << "Got subscription ack for " << env->id_to_string(id);
                     if (isFinal) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 2:
-                {
+                } else if constexpr (std::is_same_v<TI::UnsubscriptionAck, T>) {
                     std::ostringstream oss;
                     oss << "Got unsubscription ack for " << env->id_to_string(id);
                     if (isFinal) {
@@ -247,10 +236,7 @@ int main(int argc, char **argv) {
                     }
                     env->log(infra::LogLevel::Info, oss.str());
                 }
-                break;
-            default:
-                break;
-            }
+            }, output.value);
             if (isFinal) {
                 env->log(infra::LogLevel::Info, "Got final update, exiting");
                 exit(0);

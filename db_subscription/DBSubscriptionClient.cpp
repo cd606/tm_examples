@@ -190,63 +190,48 @@ int main(int argc, char **argv) {
     auto exporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
         [](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
             auto id = data.timedData.value.key.id();
-            auto input = data.timedData.value.key.key();
             auto output = std::move(data.timedData.value.data);
             bool isFinal = data.timedData.finalFlag;
             auto *env = data.environment;
 
-            switch (output.value.index()) {
-            case 0:
-                {
-                    TI::TransactionResult const &tr = std::get<0>(output.value);
+            std::visit([env,isFinal,&id](auto const &tr) {
+                using T = std::decay_t<decltype(tr)>;
+                if constexpr (std::is_same_v<TI::TransactionResult,T>) {
                     std::ostringstream oss;
-                    switch (tr.index()) {
-                    case 0:
-                        oss << "Got transaction success for " << env->id_to_string(id);
-                        break;
-                    case 1:
-                        oss << "Got transaction failure by permission for " << env->id_to_string(id);
-                        break;
-                    case 2:
-                        oss << "Got transaction failure by precondition for " << env->id_to_string(id);
-                        break;
-                    case 3:
-                        oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
-                        break;
-                    default:
-                        oss << "Got unknown transaction failure for " << env->id_to_string(id);
-                        break;
-                    }
+                    std::visit([env,&id,&oss](auto const &tr1) {
+                        using T1 = std::decay_t<decltype(tr1)>;
+                        if constexpr (std::is_same_v<TI::TransactionSuccess, T1>) {
+                            oss << "Got transaction success for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailurePermission, T1>) {
+                            oss << "Got transaction failure by permission for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailurePrecondition, T1>) {
+                            oss << "Got transaction failure by precondition for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionQueuedAsynchronously, T1>) {
+                            oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
+                        } else {
+                            oss << "Got unknown transaction failure for " << env->id_to_string(id);
+                        }
+                    }, tr);
                     if (isFinal) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 1:
-                {
+                } else if constexpr (std::is_same_v<TI::SubscriptionAck, T>) {
                     std::ostringstream oss;
                     oss << "Got subscription ack for " << env->id_to_string(id);
                     if (isFinal) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 2:
-                {
+                } else if constexpr (std::is_same_v<TI::UnsubscriptionAck, T>) {
                     std::ostringstream oss;
                     oss << "Got unsubscription ack for " << env->id_to_string(id);
                     if (isFinal) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 3:
-                {
+                } else if constexpr (std::is_same_v<TI::OneValue, T>) {
                     std::ostringstream oss;
-                    TI::OneValue const &tr = std::get<3>(output.value);
                     if (tr.data) {
                         oss << "Got insert: [name='" << tr.groupID << "'"
                             << ",value1="<< tr.data->value1()
@@ -262,12 +247,8 @@ int main(int argc, char **argv) {
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                }
-                break;
-            case 4:
-                {
+                } else if constexpr (std::is_same_v<TI::OneDelta, T>) {
                     std::ostringstream oss;
-                    TI::OneDelta const &tr = std::get<4>(output.value);
                     oss << "Got update: [name='" << tr.groupID << "'"
                         << ",value1="<< tr.data.value1()
                         << ",value2='" << tr.data.value2() << "'"
@@ -278,8 +259,8 @@ int main(int argc, char **argv) {
                     }
                     env->log(infra::LogLevel::Info, oss.str());
                 }
-                break;
-            }
+            }, output.value);
+
             if (isFinal) {
                 env->log(infra::LogLevel::Info, "Got final update, exiting");
                 exit(0);
