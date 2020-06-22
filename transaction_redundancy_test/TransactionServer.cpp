@@ -183,38 +183,39 @@ private:
             innerSendState(l);
         }
     }
-    bool tryTransfer(std::optional<TransactionDataVersion> const &version, TransferData const &transferData, bool force) {
+    basic::transaction::RequestDecision tryTransfer(std::optional<TransactionDataVersion> const &version, TransferData const &transferData, bool ignoreChecks) {
         std::lock_guard<std::mutex> _(dataMutex_);
         TransactionDataVersion myVersion {
             accountA_.version, accountB_.version, pendingTransfers_.version
         };
         if (version) {
             if (versionCmp_(myVersion, *version) || versionCmp_(*version, myVersion)) {
-                return false;
+                return basic::transaction::RequestDecision::FailurePrecondition;
             }
         }
         int32_t total = transferData.amount;
         if (pendingTransfers_.data) {
-            if (!force && pendingTransfers_.data->items.size() >= PENDING_TRANSFER_SIZE_LIMIT) {
-                return false;
+            if (!ignoreChecks && pendingTransfers_.data->items.size() >= PENDING_TRANSFER_SIZE_LIMIT) {
+                return basic::transaction::RequestDecision::FailureConsistency;
             }
             for (auto const &item : pendingTransfers_.data->items) {
                 total += item.amount;
             }
         }
-        if (!force) {
+        
+        if (!ignoreChecks) {
             if (total > 0) {
                 if (!accountA_.data || accountA_.data->value < static_cast<uint32_t>(total)) {
-                    return false;
+                    return basic::transaction::RequestDecision::FailureConsistency;
                 }
             } else if (total < 0) {
                 if (!accountB_.data || accountB_.data->value < static_cast<uint32_t>(-total)) {
-                    return false;
+                    return basic::transaction::RequestDecision::FailureConsistency;
                 }
             }
         }
         if (total == 0) {
-            return true;
+            return basic::transaction::RequestDecision::Success;
         }
 
         TransferList l;
@@ -250,52 +251,53 @@ private:
         txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
         txnStub->Txn(&txnCtx, txn, &resp);
 
-        return resp.succeeded();
-    }
-    void handleTransfer(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, TransferData const &transferData, bool forceUpdate, Callback *cb) {
-        if (forceUpdate) {
-            while (tryTransfer(std::nullopt, transferData, true)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            cb->onRequestDecision(id, RequestDecision::Success);
+        if (resp.succeeded()) {
+            return basic::transaction::RequestDecision::Success;
         } else {
-            if (tryTransfer(oldVersion, transferData, false)) {
-                cb->onRequestDecision(id, RequestDecision::Success);
-            } else {
-                cb->onRequestDecision(id, RequestDecision::FailurePrecondition);
-            }
+            return basic::transaction::RequestDecision::FailurePrecondition;
         }
     }
-    bool tryProcess(std::optional<TransactionDataVersion> const &version, bool force) {
+    void handleTransfer(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, TransferData const &transferData, bool ignoreChecks, Callback *cb) {
+        if (ignoreChecks) {
+            basic::transaction::RequestDecision res;
+            while ((res = tryTransfer(std::nullopt, transferData, ignoreChecks)) != basic::transaction::RequestDecision::Success) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            cb->onRequestDecision(id, res);
+        } else {
+            cb->onRequestDecision(id, tryTransfer(oldVersion, transferData, false));
+        }
+    }
+    basic::transaction::RequestDecision tryProcess(std::optional<TransactionDataVersion> const &version, bool ignoreChecks) {
         std::lock_guard<std::mutex> _(dataMutex_);
         TransactionDataVersion myVersion {
             accountA_.version, accountB_.version, pendingTransfers_.version
         };
         if (version) {
             if (versionCmp_(myVersion, *version) || versionCmp_(*version, myVersion)) {
-                return false;
+                return basic::transaction::RequestDecision::FailurePrecondition;
             }
         }
         if (!pendingTransfers_.data) {
-            return true;
+            return basic::transaction::RequestDecision::Success;
         }
         int32_t total = 0;
         for (auto const &item : pendingTransfers_.data->items) {
             total += item.amount;
         }
-        if (!force) {
+        if (!ignoreChecks) {
             if (total > 0) {
                 if (!accountA_.data || accountA_.data->value < static_cast<uint32_t>(total)) {
-                    return false;
+                    return basic::transaction::RequestDecision::FailureConsistency;
                 }
             } else if (total < 0) {
                 if (!accountB_.data || accountB_.data->value < static_cast<uint32_t>(-total)) {
-                    return false;
+                    return basic::transaction::RequestDecision::FailureConsistency;
                 }
             }
         }
         if (total == 0) {
-            return true;
+            return basic::transaction::RequestDecision::Success;
         }
         
         basic::CBOR<uint32_t> newA {
@@ -341,30 +343,31 @@ private:
         txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
         txnStub->Txn(&txnCtx, txn, &resp);
 
-        return resp.succeeded();
-    }
-    void handleProcess(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, bool forceUpdate, Callback *cb) {
-        if (forceUpdate) {
-            while (tryProcess(std::nullopt, true)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            cb->onRequestDecision(id, RequestDecision::Success);
+        if (resp.succeeded()) {
+            return basic::transaction::RequestDecision::Success;
         } else {
-            if (tryProcess(oldVersion, false)) {
-                cb->onRequestDecision(id, RequestDecision::Success);
-            } else {
-                cb->onRequestDecision(id, RequestDecision::FailurePrecondition);
-            }
+            return basic::transaction::RequestDecision::FailurePrecondition;
         }
     }
-    bool tryInject(std::optional<TransactionDataVersion> const &version, InjectData const &injectData, bool force) {
+    void handleProcess(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, bool ignoreChecks, Callback *cb) {
+        if (ignoreChecks) {
+            basic::transaction::RequestDecision res;
+            while ((res = tryProcess(std::nullopt, true)) != basic::transaction::RequestDecision::Success) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            cb->onRequestDecision(id, res);
+        } else {
+            cb->onRequestDecision(id, tryProcess(oldVersion, false));
+        }
+    }
+    basic::transaction::RequestDecision tryInject(std::optional<TransactionDataVersion> const &version, InjectData const &injectData, bool ignoreChecks) {
         std::lock_guard<std::mutex> _(dataMutex_);
         TransactionDataVersion myVersion {
             accountA_.version, accountB_.version, pendingTransfers_.version
         };
         if (version) {
             if (versionCmp_(myVersion, *version) || versionCmp_(*version, myVersion)) {
-                return false;
+                return basic::transaction::RequestDecision::FailurePrecondition;
             }
         }
 
@@ -406,31 +409,32 @@ private:
         txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
         txnStub->Txn(&txnCtx, txn, &resp);
 
-        return resp.succeeded();
-    }
-    void handleInject(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, InjectData const &injectData, bool forceUpdate, Callback *cb) {
-        if (forceUpdate) {
-            while (tryInject(std::nullopt, injectData, true)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            cb->onRequestDecision(id, RequestDecision::Success);
+        if (resp.succeeded()) {
+            return basic::transaction::RequestDecision::Success;
         } else {
-            if (tryInject(oldVersion, injectData, false)) {
-                cb->onRequestDecision(id, RequestDecision::Success);
-            } else {
-                cb->onRequestDecision(id, RequestDecision::FailurePrecondition);
-            }
+            return basic::transaction::RequestDecision::FailurePrecondition;
         }
     }
-    void handleTransaction(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, TransactionDataDelta const &delta, bool forceUpdate, Callback *cb) {
-        std::visit([this,id,&oldVersion,forceUpdate,cb](auto const &tr) {
+    void handleInject(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, InjectData const &injectData, bool ignoreChecks, Callback *cb) {
+        if (ignoreChecks) {
+            basic::transaction::RequestDecision res;
+            while ((res = tryInject(std::nullopt, injectData, true)) != basic::transaction::RequestDecision::Success) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            cb->onRequestDecision(id, res);
+        } else {
+            cb->onRequestDecision(id, tryInject(oldVersion, injectData, false));
+        }
+    }
+    void handleTransaction(transport::BoostUUIDComponent::IDType id, TransactionDataVersion const &oldVersion, TransactionDataDelta const &delta, bool ignoreChecks, Callback *cb) {
+        std::visit([this,id,&oldVersion,ignoreChecks,cb](auto const &tr) {
             using T = std::decay_t<decltype(tr)>;
             if constexpr (std::is_same_v<TransferRequest, T>) {
-                handleTransfer(id, oldVersion, std::get<1>(tr), forceUpdate, cb);
+                handleTransfer(id, oldVersion, std::get<1>(tr), ignoreChecks, cb);
             } else if constexpr (std::is_same_v<ProcessRequest, T>) {
-                handleProcess(id, oldVersion, forceUpdate, cb);
+                handleProcess(id, oldVersion, ignoreChecks, cb);
             } else if constexpr (std::is_same_v<InjectRequest, T>) {
-                handleInject(id, oldVersion, std::get<1>(tr), forceUpdate, cb);
+                handleInject(id, oldVersion, std::get<1>(tr), ignoreChecks, cb);
             }
         }, delta);
     }
@@ -636,10 +640,11 @@ public:
             , std::string const &account
             , TransactionKey const &key
             , TransactionData const &data
+            , bool ignoreConsistencyCheckAsMuchAsPossible
             , Callback *callback
         ) override final
     {
-        callback->onRequestDecision(requestID, RequestDecision::FailurePermission);
+        callback->onRequestDecision(requestID, basic::transaction::RequestDecision::FailurePermission);
     }
     virtual void
         handleUpdate(
@@ -649,7 +654,7 @@ public:
             , TransactionDataVersion const &oldVersion
             , TransactionDataSummary const &oldDataSummary
             , TransactionDataDelta const &dataDelta
-            , bool forceUpdate
+            , bool ignoreConsistencyCheckAsMuchAsPossible
             , Callback *callback
         ) override final
     {
@@ -657,7 +662,7 @@ public:
             {
                 std::lock_guard<std::mutex> _(transactionQueueMutex_);
                 transactionQueues_[transactionQueueIncomingIndex_].push_back({
-                    requestID, oldVersion, dataDelta, forceUpdate, callback
+                    requestID, oldVersion, dataDelta, ignoreConsistencyCheckAsMuchAsPossible, callback
                 });
             }
             transactionQueueCond_.notify_one();
@@ -670,11 +675,11 @@ public:
             , TransactionKey const &key
             , TransactionDataVersion const &oldVersion
             , TransactionDataSummary const &oldDataSummary
-            , bool forceDelete
+            , bool ignoreConsistencyCheckAsMuchAsPossible
             , Callback *callback
         ) override final
     {
-        callback->onRequestDecision(requestID, RequestDecision::FailurePermission);
+        callback->onRequestDecision(requestID, basic::transaction::RequestDecision::FailurePermission);
     }
     virtual void
         startWatch(

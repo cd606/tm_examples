@@ -53,10 +53,11 @@ public:
     }
     virtual ~THComponent() {
     }
-    virtual bool handleInsert(
+    virtual basic::transaction::RequestDecision handleInsert(
             std::string const &account
             , std::string const &key
             , db_data const &data
+            , bool ignoreConsistencyCheckAsMuchAsPossible
         ) override final {
         std::lock_guard<std::mutex> _(mutex_);
         if (session_) {
@@ -64,15 +65,16 @@ public:
                         , soci::use(key, "name")
                         , soci::use(data.value1(), "val1")
                         , soci::use(data.value2(), "val2");
-            return true;
+            return basic::transaction::RequestDecision::Success;
         } else {
-            return false;
+            return basic::transaction::RequestDecision::FailurePermission;
         }
     }
-    virtual bool handleUpdate(
+    virtual basic::transaction::RequestDecision handleUpdate(
         std::string const &account
         , std::string const &key
         , db_data const &data
+        , bool ignoreConsistencyCheckAsMuchAsPossible
     ) override final {
         std::lock_guard<std::mutex> _(mutex_);
         if (session_) {
@@ -80,22 +82,23 @@ public:
                         , soci::use(key, "name")
                         , soci::use(data.value1(), "val1")
                         , soci::use(data.value2(), "val2");
-            return true;
+            return basic::transaction::RequestDecision::Success;
         } else {
-            return false;
+            return basic::transaction::RequestDecision::FailurePermission;
         }
     }
-    virtual bool handleDelete(
+    virtual basic::transaction::RequestDecision handleDelete(
         std::string const &account
         , std::string const &key
+        , bool ignoreConsistencyCheckAsMuchAsPossible
     ) override final {
         std::lock_guard<std::mutex> _(mutex_);
         if (session_) {
             (*session_) << "DELETE FROM test_table WHERE name = :name"
                         , soci::use(key, "name");
-            return true;
+            return basic::transaction::RequestDecision::Success;
         } else {
-            return false;
+            return basic::transaction::RequestDecision::FailurePermission;
         }
     }
     virtual std::vector<std::tuple<std::string,db_data>> loadInitialData() override final {

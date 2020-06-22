@@ -125,6 +125,8 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                             oss << "Got transaction failure by permission for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<typename TI::TransactionFailurePrecondition, T1>) {
                             oss << "Got transaction failure by precondition for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<typename TI::TransactionFailureConsistency, T1>) {
+                            oss << "Got transaction failure by consistency for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<typename TI::TransactionQueuedAsynchronously, T1>) {
                             oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         } else {

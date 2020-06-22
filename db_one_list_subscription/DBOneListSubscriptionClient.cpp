@@ -211,6 +211,8 @@ int main(int argc, char **argv) {
                             oss << "Got transaction failure by permission for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<TI::TransactionFailurePrecondition, T1>) {
                             oss << "Got transaction failure by precondition for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailureConsistency, T1>) {
+                            oss << "Got transaction failure by consistency for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<TI::TransactionQueuedAsynchronously, T1>) {
                             oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         } else {

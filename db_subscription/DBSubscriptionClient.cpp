@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         ("old_value1", po::value<int>(), "old value1 for the command")
         ("old_value2", po::value<std::string>(), "old value2 for the command")
         ("id", po::value<std::string>(), "id for the command")
-        ("force", "force update/delete")
+        ("force", "ignore checks in update/delete")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -210,6 +210,8 @@ int main(int argc, char **argv) {
                             oss << "Got transaction failure by permission for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<TI::TransactionFailurePrecondition, T1>) {
                             oss << "Got transaction failure by precondition for " << env->id_to_string(id);
+                        } else if constexpr (std::is_same_v<TI::TransactionFailureConsistency, T1>) {
+                            oss << "Got transaction failure by consistency for " << env->id_to_string(id);
                         } else if constexpr (std::is_same_v<TI::TransactionQueuedAsynchronously, T1>) {
                             oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
                         } else {

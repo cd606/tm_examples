@@ -51,19 +51,21 @@ public:
     }
     virtual ~THComponent() {
     }
-    virtual bool handleInsert(
+    virtual basic::transaction::RequestDecision handleInsert(
             std::string const &
             , Key const &
             , Data const &
+            , bool
         ) override final {
         //Since the whole database is represented as a list
         //, there will never be insert or delete on the "key" (void struct)
-        return false;
+        return basic::transaction::RequestDecision::FailureConsistency;
     }
-    virtual bool handleUpdate(
+    virtual basic::transaction::RequestDecision handleUpdate(
         std::string const &account
         , Key const &
         , DataDelta const &dataDelta
+        , bool ignoreConsistencyCheckAsMuchAsPossible
     ) override final {
         std::lock_guard<std::mutex> _(mutex_);
         if (session_) {
@@ -95,18 +97,19 @@ public:
                                 , soci::use(statsToInsert, "st"));
                 insStmt.execute(true);
             }
-            return true;
+            return basic::transaction::RequestDecision::Success;
         } else {
-            return false;
+            return basic::transaction::RequestDecision::FailurePermission;
         }
     }
-    virtual bool handleDelete(
+    virtual basic::transaction::RequestDecision handleDelete(
         std::string const &
         , Key const &
+        , bool
     ) override final {
         //Since the whole database is represented as a list
         //, there will never be insert or delete on the "key" (void struct)
-        return false;
+        return basic::transaction::RequestDecision::FailureConsistency;
     }
     virtual std::vector<std::tuple<Key,Data>> loadInitialData() override final {
         std::vector<std::tuple<Key,Data>> ret;
