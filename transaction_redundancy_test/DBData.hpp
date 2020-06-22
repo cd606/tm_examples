@@ -39,4 +39,33 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(test::TransferList, TransferListFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(test::TransactionData, TransactionDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(test::InjectData, InjectDataFields);
 
+namespace test {
+    inline std::ostream &operator<<(std::ostream &os, test::TransactionData const &d) {
+        os << "{accountA : " << d.accountA
+            << ", accountB : " << d.accountB
+            << ", pendingTransfers : {items: [";
+        for (auto const &item : d.pendingTransfers.items) {
+            os << item << ' ';
+        }
+        os << "]}}";
+        return os;
+    }
+    inline bool operator==(test::TransactionData const &a, test::TransactionData const &b) {
+        auto x = (a.accountA.amount == b.accountA.amount
+            && a.accountB.amount == b.accountB.amount);
+        if (!x) {
+            return false;
+        }
+        if (a.pendingTransfers.items.size() != b.pendingTransfers.items.size()) {
+            return false;
+        }
+        for (size_t ii=0; ii<a.pendingTransfers.items.size(); ++ii) {
+            if (a.pendingTransfers.items[ii].amount != b.pendingTransfers.items[ii].amount) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
 #endif

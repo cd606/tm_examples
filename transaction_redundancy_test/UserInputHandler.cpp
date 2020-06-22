@@ -32,7 +32,7 @@ int main() {
         , transport::BoostUUIDComponent::IDType
         , TransactionDataSummary
         , TransactionDataDelta
-        , infra::ArrayComparerWithSkip<int64_t, 3>
+        , TransactionVersionComparer
     >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
@@ -216,35 +216,11 @@ int main() {
             {
                 std::lock_guard<std::mutex> _(dataMutex);
                 currentData = std::move(data);
-                
-                oss << "{accountA=";
                 if (currentData.data) {
-                    oss << currentData.data->accountA;
+                    oss << *(currentData.data) << ", (version: " << currentData.version << ")";
                 } else {
                     oss << "(none)";
-                }
-                oss << ",accountB=";
-                if (currentData.data) {
-                    oss << currentData.data->accountB;
-                } else {
-                    oss << "(none)";
-                }
-                oss << ",pendingTransfers=";
-                if (currentData.data) {
-                    oss << "[";
-                    for (auto const &t : currentData.data->pendingTransfers.items) {
-                        oss << t << ' ';
-                    }
-                    oss << "]";
-                    oss << " (" << currentData.data->pendingTransfers.items.size() << " items)";
-                } else {
-                    oss << "(none)";
-                }
-                oss << " (version:[";
-                for (auto const &v : currentData.version) {
-                    oss << v << ' ';
-                };
-                oss << "])";                
+                }    
             }
             env.log(infra::LogLevel::Info, oss.str());
         }

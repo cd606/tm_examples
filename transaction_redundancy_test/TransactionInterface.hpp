@@ -10,6 +10,11 @@ namespace test {
     using TransactionDataVersion = std::array<int64_t, 3>; //index 0 is account A, 1 is account B, and 2 is transfer list
     using TransactionVersionComparer = dev::cd606::tm::infra::ArrayComparerWithSkip<int64_t, 3>;
     using TransactionDataSummary = dev::cd606::tm::basic::VoidStruct; //no need of any summary
+    struct TransactionDataCheckSummary {
+        bool operator()(TransactionData const &, TransactionDataSummary const &) const {
+            return true;
+        }
+    };
     using TransferRequest = std::tuple<
         dev::cd606::tm::basic::ConstType<1001>
         , TransferData
@@ -24,6 +29,11 @@ namespace test {
         , ProcessRequest
         , InjectRequest
     >;
+
+    inline std::ostream &operator<<(std::ostream &os, TransactionDataVersion const &v) {
+        os << "[" << v[0] << ',' << v[1] << ',' << v[2] << "]";
+        return os;
+    }
 }
 
 #endif
