@@ -104,16 +104,18 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
             env.log(infra::LogLevel::Info, oss.str());
         }
     );
-    auto otherExporter = M::template simpleExporter<typename M::template Key<typename TI::FacilityOutput>>(
-        [](typename M::template InnerData<typename M::template Key<typename TI::FacilityOutput>> &&data) {
-            static int unsubscriptionCount = 0;
 
+    std::shared_ptr<int> unsubscriptionCount = std::make_shared<int>(0);
+    r.preservePointer(unsubscriptionCount);
+
+    auto otherExporter = M::template simpleExporter<typename M::template Key<typename TI::FacilityOutput>>(
+        [unsubscriptionCount](typename M::template InnerData<typename M::template Key<typename TI::FacilityOutput>> &&data) {
             auto id = data.timedData.value.id();
             auto output = data.timedData.value.key();
             bool isFinal = data.timedData.finalFlag;
             auto *env = data.environment;
 
-            std::visit([env,isFinal,&id](auto const &o) {
+            std::visit([env,isFinal,&id,unsubscriptionCount](auto const &o) {
                 using T = std::decay_t<decltype(o)>;
                 if constexpr (std::is_same_v<typename TI::TransactionResult,T>) {
                     std::ostringstream oss;
@@ -151,8 +153,8 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                         oss << " [F]";
                     }
                     env->log(infra::LogLevel::Info, oss.str());
-                    ++unsubscriptionCount;
-                    if (unsubscriptionCount == 2) {
+                    ++(*unsubscriptionCount);
+                    if (*unsubscriptionCount == 2) {
                         env->log(infra::LogLevel::Info, "All unsubscribed, exiting");
                         exit(0);
                     }
