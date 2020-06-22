@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
         ("old_value1", po::value<int>(), "old value1 for the command")
         ("old_value2", po::value<std::string>(), "old value2 for the command")
         ("id", po::value<std::string>(), "id for the command")
+        ("force", "force update/delete")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -67,6 +68,7 @@ int main(int argc, char **argv) {
     std::string old_value2;
     int64_t old_version = 0;
     std::string idStr;
+    bool force = false;
     if (cmd == "subscribe") {
         if (!vm.count("key")) {
             std::cerr << "Please provide key for command\n";
@@ -131,6 +133,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         old_version = vm["old_version"].as<int64_t>();
+        force = vm.count("force");
     } else if (cmd == "delete") {
         if (!vm.count("key")) {
             std::cerr << "Please provide key for command\n";
@@ -152,6 +155,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         old_version = vm["old_version"].as<int64_t>();
+        force = vm.count("force");
     }
 
     using TI = basic::transaction::SingleKeyTransactionInterface<
@@ -275,7 +279,7 @@ int main(int argc, char **argv) {
     );
 
     auto createCommand = M::liftMaybe<basic::VoidStruct>(
-        [&env,cmd,key,value1,value2,old_value1,old_value2,old_version,idStr](basic::VoidStruct &&) -> std::optional<TI::BasicFacilityInput> {
+        [&env,cmd,key,value1,value2,old_value1,old_value2,old_version,idStr,force](basic::VoidStruct &&) -> std::optional<TI::BasicFacilityInput> {
             if (cmd == "subscribe") {
                 return TI::BasicFacilityInput {
                     { TI::Subscription {key} }
@@ -302,7 +306,7 @@ int main(int argc, char **argv) {
                 old_item.set_value2(old_value2);
                 return TI::BasicFacilityInput { 
                     { TI::Transaction {
-                        TI::UpdateAction {key, old_version, old_item, item}
+                        TI::UpdateAction {key, old_version, old_item, item, force}
                     } }
                 };
             } else if (cmd == "delete") {
@@ -311,7 +315,7 @@ int main(int argc, char **argv) {
                 old_item.set_value2(old_value2);
                 return TI::BasicFacilityInput { 
                     { TI::Transaction {
-                        TI::DeleteAction {key, old_version, old_item}
+                        TI::DeleteAction {key, old_version, old_item, force}
                     } }
                 };
             } else {
