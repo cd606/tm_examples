@@ -13,6 +13,9 @@
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <grpcpp/grpcpp.h>
+#ifdef _MSC_VER
+#undef DELETE
+#endif
 #include <libetcd/rpc.grpc.pb.h>
 #include <libetcd/kv.pb.h>
 
