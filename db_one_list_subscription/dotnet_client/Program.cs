@@ -125,7 +125,7 @@ namespace dotnet_client
                                     .Add("old_version", data.old_version)
                                     .Add("old_data_summary", data.old_count)
                                     .Add("data_delta", dataDelta)
-                                    .Add("ignore_checks", 0)
+                                    .Add("ignore_version_check", 0)
                             )
                     )
             );
@@ -148,7 +148,7 @@ namespace dotnet_client
                                     .Add("old_version", data.old_version)
                                     .Add("old_data_summary", data.old_count)
                                     .Add("data_delta", dataDelta)
-                                    .Add("ignore_checks", 0)
+                                    .Add("ignore_version_check", 0)
                             )
                     )
             );

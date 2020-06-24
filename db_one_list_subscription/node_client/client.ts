@@ -98,7 +98,7 @@ async function run(args : Args) {
                                 }
                             ]}
                         }
-                        , ignore_checks: 0
+                        , ignore_version_check: 0
                     }
                 ]
             ]));
@@ -115,7 +115,7 @@ async function run(args : Args) {
                             deletes: {keys: [{name: args.name}]}
                             , inserts_updates: {items: []}
                         }
-                        , ignore_checks: 0
+                        , ignore_version_check: 0
                     }
                 ]
             ]));
