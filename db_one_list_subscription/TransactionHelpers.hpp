@@ -18,13 +18,14 @@ namespace db_one_list_subscription {
         }
     };
     struct ApplyDelta {
-        void operator()(Data &data, DataDelta const &delta) const {
+        DataDelta operator()(Data &data, DataDelta const &delta) const {
             for (auto const &key : delta.deletes.keys) {
                 data.erase(key);
             }
             for (auto const &item : delta.inserts_updates.items) {
                 data[item.key] = item.data;
             }
+            return delta;
         }
     };
 }

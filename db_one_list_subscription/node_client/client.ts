@@ -46,6 +46,7 @@ enum Command {
     , Update 
     , Delete 
     , Unsubscribe
+    , List
     , Unknown
 };
 
@@ -59,9 +60,9 @@ interface Args {
     , id : string
 };
 
-function sendCommand(conn : Connection, cmd : Buffer) {
+function sendCommand(queue : string, conn : Connection, cmd : Buffer) {
     conn.channel.sendToQueue(
-        "test_db_one_list_cmd_queue"
+        queue
         , cbor.encode(["node_client", cmd])
         , {
             correlationId : uuidv4()
@@ -77,56 +78,62 @@ async function run(args : Args) {
     let conn = await start();
     switch (args.command) {
         case Command.Subscribe:
-            sendCommand(conn, cbor.encode([
-                1, {key: 0}
+            sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+                0, {keys: [0]}
             ]));
             break;
         case Command.Update:
-            sendCommand(conn, cbor.encode([
-                0
-                , [1
-                    , {
-                        key: 0
-                        , old_version: args.old_version
-                        , old_data_summary: args.old_count
-                        , data_delta: {
-                            deletes: {keys: []}
-                            , inserts_updates: {items: [
-                                {
-                                    key: {name: args.name}
-                                    , data: {amount: args.amount, stat: args.stat}
-                                }
-                            ]}
-                        }
-                        , ignore_version_check: 0
+            sendCommand("test_db_one_list_cmd_transaction_queue", conn, cbor.encode([
+                1
+                , {
+                    key: 0
+                    , old_version_slice: [args.old_version]
+                    , old_data_summary: [args.old_count]
+                    , data_delta: {
+                        deletes: {keys: []}
+                        , inserts_updates: {items: [
+                            {
+                                key: {name: args.name}
+                                , data: {amount: args.amount, stat: args.stat}
+                            }
+                        ]}
                     }
-                ]
+                }
             ]));
             break;
         case Command.Delete:
-            sendCommand(conn, cbor.encode([
-                0
-                , [1
-                    , {
-                        key: 0
-                        , old_version: args.old_version
-                        , old_data_summary: args.old_count
-                        , data_delta: {
-                            deletes: {keys: [{name: args.name}]}
-                            , inserts_updates: {items: []}
-                        }
-                        , ignore_version_check: 0
+            sendCommand("test_db_one_list_cmd_transaction_queue", conn, cbor.encode([
+                1
+                , {
+                    key: 0
+                    , old_version_slice: [args.old_version]
+                    , old_data_summary: [args.old_count]
+                    , data_delta: {
+                        deletes: {keys: [{name: args.name}]}
+                        , inserts_updates: {items: []}
                     }
-                ]
+                }
             ]));
             break;
         case Command.Unsubscribe:
-            sendCommand(conn, cbor.encode([
+            if (args.id != "") {
+                sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+                    1
+                    , {
+                        original_subscription_id: args.id
+                    }
+                ]));
+            } else {
+                sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+                    3
+                    , 0
+                ]));
+            }
+            break;
+        case Command.List:
+            sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
                 2
-                , {
-                    original_subscription_id: args.id
-                    , key: 0
-                }
+                , 0
             ]));
             break;
         default:
@@ -151,6 +158,9 @@ async function run(args : Args) {
             break;
         case 'unsubscribe':
             cmd = Command.Unsubscribe;
+            break;
+        case 'list':
+            cmd = Command.List;
             break;
         default:
             break;

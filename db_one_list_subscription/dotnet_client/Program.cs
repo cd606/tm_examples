@@ -13,6 +13,7 @@ namespace dotnet_client
             , Update
             , Delete
             , Unsubscribe
+            , List
             , Unknown
         };
         struct Data {
@@ -63,7 +64,7 @@ namespace dotnet_client
                 }
             };
         }
-        void SendCommand(CBORObject cmd) {
+        void SendCommand(string queue, CBORObject cmd) {
             if (chan != null) {
                 var props = chan.CreateBasicProperties();
                 var id = Guid.NewGuid().ToString();
@@ -79,7 +80,7 @@ namespace dotnet_client
                                             .Add(cmd.EncodeToBytes());
                 chan.BasicPublish(
                     exchange: ""
-                    , routingKey: "test_db_one_list_cmd_queue"
+                    , routingKey: queue
                     , basicProperties: props
                     , body: withIdentity.EncodeToBytes()
                 );
@@ -95,9 +96,10 @@ namespace dotnet_client
         }
         void Subscribe() {
             SendCommand(
-                CBORObject.NewArray()
-                    .Add(1) //subscribe
-                    .Add(CBORObject.NewMap().Add("key", 0)) //subscription object, 0 is the key (VoidStruct)
+                "test_db_one_list_cmd_subscription_queue"
+                , CBORObject.NewArray()
+                    .Add(0) //subscribe
+                    .Add(CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(0))) //subscription object, 0 is the key (VoidStruct)
             );
         }
         void Update(Data data) {
@@ -114,19 +116,15 @@ namespace dotnet_client
                     .Add("deletes", CBORObject.NewMap().Add("keys", CBORObject.NewArray()))
                     .Add("inserts_updates", CBORObject.NewMap().Add("items", updatedData));
             SendCommand(
-                CBORObject.NewArray()
-                    .Add(0) //transaction
+                "test_db_one_list_cmd_transaction_queue"
+                , CBORObject.NewArray()
+                    .Add(1) //update
                     .Add(
-                        CBORObject.NewArray()
-                            .Add(1) //update
-                            .Add(
-                                CBORObject.NewMap()
-                                    .Add("key", 0)
-                                    .Add("old_version", data.old_version)
-                                    .Add("old_data_summary", data.old_count)
-                                    .Add("data_delta", dataDelta)
-                                    .Add("ignore_version_check", 0)
-                            )
+                        CBORObject.NewMap()
+                            .Add("key", 0)
+                            .Add("old_version_slice", CBORObject.NewArray().Add(data.old_version))
+                            .Add("old_data_summary", CBORObject.NewArray().Add(data.old_count))
+                            .Add("data_delta", dataDelta)
                     )
             );
         }
@@ -137,31 +135,44 @@ namespace dotnet_client
                     .Add("deletes", CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(deletedKey)))
                     .Add("inserts_updates", CBORObject.NewMap().Add("items", CBORObject.NewArray()));
             SendCommand(
-                CBORObject.NewArray()
-                    .Add(0) //transaction
+                "test_db_one_list_cmd_transaction_queue"
+                , CBORObject.NewArray()
+                    .Add(1) //update
                     .Add(
-                        CBORObject.NewArray()
-                            .Add(1) //update
-                            .Add(
-                                CBORObject.NewMap()
-                                    .Add("key", 0)
-                                    .Add("old_version", data.old_version)
-                                    .Add("old_data_summary", data.old_count)
-                                    .Add("data_delta", dataDelta)
-                                    .Add("ignore_version_check", 0)
-                            )
+                        CBORObject.NewMap()
+                            .Add("key", 0)
+                            .Add("old_version_slice", CBORObject.NewArray().Add(data.old_version))
+                            .Add("old_data_summary", CBORObject.NewArray().Add(data.old_count))
+                            .Add("data_delta", dataDelta)
                     )
             );
         }
         void Unsubscribe(Data data) {
+            if (data.id == "" || data.id == "all") {
+                SendCommand(
+                    "test_db_one_list_cmd_subscription_queue"
+                    , CBORObject.NewArray()
+                        .Add(3) //unsubscribe all
+                        .Add(0) //0 means empty object (the UnsubscribeAll object)
+                );
+            } else {
+                SendCommand(
+                    "test_db_one_list_cmd_subscription_queue"
+                    , CBORObject.NewArray()
+                        .Add(1) //unsubscribe
+                        .Add(
+                            CBORObject.NewMap()
+                                .Add("original_subscription_id", data.id)
+                        )
+                );
+            }
+        }
+        void List(Data data) {
             SendCommand(
-                CBORObject.NewArray()
-                    .Add(2) //unsubscribe
-                    .Add(
-                        CBORObject.NewMap()
-                            .Add("original_subscription_id", data.id)
-                            .Add("key", 0)
-                    )
+                "test_db_one_list_cmd_subscription_queue"
+                , CBORObject.NewArray()
+                    .Add(2) //list
+                    .Add(0) //0 means empty object (the ListSubscriptions object)
             );
         }
         void Run(Command cmd, Data data) {
@@ -178,6 +189,9 @@ namespace dotnet_client
                 break;
             case Command.Unsubscribe:
                 Unsubscribe(data);
+                break;
+            case Command.List:
+                List(data);
                 break;
             default:
                 break;
@@ -260,6 +274,9 @@ namespace dotnet_client
                     break;
                 case "unsubscribe":
                     new Program().Run(Command.Unsubscribe, data);
+                    break;
+                case "list":
+                    new Program().Run(Command.List, data);
                     break;
                 default:
                     break;
