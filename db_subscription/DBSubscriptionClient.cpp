@@ -2,13 +2,15 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/BasicWithTimeMonad.hpp>
 #include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/KleisliUtils.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
-#include <tm_kit/basic/transaction/SingleKeyTransactionInterface.hpp>
+#include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
+#include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -25,13 +27,330 @@
 using namespace dev::cd606::tm;
 using namespace db_subscription;
 
+void diMain(std::string const &cmd, std::string const &key, std::string const &idStr) {
+    using DI = basic::transaction::v2::DataStreamInterface<
+        int64_t
+        , std::string
+        , int64_t
+        , db_data
+    >;
+    using GS = basic::transaction::v2::GeneralSubscriberTypes<
+        boost::uuids::uuid, DI
+    >;
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<false>,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
+        transport::BoostUUIDComponent,
+        transport::rabbitmq::RabbitMQComponent,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
+            , GS::Input>
+    >;
+    using M = infra::RealTimeMonad<TheEnvironment>;
+    using R = infra::MonadRunner<M>;
+
+    TheEnvironment env;
+    env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>::operator=(
+        transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>(
+            "db_subscription_client"
+        )
+    ); 
+
+    R r(&env); 
+
+    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+        <GS::Input,GS::Output>(
+        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_cmd_subscription_queue")
+    );
+
+    auto dataStorePtr = std::make_shared<basic::transaction::v2::TransactionDataStore<DI>>();
+    r.preservePointer(dataStorePtr);
+
+    auto extractKeyedOutput = M::kleisli<M::KeyedData<GS::Input,GS::Output>>(
+        basic::CommonFlowUtilComponents<M>::extractIDAndDataFromKeyedData<GS::Input,GS::Output>()
+    );
+
+    auto printAck = M::simpleExporter<M::Key<GS::Output>>(
+        [&env](M::InnerData<M::Key<GS::Output>> &&o) {
+            auto id = o.timedData.value.id();
+            std::visit([&id,&env](auto const &x) {
+                using T = std::decay_t<decltype(x)>;
+                if constexpr (std::is_same_v<T,GS::Subscription>) {
+                    std::ostringstream oss;
+                    oss << "Got subscription ack for " << env.id_to_string(id)
+                        << " on " << x.keys.size() << " keys";
+                    env.log(infra::LogLevel::Info, oss.str());
+                } else if constexpr (std::is_same_v<T,GS::Unsubscription>) {
+                    std::ostringstream oss;
+                    oss << "Got unsubscription ack for " << env.id_to_string(x.originalSubscriptionID)
+                        << " from " << env.id_to_string(id);
+                    env.log(infra::LogLevel::Info, oss.str());
+                } else if constexpr (std::is_same_v<T,GS::SubscriptionInfo>) {
+                    std::ostringstream oss;
+                    oss << "Got subscription info " << x;
+                    env.log(infra::LogLevel::Info, oss.str());
+                } else if constexpr (std::is_same_v<T,GS::UnsubscribeAll>) {
+                    std::ostringstream oss;
+                    oss << "Got unsubscribe-all ack from " << env.id_to_string(id);
+                    env.log(infra::LogLevel::Info, oss.str());
+                }
+            }, o.timedData.value.key().value);
+            if (o.timedData.finalFlag) {
+                env.log(infra::LogLevel::Info, "Got final update, exiting");
+                exit(0);
+            }
+        }
+    );
+
+    auto getOutput = infra::KleisliUtils<M>::liftMaybe<GS::Output>(
+        [](GS::Output &&o) -> std::optional<DI::Update> {
+            return std::visit([](auto &&x) -> std::optional<DI::Update> {
+                using T = std::decay_t<decltype(x)>;
+                if constexpr (std::is_same_v<T,DI::Update>) {
+                    return std::move(x);
+                } else {
+                    return std::nullopt;
+                }
+            }, std::move(o.value));
+        }
+    );
+    
+    using DM = basic::transaction::v2::TransactionDeltaMerger<
+        DI, true
+    >;
+    auto deltaMerger = infra::KleisliUtils<M>::liftPure<DI::Update>(DM {dataStorePtr});
+    
+    auto getFullOutput = M::kleisli<M::Key<GS::Output>>(
+        basic::CommonFlowUtilComponents<M>::withKey<GS::Output>(
+            infra::KleisliUtils<M>::compose<GS::Output>(std::move(getOutput), std::move(deltaMerger))
+        )
+    );
+
+    auto printFullUpdate = M::pureExporter<M::Key<DI::Update>>(
+        [&env](M::Key<DI::Update> &&update) {
+            std::ostringstream oss;
+            oss << "Got full update {";
+            oss << "globalVersion=" << update.key().version;
+            oss << ",updates=[";
+            int ii = 0;
+            for (auto const &item : update.key().data) {
+                std::visit([&oss,&ii](auto const &x) {
+                    using T = std::decay_t<decltype(x)>;
+                    if constexpr (std::is_same_v<T,DI::OneFullUpdateItem>) {
+                        if (ii > 0) {
+                            oss << ",";
+                        }
+                        ++ii;
+                        oss << "{key=" << x.groupID;
+                        oss << ",version=" << x.version;
+                        if (x.data) {
+                            oss << ",data={value1=" << x.data->value1() << ",value2='" << x.data->value2() << "'}";
+                        } else {
+                            oss << ",data=(deleted)";
+                        }
+                        oss << "}";
+                    }
+                }, item);
+            }
+            oss << "]";
+            oss << "} (from " << env.id_to_string(update.id()) << ")";
+            env.log(infra::LogLevel::Info, oss.str());
+        }
+    );
+
+    auto createCommand = M::liftMaybe<basic::VoidStruct>(
+        [&env,cmd,key,idStr](basic::VoidStruct &&) -> std::optional<GS::Input> {
+            if (cmd == "subscribe") {
+                return GS::Input {
+                    GS::Subscription { std::vector<DI::Key> {key} }
+                };
+            } else if (cmd == "unsubscribe") {
+                if (idStr == "all") {
+                    return GS::Input {
+                        GS::UnsubscribeAll {}
+                    };
+                } else {
+                    return GS::Input {
+                        GS::Unsubscription {env.id_from_string(idStr)}
+                    };
+                }
+            } else if (cmd == "list") {
+                return GS::Input {
+                    GS::ListSubscriptions {}
+                };
+            } else {
+                return std::nullopt;
+            }
+        }
+    );
+
+    auto keyify = M::template kleisli<typename GS::Input>(
+        basic::CommonFlowUtilComponents<M>::template keyify<typename GS::Input>()
+    );
+
+    auto initialImporter = M::simpleImporter<basic::VoidStruct>(
+        [](M::PublisherCall<basic::VoidStruct> &p) {
+            p(basic::VoidStruct {});
+        }
+        , infra::LiftParameters<std::chrono::system_clock::time_point>()
+            .SuggestThreaded(true)
+    );
+
+    auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
+    auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
+    r.placeOrderWithFacility(std::move(keyedCommand), "facility", facility, r.actionAsSink("extractKeyedOutput", extractKeyedOutput));
+    auto keyedOutput = r.actionAsSource(extractKeyedOutput);
+    r.exportItem("printAck", printAck, keyedOutput.clone());
+    r.exportItem("printFullUpdate", printFullUpdate, r.execute("getFullOutput", getFullOutput, keyedOutput.clone()));
+
+    std::ostringstream graphOss;
+    graphOss << "The graph is:\n";
+    r.writeGraphVizDescription(graphOss, "db_subscription_client");
+    r.finalize();
+
+    env.log(infra::LogLevel::Info, graphOss.str());
+    env.log(infra::LogLevel::Info, "DB subscription client started");
+
+    infra::terminationController(infra::RunForever {});
+}
+
+void tiMain(std::string const &cmd, std::string const &key, int value1, std::string const &value2
+        , int oldValue1, std::string const &oldValue2, int oldVersion, bool force) {
+    using TI = basic::transaction::v2::TransactionInterface<
+        int64_t
+        , std::string
+        , int64_t
+        , db_data
+    >;
+
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<false>,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
+        transport::BoostUUIDComponent,
+        transport::rabbitmq::RabbitMQComponent,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
+            , TI::Transaction>
+    >;
+    using M = infra::RealTimeMonad<TheEnvironment>;
+    using R = infra::MonadRunner<M>;
+
+    TheEnvironment env;
+    env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>::operator=(
+        transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>(
+            "db_subscription_client"
+        )
+    );
+
+    R r(&env); 
+
+    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+        <TI::Transaction,TI::TransactionResponse>(
+        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_cmd_transaction_queue")
+    );
+
+    auto initialImporter = M::simpleImporter<basic::VoidStruct>(
+        [](M::PublisherCall<basic::VoidStruct> &p) {
+            p(basic::VoidStruct {});
+        }
+        , infra::LiftParameters<std::chrono::system_clock::time_point>()
+            .SuggestThreaded(true)
+    );
+
+    auto createCommand = M::liftMaybe<basic::VoidStruct>(
+        [cmd,key,value1,value2,oldValue1,oldValue2,oldVersion,force](basic::VoidStruct &&) -> std::optional<TI::Transaction> {
+            if (cmd == "insert") {
+                db_data item;
+                item.set_value1(value1);
+                item.set_value2(value2);
+                return TI::Transaction { {
+                    TI::InsertAction {key, item}
+                } };
+            } else if (cmd == "update") {
+                db_data item;
+                item.set_value1(value1);
+                item.set_value2(value2);
+                db_data old_item;
+                old_item.set_value1(oldValue1);
+                old_item.set_value2(oldValue2);
+                if (force) {
+                    return TI::Transaction { {
+                        TI::UpdateAction {
+                            key, std::nullopt, std::nullopt, item
+                        }
+                    } };
+                } else {
+                    return TI::Transaction { {
+                        TI::UpdateAction {
+                            key, oldVersion, old_item, item
+                        }
+                    } };
+                }
+            } else if (cmd == "delete") {
+                db_data old_item;
+                old_item.set_value1(oldValue1);
+                old_item.set_value2(oldValue2);
+                if (force) {
+                    return TI::Transaction { {
+                        TI::DeleteAction {
+                            key, std::nullopt, std::nullopt
+                        }
+                    } };
+                } else {
+                    return TI::Transaction { {
+                        TI::DeleteAction {
+                            key, oldVersion, old_item
+                        }
+                    } };
+                }
+            } else {
+                return std::nullopt;
+            }
+        }
+    );
+
+    auto keyify = M::template kleisli<typename TI::Transaction>(
+        basic::CommonFlowUtilComponents<M>::template keyify<typename TI::Transaction>()
+    );
+
+    auto printResponse = M::simpleExporter<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
+        [&env](M::InnerData<M::KeyedData<TI::Transaction,TI::TransactionResponse>> &&r) {
+            auto const &resp = r.timedData.value.data.value;
+            std::ostringstream oss;
+            oss << "Got transaction response {";
+            oss << "globalVersion=" << resp.globalVersion;
+            oss << ",requestDecision=" << resp.requestDecision;
+            oss << "}";
+            env.log(infra::LogLevel::Info, oss.str());
+            if (r.timedData.finalFlag) {
+                env.log(infra::LogLevel::Info, "Got final update, exiting");
+                exit(0);
+            }
+        }
+    );
+
+    auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
+    auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
+    r.placeOrderWithFacility(std::move(keyedCommand), "facility", facility, r.exporterAsSink("printResponse", printResponse));
+
+    std::ostringstream graphOss;
+    graphOss << "The graph is:\n";
+    r.writeGraphVizDescription(graphOss, "db_subscription_client");
+    r.finalize();
+
+    env.log(infra::LogLevel::Info, graphOss.str());
+    env.log(infra::LogLevel::Info, "DB subscription client started");
+
+    infra::terminationController(infra::RunForever {});
+}
+
 int main(int argc, char **argv) {
     namespace po = boost::program_options;
 
     po::options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("command", po::value<std::string>(), "the command (subscribe, insert, update, delete, unsubscribe)")
+        ("command", po::value<std::string>(), "the command (subscribe, insert, update, delete, unsubscribe, list)")
         ("key", po::value<std::string>(), "key for the command")
         ("value1", po::value<int>(), "value1 for the command")
         ("value2", po::value<std::string>(), "value2 for the command")
@@ -56,7 +375,7 @@ int main(int argc, char **argv) {
     }
 
     auto cmd = vm["command"].as<std::string>();
-    if (cmd != "subscribe" && cmd != "insert" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe") {
+    if (cmd != "subscribe" && cmd != "insert" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe" && cmd != "list") {
         std::cerr << "Command must be subscribe, insert, update, delete or unsubsribe\n";
         return 1;
     }
@@ -75,17 +394,16 @@ int main(int argc, char **argv) {
             return 1;
         }
         key = vm["key"].as<std::string>();
+        diMain(cmd, key, idStr);
     } else if (cmd == "unsubscribe") {
-        if (!vm.count("key")) {
-            std::cerr << "Please provide key for command\n";
-            return 1;
-        }
-        key = vm["key"].as<std::string>();
         if (!vm.count("id")) {
             std::cerr << "Please provide id for command\n";
             return 1;
         }
         idStr = vm["id"].as<std::string>();
+        diMain(cmd, key, idStr);
+    } else if (cmd == "list") {
+        diMain(cmd, key, idStr);
     } else if (cmd == "insert") {
         if (!vm.count("key")) {
             std::cerr << "Please provide key for command\n";
@@ -102,6 +420,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         value2 = vm["value2"].as<std::string>();
+        tiMain(cmd, key, value1, value2, old_value1, old_value2, old_version, force);
     } else if (cmd == "update") {
         if (!vm.count("key")) {
             std::cerr << "Please provide key for command\n";
@@ -134,6 +453,7 @@ int main(int argc, char **argv) {
         }
         old_version = vm["old_version"].as<int64_t>();
         force = vm.count("force");
+        tiMain(cmd, key, value1, value2, old_value1, old_value2, old_version, force);
     } else if (cmd == "delete") {
         if (!vm.count("key")) {
             std::cerr << "Please provide key for command\n";
@@ -156,198 +476,6 @@ int main(int argc, char **argv) {
         }
         old_version = vm["old_version"].as<int64_t>();
         force = vm.count("force");
+        tiMain(cmd, key, value1, value2, old_value1, old_value2, old_version, force);    
     }
-
-    using TI = basic::transaction::SingleKeyTransactionInterface<
-        std::string
-        , db_data
-        , int64_t
-        , transport::BoostUUIDComponent::IDType
-    >;
-    
-    using TheEnvironment = infra::Environment<
-        infra::CheckTimeComponent<false>,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-        transport::BoostUUIDComponent,
-        transport::ClientSideSimpleIdentityAttacherComponent<
-            std::string
-            , TI::BasicFacilityInput>,
-        transport::rabbitmq::RabbitMQComponent
-    >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
-
-    TheEnvironment env;
-    env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::BasicFacilityInput>::operator=(
-        transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::BasicFacilityInput>(
-            "db_subscription_client"
-        )
-    );
-
-    R r(&env); 
-    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
-        <TI::BasicFacilityInput,TI::FacilityOutput>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_cmd_queue")
-    );
-    r.registerOnOrderFacility("facility", facility);
-
-    auto exporter = M::simpleExporter<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>>(
-        [](M::InnerData<M::KeyedData<TI::BasicFacilityInput,TI::FacilityOutput>> &&data) {
-            auto id = data.timedData.value.key.id();
-            auto output = std::move(data.timedData.value.data);
-            bool isFinal = data.timedData.finalFlag;
-            auto *env = data.environment;
-
-            std::visit([env,isFinal,&id](auto const &tr) {
-                using T = std::decay_t<decltype(tr)>;
-                if constexpr (std::is_same_v<TI::TransactionResult,T>) {
-                    std::ostringstream oss;
-                    std::visit([env,&id,&oss](auto const &tr1) {
-                        using T1 = std::decay_t<decltype(tr1)>;
-                        if constexpr (std::is_same_v<TI::TransactionSuccess, T1>) {
-                            oss << "Got transaction success for " << env->id_to_string(id);
-                        } else if constexpr (std::is_same_v<TI::TransactionFailurePermission, T1>) {
-                            oss << "Got transaction failure by permission for " << env->id_to_string(id);
-                        } else if constexpr (std::is_same_v<TI::TransactionFailurePrecondition, T1>) {
-                            oss << "Got transaction failure by precondition for " << env->id_to_string(id);
-                        } else if constexpr (std::is_same_v<TI::TransactionFailureConsistency, T1>) {
-                            oss << "Got transaction failure by consistency for " << env->id_to_string(id);
-                        } else if constexpr (std::is_same_v<TI::TransactionQueuedAsynchronously, T1>) {
-                            oss << "Got transaction queued asynchronously for " << env->id_to_string(id);
-                        } else {
-                            oss << "Got unknown transaction failure for " << env->id_to_string(id);
-                        }
-                    }, tr);
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<TI::SubscriptionAck, T>) {
-                    std::ostringstream oss;
-                    oss << "Got subscription ack for " << env->id_to_string(id);
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<TI::UnsubscriptionAck, T>) {
-                    std::ostringstream oss;
-                    oss << "Got unsubscription ack for " << env->id_to_string(id);
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<TI::OneValue, T>) {
-                    std::ostringstream oss;
-                    if (tr.data) {
-                        oss << "Got insert: [name='" << tr.groupID << "'"
-                            << ",value1="<< tr.data->value1()
-                            << ",value2='" << tr.data->value2() << "'"
-                            << ",version=" << tr.version
-                            << "] for " << env->id_to_string(id);
-                    } else {
-                        oss << "Got delete: [name='" << tr.groupID << "'"
-                            << ",version=" << tr.version
-                            << "] for " << env->id_to_string(id);
-                    }
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<TI::OneDelta, T>) {
-                    std::ostringstream oss;
-                    oss << "Got update: [name='" << tr.groupID << "'"
-                        << ",value1="<< tr.data.value1()
-                        << ",value2='" << tr.data.value2() << "'"
-                        << ",version=" << tr.version
-                        << "] for " << env->id_to_string(id);
-                    if (isFinal) {
-                        oss << " [F]";
-                    }
-                    env->log(infra::LogLevel::Info, oss.str());
-                }
-            }, output.value);
-
-            if (isFinal) {
-                env->log(infra::LogLevel::Info, "Got final update, exiting");
-                exit(0);
-            }
-        }
-    );
-
-    auto importer = basic::real_time_clock::template ClockImporter<TheEnvironment>
-                    ::template createOneShotClockConstImporter<basic::VoidStruct>(
-        env.now()+std::chrono::milliseconds(100)
-        , basic::VoidStruct {}
-    );
-
-    auto createCommand = M::liftMaybe<basic::VoidStruct>(
-        [&env,cmd,key,value1,value2,old_value1,old_value2,old_version,idStr,force](basic::VoidStruct &&) -> std::optional<TI::BasicFacilityInput> {
-            if (cmd == "subscribe") {
-                return TI::BasicFacilityInput {
-                    { TI::Subscription {key} }
-                };
-            } else if (cmd == "unsubscribe") {
-                return TI::BasicFacilityInput {
-                    { TI::Unsubscription {env.id_from_string(idStr), key} }
-                };
-            } else if (cmd == "insert") {
-                db_data item;
-                item.set_value1(value1);
-                item.set_value2(value2);
-                return TI::BasicFacilityInput { 
-                    { TI::Transaction {
-                        TI::InsertAction {key, item}
-                    } }
-                };
-            } else if (cmd == "update") {
-                db_data item;
-                item.set_value1(value1);
-                item.set_value2(value2);
-                db_data old_item;
-                old_item.set_value1(old_value1);
-                old_item.set_value2(old_value2);
-                return TI::BasicFacilityInput { 
-                    { TI::Transaction {
-                        TI::UpdateAction {key, old_version, old_item, item, force}
-                    } }
-                };
-            } else if (cmd == "delete") {
-                db_data old_item;
-                old_item.set_value1(old_value1);
-                old_item.set_value2(old_value2);
-                return TI::BasicFacilityInput { 
-                    { TI::Transaction {
-                        TI::DeleteAction {key, old_version, old_item, force}
-                    } }
-                };
-            } else {
-                return std::nullopt;
-            }
-        }
-    );
-
-    auto keyify = M::liftPure<TI::BasicFacilityInput>(
-        [](TI::BasicFacilityInput &&x) {
-            return infra::withtime_utils::keyify
-                <TI::BasicFacilityInput,TheEnvironment>(std::move(x));
-        }
-    );
-
-    r.placeOrderWithFacility(
-        r.execute("keyify", keyify, 
-            r.execute("createCommand", createCommand, 
-                r.importItem("importer", importer)))
-        , facility
-        , r.exporterAsSink("exporter", exporter)
-    );
-    
-    std::ostringstream graphOss;
-    graphOss << "The graph is:\n";
-    r.writeGraphVizDescription(graphOss, "db_subscription_client");
-    r.finalize();
-
-    env.log(infra::LogLevel::Info, graphOss.str());
-    env.log(infra::LogLevel::Info, "DB subscription client started");
-
-    infra::terminationController(infra::RunForever {});
 }

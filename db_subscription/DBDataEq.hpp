@@ -1,7 +1,7 @@
 #include "dbData.pb.h"
 
-struct DBDataEq {
-    bool operator()(db_subscription::db_data const &a, db_subscription::db_data const &b) const {
+namespace db_subscription {
+    inline bool operator==(db_data const &a, db_data const &b) {
         return (a.value1() == b.value1() && a.value2() == b.value2());
     }
-};
+}
