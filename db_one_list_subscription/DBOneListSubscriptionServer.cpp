@@ -268,7 +268,6 @@ int main(int argc, char **argv) {
         , std::equal_to<int64_t>
         , std::equal_to<int64_t>
         , CheckSummary
-        , ApplyDelta
     >;
     auto dataStore = std::make_shared<TF::DataStore>();
     using DM = basic::transaction::v2::TransactionDeltaMerger<
