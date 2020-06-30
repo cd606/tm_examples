@@ -3,8 +3,7 @@
 #include <tm_kit/infra/RealTimeMonad.hpp>
 
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
-#include <tm_kit/basic/transaction/ExclusiveSingleKeyAsyncWatchableTransactionHandlerComponent.hpp>
-#include <tm_kit/basic/transaction/ExclusiveSingleKeyAsyncWatchableStorageTransactionBroker.hpp>
+#include <tm_kit/basic/transaction/TransactionServer.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -24,278 +23,127 @@
 #include <atomic>
 #include <thread>
 
+#include <boost/algorithm/string.hpp>
+
 #include "TransactionInterface.hpp"
 
 using namespace dev::cd606::tm;
 using namespace test;
 
-class THComponent : public basic::transaction::ExclusiveSingleKeyAsyncWatchableTransactionHandlerComponent<
-    TransactionDataVersion
-    , TransactionKey
-    , TransactionData
-    , TransactionDataDelta
-    , TransactionVersionComparer
-> {
+using DI = basic::transaction::current::DataStreamInterface<
+    int64_t
+    , Key
+    , Version
+    , Data
+    , VersionSlice
+    , DataSlice
+    , std::less<int64_t>
+    , CompareVersion
+>;
+
+using TI = basic::transaction::current::TransactionInterface<
+    int64_t
+    , Key
+    , Version
+    , Data
+    , DataSummary
+    , VersionSlice
+    , Command
+    , DataSlice
+>;
+
+using GS = basic::transaction::current::GeneralSubscriberTypes<
+    boost::uuids::uuid, DI
+>;
+
+struct StorageConstants {
+    inline static const std::string OVERALL_STAT_KEY = "trtest:overall_stat";
+    inline static const std::string PENDING_TRANSFERS_KEY = "trtest:pending_transfers";
+    inline static const std::string ACCOUNT_KEY_PREFIX = "trtest:accounts:";
+};
+
+class DSComponent : public basic::transaction::current::DataStreamEnvComponent<DI> {
 private:
     std::shared_ptr<grpc::ChannelInterface> channel_;
-    std::string connectionString_;
     std::function<void(std::string)> logger_;
     std::thread watchThread_;
     std::atomic<bool> running_;
 
     Callback *watchListener_;
 
-    TransactionVersionComparer versionCmp_;
-
-    std::mutex dataMutex_;
-    using VersionedData = infra::VersionedData<
-        TransactionDataVersion, TransactionData, TransactionVersionComparer
-    >;
-    VersionedData data_;
-    int64_t revision_;
-
-    inline static const std::string ACCOUNT_A_KEY = "trtest:A";
-    inline static const std::string ACCOUNT_B_KEY = "trtest:B";
-    inline static const std::string PENDING_TRANSFERS_KEY = "trtest:pending_transfers";
     inline static const std::string WATCH_RANGE_START = "trtest:";
-    inline static const std::string WATCH_RANGE_END = "trtest;"; //semicolon follows colon in ASCII table
-    inline static const size_t PENDING_TRANSFER_SIZE_LIMIT = 10;
+    inline static const std::string WATCH_RANGE_END = "trtest;"; //semicolon follows colon in ASCII table  
 
-    void updateState(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv) {
-        if (kv.key() == ACCOUNT_A_KEY) {
-            if (eventType == mvccpb::Event::PUT) {
-                auto x = basic::bytedata_utils::RunDeserializer<
-                            basic::CBOR<uint32_t>
-                        >::apply(kv.value());
-                if (x && kv.version() > data_.version[0]) {
-                    data_.version[0] = kv.version();
-                    data_.data.accountA.amount = x->value;
-                }
-            } else if (eventType == mvccpb::Event::DELETE) {
-                data_.version[0] = 0;
-                data_.data.accountA.amount = 0;
-            }
-        } else if (kv.key() == ACCOUNT_B_KEY) {
-            if (eventType == mvccpb::Event::PUT) {
-                auto x = basic::bytedata_utils::RunDeserializer<
-                            basic::CBOR<uint32_t>
-                        >::apply(kv.value());
-                if (x && kv.version() > data_.version[1]) {
-                    data_.version[1] = kv.version();
-                    data_.data.accountB.amount = x->value;
-                }
-            } else if (eventType == mvccpb::Event::DELETE) {
-                data_.version[1] = 0;
-                data_.data.accountB.amount = 0;
-            }
-        } else if (kv.key() == PENDING_TRANSFERS_KEY) {
-            if (eventType == mvccpb::Event::PUT) {
-                auto x = basic::bytedata_utils::RunDeserializer<TransferList>::apply(kv.value());
-                if (x && kv.version() > data_.version[2]) {
-                    data_.version[2] = kv.version();
-                    data_.data.pendingTransfers = *x;
-                }
-            } else if (eventType == mvccpb::Event::DELETE) {
-                data_.version[2] = 0;
-                data_.data.pendingTransfers = TransferList {};
-            }
-        }
-    }
-    void printState(std::ostream &os) const {
-        os << data_.data << " (version: " << data_.version << ")";
-        os << " (revision:" << revision_ << ")";
-    }
-    void sendState() {
-        VersionedData d = data_;
-        watchListener_->onValueChange(
-            TransactionKey {}
-            , std::move(d.version)
-            , std::optional<TransactionData> {std::move(d.data)}
-        );
-    }
-    bool oldDataIsUpToDate(TransactionDataVersion const &version, TransactionData const &oldData) {
-        std::lock_guard<std::mutex> _(dataMutex_);
-        if (versionCmp_(data_.version, version) || versionCmp_(version, data_.version)) {
-            return false;
-        }
-        return (data_.data == oldData);
-    }
-    basic::transaction::RequestDecision runTxn(etcdserverpb::TxnRequest const &txn) {
-        etcdserverpb::TxnResponse resp;
+    std::optional<DI::OneDeltaUpdateItem> createDeltaUpdate(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv) {
+        VersionSlice versionSlice;
+        DataSlice dataSlice;
 
-        auto txnStub = etcdserverpb::KV::NewStub(channel_);
-        grpc::ClientContext txnCtx;
-        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        txnStub->Txn(&txnCtx, txn, &resp);
-
-        if (resp.succeeded()) {
-            return basic::transaction::RequestDecision::Success;
+        if (kv.key() == StorageConstants::OVERALL_STAT_KEY) {
+            if (eventType == mvccpb::Event::PUT) {
+                versionSlice.overallStat = kv.version();
+                auto s = basic::bytedata_utils::RunDeserializer<
+                    basic::CBOR<OverallStat>
+                >::apply(kv.value());
+                if (s) {
+                    dataSlice.overallStat = s->value;
+                } else {
+                    dataSlice.overallStat = OverallStat {0};
+                }
+            } else {
+                versionSlice.overallStat = kv.version();
+                dataSlice.overallStat = OverallStat {0};
+            }
+            return DI::OneDeltaUpdateItem {
+                Key {}
+                , std::move(versionSlice)
+                , std::move(dataSlice)
+            };
+        } else if (kv.key() == StorageConstants::PENDING_TRANSFERS_KEY) {
+            if (eventType == mvccpb::Event::PUT) {
+                versionSlice.pendingTransfers = kv.version();
+                auto s = basic::bytedata_utils::RunDeserializer<
+                    basic::CBOR<TransferList>
+                >::apply(kv.value());
+                if (s) {
+                    dataSlice.pendingTransfers = s->value;
+                } else {
+                    dataSlice.pendingTransfers = TransferList {};
+                }
+            } else {
+                versionSlice.pendingTransfers = kv.version();
+                dataSlice.pendingTransfers = TransferList {};
+            }
+            return DI::OneDeltaUpdateItem {
+                Key {}
+                , std::move(versionSlice)
+                , std::move(dataSlice)
+            };
+        } else if (boost::starts_with(kv.key(), StorageConstants::ACCOUNT_KEY_PREFIX)) {
+            std::string accountName = kv.key().substr(StorageConstants::ACCOUNT_KEY_PREFIX.length());
+            if (eventType == mvccpb::Event::PUT) {
+                versionSlice.accounts[accountName] = kv.version();
+                auto s = basic::bytedata_utils::RunDeserializer<
+                    basic::CBOR<AccountData>
+                >::apply(kv.value());
+                if (s) {
+                    dataSlice.accounts[accountName] = s->value;
+                } else {
+                    dataSlice.accounts[accountName] = std::nullopt;
+                }
+            } else {
+                versionSlice.accounts[accountName] = kv.version();
+                dataSlice.accounts[accountName] = std::nullopt;
+            }
+            return DI::OneDeltaUpdateItem {
+                Key {}
+                , std::move(versionSlice)
+                , std::move(dataSlice)
+            };
         } else {
-            return basic::transaction::RequestDecision::FailurePrecondition;
+            return std::nullopt;
         }
     }
-    basic::transaction::RequestDecision handleTransfer(TransactionDataVersion const &version, TransactionData const &oldData, TransferData const &transferData, bool ignoreChecks) {
-        if (!ignoreChecks) {
-            if (!oldDataIsUpToDate(version, oldData)) {
-                return basic::transaction::RequestDecision::FailurePrecondition;
-            }
-            if (oldData.pendingTransfers.items.size() >= PENDING_TRANSFER_SIZE_LIMIT) {
-                return basic::transaction::RequestDecision::FailureConsistency;
-            }
-            int32_t total = transferData.amount;
-            for (auto const &item : oldData.pendingTransfers.items) {
-                total += item.amount;
-            }
-            if (total > 0) {
-                if (oldData.accountA.amount < static_cast<uint32_t>(total)) {
-                    return basic::transaction::RequestDecision::FailureConsistency;
-                }
-            } else if (total < 0) {
-                if (oldData.accountB.amount < static_cast<uint32_t>(-total)) {
-                    return basic::transaction::RequestDecision::FailureConsistency;
-                }
-            }
-        }
 
-        TransferList l {oldData.pendingTransfers};
-        l.items.push_back(transferData);
-
-        etcdserverpb::TxnRequest txn;
-        if (ignoreChecks) {
-            auto *cmp = txn.add_compare();
-            cmp->set_result(etcdserverpb::Compare::EQUAL);
-            cmp->set_target(etcdserverpb::Compare::VERSION);
-            cmp->set_key(PENDING_TRANSFERS_KEY);
-            cmp->set_version(version[2]);
-        } else {
-            auto *cmp = txn.add_compare();
-            cmp->set_result(etcdserverpb::Compare::EQUAL);
-            cmp->set_target(etcdserverpb::Compare::VERSION);
-            cmp->set_key(ACCOUNT_A_KEY);
-            cmp->set_version(version[0]);
-            cmp = txn.add_compare();
-            cmp->set_result(etcdserverpb::Compare::EQUAL);
-            cmp->set_target(etcdserverpb::Compare::VERSION);
-            cmp->set_key(ACCOUNT_B_KEY);
-            cmp->set_version(version[1]);
-            cmp = txn.add_compare();
-            cmp->set_result(etcdserverpb::Compare::EQUAL);
-            cmp->set_target(etcdserverpb::Compare::VERSION);
-            cmp->set_key(PENDING_TRANSFERS_KEY);
-            cmp->set_version(version[2]);
-        }
-        auto *action = txn.add_success();
-        auto *put = action->mutable_request_put();
-        put->set_key(PENDING_TRANSFERS_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<TransferList>::apply(l));
-
-        return runTxn(txn);
-    }
-    basic::transaction::RequestDecision handleProcess(TransactionDataVersion const &version, TransactionData const &oldData, bool ignoreChecks) {
-        if (!ignoreChecks) {
-            if (!oldDataIsUpToDate(version, oldData)) {
-                return basic::transaction::RequestDecision::FailurePrecondition;
-            }
-        }
-
-        int32_t total = 0;
-        for (auto const &item : oldData.pendingTransfers.items) {
-            total += item.amount;
-        }
-
-        if (!ignoreChecks) {
-            if (total > 0) {
-                if (oldData.accountA.amount < static_cast<uint32_t>(total)) {
-                    return basic::transaction::RequestDecision::FailureConsistency;
-                }
-            } else if (total < 0) {
-                if (oldData.accountB.amount < static_cast<uint32_t>(-total)) {
-                    return basic::transaction::RequestDecision::FailureConsistency;
-                }
-            }
-        }
-
-        if (oldData.pendingTransfers.items.empty()) {
-            return basic::transaction::RequestDecision::Success;
-        }
-
-        basic::CBOR<uint32_t> newA {
-            oldData.accountA.amount - total
-        };
-        basic::CBOR<uint32_t> newB {
-            oldData.accountB.amount + total
-        };
-        TransferList l;
-
-        etcdserverpb::TxnRequest txn;
-        auto *cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(ACCOUNT_A_KEY);
-        cmp->set_version(version[0]);
-        cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(ACCOUNT_B_KEY);
-        cmp->set_version(version[1]);
-        cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(PENDING_TRANSFERS_KEY);
-        cmp->set_version(version[2]);
-
-        auto *action = txn.add_success();
-        auto *put = action->mutable_request_put();
-        put->set_key(ACCOUNT_A_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<uint32_t>>::apply(newA));
-        action = txn.add_success();
-        put = action->mutable_request_put();
-        put->set_key(ACCOUNT_B_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<uint32_t>>::apply(newB));
-        action = txn.add_success();
-        put = action->mutable_request_put();
-        put->set_key(PENDING_TRANSFERS_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<TransferList>::apply(l));
-
-        return runTxn(txn);
-    }
-    basic::transaction::RequestDecision handleInject(TransactionDataVersion const &version, TransactionData const &oldData, InjectData const &injectData, bool ignoreChecks) {
-        if (!ignoreChecks) {
-            if (!oldDataIsUpToDate(version, oldData)) {
-                return basic::transaction::RequestDecision::FailurePrecondition;
-            }
-        }
-
-        basic::CBOR<uint32_t> newA {
-            oldData.accountA.amount + injectData.accountAIncrement
-        };
-        basic::CBOR<uint32_t> newB {
-            oldData.accountB.amount + injectData.accountBIncrement
-        };
-
-        etcdserverpb::TxnRequest txn;
-        auto *cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(ACCOUNT_A_KEY);
-        cmp->set_version(version[0]);
-        cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(ACCOUNT_B_KEY);
-        cmp->set_version(version[1]);
-
-        auto *action = txn.add_success();
-        auto *put = action->mutable_request_put();
-        put->set_key(ACCOUNT_A_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<uint32_t>>::apply(newA));
-        action = txn.add_success();
-        put = action->mutable_request_put();
-        put->set_key(ACCOUNT_B_KEY);
-        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<uint32_t>>::apply(newB));
-
-        return runTxn(txn);
-    }
     void runWatchThread() {
         etcdserverpb::RangeRequest range;
         range.set_key(WATCH_RANGE_START);
@@ -357,15 +205,25 @@ private:
             case 1:
                 {
                     if (initResponse.kvs_size() > 0) {
-                        std::lock_guard<std::mutex> _(dataMutex_);
+                        std::vector<DI::OneUpdateItem> updates;
                         for (auto const &kv : initResponse.kvs()) {
-                            updateState(mvccpb::Event::PUT, kv);
+                            auto delta = createDeltaUpdate(mvccpb::Event::PUT, kv);
+                            if (delta) {
+                                updates.push_back(*delta);
+                            }
                         }
-                        revision_ = initResponse.header().revision();
+                        int64_t revision = watchResponse.header().revision();
+
                         std::ostringstream oss;
-                        printState(oss);
+                        oss << "[DSComponent] Got init query callback, total "
+                            << initResponse.kvs_size()
+                            << " key-value pairs (revision: " << revision << ")";
                         logger_(oss.str());
-                        sendState();
+
+                        watchListener_->onUpdate(DI::Update {
+                            revision
+                            , std::move(updates)
+                        });
                     }
                 }
                 break;
@@ -379,15 +237,25 @@ private:
             case 4:
                 { 
                     if (watchResponse.events_size() > 0) {
-                        std::lock_guard<std::mutex> _(dataMutex_);
+                        std::vector<DI::OneUpdateItem> updates;
                         for (auto const &ev : watchResponse.events()) {
-                            updateState(ev.type(), ev.kv());
+                            auto delta = createDeltaUpdate(ev.type(), ev.kv());
+                            if (delta) {
+                                updates.push_back(*delta);
+                            }
                         }
-                        revision_ = watchResponse.header().revision();
+                        int64_t revision = watchResponse.header().revision();
+
                         std::ostringstream oss;
-                        printState(oss);
+                        oss << "[DSComponent] Got watch  callback, total "
+                            << watchResponse.events_size()
+                            << " events (revision: " << revision << ")";
                         logger_(oss.str());
-                        sendState();
+
+                        watchListener_->onUpdate(DI::Update {
+                            revision
+                            , std::move(updates)
+                        });
                     }
                 }
                 watchStream->Read(&watchResponse, (void *)4);  
@@ -402,158 +270,236 @@ private:
         }
     }
 public:
-    THComponent() : 
-        channel_(), connectionString_(), logger_()
-        , watchThread_(), running_(false)
-        , watchListener_(nullptr), versionCmp_() 
-        , dataMutex_(), data_(), revision_(0)
+    DSComponent()
+        : channel_(), logger_(), watchThread_(), running_(false)
+        , watchListener_(nullptr)
     {}
-    THComponent(THComponent &&c) : 
-        channel_(std::move(c.channel_))
-        , connectionString_(std::move(c.connectionString_)), logger_(std::move(c.logger_))
-        , watchThread_(), running_(false)
-        , watchListener_(nullptr), versionCmp_() 
-        , dataMutex_(), data_(), revision_(0)
-    {}
-    THComponent &operator=(THComponent &&c) {
+    DSComponent &operator=(DSComponent &&c) {
         if (this != &c) {
+            //only copy these!
             channel_ = std::move(c.channel_);
-            connectionString_ = std::move(c.connectionString_);
             logger_ = std::move(c.logger_);
         }
         return *this;
     } 
-    THComponent(std::string const &connectionString, std::function<void(std::string)> const &logger) 
-        : channel_(), connectionString_(connectionString), logger_(logger)
+    DSComponent(std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
+        : channel_(channel), logger_(logger)
         , watchThread_(), running_(false)
-        , watchListener_(nullptr), versionCmp_()
-        , dataMutex_(), data_(), revision_(0)
+        , watchListener_(nullptr)
     {}
-    virtual ~THComponent() {
+    virtual ~DSComponent() {
         if (running_) {
             running_ = false;
             watchThread_.join();
         }
     }
-    virtual bool exclusivelyBindTo(Callback *cb) override {
-        if (!watchListener_) {
-            watchListener_ = cb;
-            return true;
-        }
-        return false;
-    }
-    virtual void setUpInitialWatching() override {
-        channel_ = grpc::CreateChannel(connectionString_, grpc::InsecureChannelCredentials());     
-        running_ = true;
-        watchThread_ = std::thread(&THComponent::runWatchThread, this);
-        watchThread_.detach();
-        logger_("TH component started");
-    }
-    virtual void startWatchIfNecessary(std::string const &account, TransactionKey const &key) override {
-    }
-    virtual void discretionallyStopWatch(std::string const &account, TransactionKey const &key) override {
-    }
-    virtual basic::transaction::RequestDecision
-        handleInsert(
-            std::string const &account
-            , TransactionKey const &key
-            , TransactionData const &data
-            , bool ignoreConsistencyCheckAsMuchAsPossible
-        ) override {
-        return basic::transaction::RequestDecision::FailurePrecondition;
-    }
-    virtual basic::transaction::RequestDecision
-        handleUpdate(
-            std::string const &account
-            , TransactionKey const &key
-            , infra::VersionedData<TransactionDataVersion, TransactionData, TransactionVersionComparer> const &oldData
-            , TransactionDataDelta const &dataDelta
-            , bool ignoreConsistencyCheckAsMuchAsPossible
-        ) override {
-        return std::visit(
-            [this,&key,&oldData,&ignoreConsistencyCheckAsMuchAsPossible](auto const &delta) 
-             -> basic::transaction::RequestDecision {
-                using T = std::decay_t<decltype(delta)>;
-                if constexpr (std::is_same_v<TransferRequest,T>) {
-                    return handleTransfer(oldData.version, oldData.data, std::get<1>(delta), ignoreConsistencyCheckAsMuchAsPossible);
-                } else if constexpr (std::is_same_v<ProcessRequest,T>) {
-                    return handleProcess(oldData.version, oldData.data, ignoreConsistencyCheckAsMuchAsPossible);
-                } else if constexpr (std::is_same_v<InjectRequest,T>) {  
-                    return handleInject(oldData.version, oldData.data, std::get<1>(delta), ignoreConsistencyCheckAsMuchAsPossible);  
+    void initialize(Callback *cb) {
+        watchListener_ = cb;
+
+        //This is to make sure there is a data entry
+        //if the database has never been populated
+        watchListener_->onUpdate(DI::Update {
+            0
+            , std::vector<DI::OneUpdateItem> {
+                DI::OneFullUpdateItem {
+                    Key {}
+                    , Version {}
+                    , Data {}
                 }
             }
-            , dataDelta
-        );
+        });
+
+        running_ = true;
+        watchThread_ = std::thread(&DSComponent::runWatchThread, this);
+        watchThread_.detach();
+
+        logger_("DS component started");
     }
-    virtual basic::transaction::RequestDecision
-        handleDelete(
-            std::string const &account
-            , TransactionKey const &key
-            , infra::VersionedData<TransactionDataVersion, TransactionData, TransactionVersionComparer> const &oldData
-            , bool ignoreConsistencyCheckAsMuchAsPossible
-        ) override {
-        return basic::transaction::RequestDecision::FailurePrecondition;
+};
+
+class THComponent : public basic::transaction::current::TransactionEnvComponent<TI> {
+private:
+    std::shared_ptr<grpc::ChannelInterface> channel_;
+    std::function<void(std::string)> logger_;
+public:
+    THComponent()
+        : channel_(), logger_()
+    {}
+    THComponent &operator=(THComponent &&c) {
+        if (this != &c) {
+            //only copy these!
+            channel_ = std::move(c.channel_);
+            logger_ = std::move(c.logger_);
+        }
+        return *this;
+    } 
+    THComponent(std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
+        : channel_(channel), logger_(logger)
+    {}
+    virtual ~THComponent() {
+    }
+    TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &name) override final {
+        return 0;
+    }
+    TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &name) override final {
+        return 0;
+    }
+    TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
+        //Since the whole database is represented as a list
+        //, there will never be insert or delete on the "key" (void struct)
+        return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
+    }
+    TI::TransactionResponse handleUpdate(std::string const &account, TI::Key const &key, std::optional<TI::VersionSlice> const &updateVersionSlice, TI::ProcessedUpdate const &dataDelta) override final {
+        etcdserverpb::TxnRequest txn;
+        if (updateVersionSlice) {
+            if (updateVersionSlice->overallStat) {
+                auto *cmp = txn.add_compare();
+                cmp->set_result(etcdserverpb::Compare::EQUAL);
+                cmp->set_target(etcdserverpb::Compare::VERSION);
+                cmp->set_key(StorageConstants::OVERALL_STAT_KEY);
+                cmp->set_version(*(updateVersionSlice->overallStat));
+            }
+            for (auto const &item : updateVersionSlice->accounts) {
+                if (item.second) {
+                    auto *cmp = txn.add_compare();
+                    cmp->set_result(etcdserverpb::Compare::EQUAL);
+                    cmp->set_target(etcdserverpb::Compare::VERSION);
+                    cmp->set_key(StorageConstants::ACCOUNT_KEY_PREFIX+item.first);
+                    cmp->set_version(*(item.second));
+                }
+            }
+            if (updateVersionSlice->pendingTransfers) {
+                auto *cmp = txn.add_compare();
+                cmp->set_result(etcdserverpb::Compare::EQUAL);
+                cmp->set_target(etcdserverpb::Compare::VERSION);
+                cmp->set_key(StorageConstants::PENDING_TRANSFERS_KEY);
+                cmp->set_version(*(updateVersionSlice->pendingTransfers));
+            }
+        }
+        if (dataDelta.overallStat) {
+            auto *action = txn.add_success();
+            auto *put = action->mutable_request_put();
+            put->set_key(StorageConstants::OVERALL_STAT_KEY);
+            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<OverallStat>>::apply({*(dataDelta.overallStat)}));
+        }
+        for (auto const &item : dataDelta.accounts) {
+            auto *action = txn.add_success();
+            if (item.second) {
+                auto *put = action->mutable_request_put();
+                put->set_key(StorageConstants::ACCOUNT_KEY_PREFIX+item.first);
+                put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<AccountData>>::apply({*(item.second)}));
+            } else {
+                auto *del = action->mutable_request_delete_range();
+                del->set_key(StorageConstants::ACCOUNT_KEY_PREFIX+item.first);
+            }
+        }
+        if (dataDelta.pendingTransfers) {
+            auto *action = txn.add_success();
+            auto *put = action->mutable_request_put();
+            put->set_key(StorageConstants::PENDING_TRANSFERS_KEY);
+            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<TransferList>>::apply({*(dataDelta.pendingTransfers)}));
+        }
+
+        etcdserverpb::TxnResponse resp;
+
+        auto txnStub = etcdserverpb::KV::NewStub(channel_);
+        grpc::ClientContext txnCtx;
+        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        txnStub->Txn(&txnCtx, txn, &resp);
+
+        if (resp.succeeded()) {
+            return {resp.header().revision(), basic::transaction::v2::RequestDecision::Success};
+        } else {
+            return {resp.header().revision(), basic::transaction::v2::RequestDecision::FailurePrecondition};
+        }
+    }
+    TI::TransactionResponse handleDelete(std::string const &account, TI::Key const &key, std::optional<TI::Version> const &versionToDelete) override final {
+        //Since the whole database is represented as a list
+        //, there will never be insert or delete on the "key" (void struct)
+        return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
     }
 };
 
 int main(int argc, char **argv) {
-    using TI = basic::transaction::SingleKeyTransactionInterface<
-        TransactionKey
-        , TransactionData
-        , TransactionDataVersion
-        , transport::BoostUUIDComponent::IDType
-        , TransactionDataSummary
-        , TransactionDataDelta
-        , TransactionVersionComparer
-    >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
-            , TI::BasicFacilityInput>,
+            , TI::Transaction>,
+        transport::ServerSideSimpleIdentityCheckerComponent<
+            std::string
+            , GS::Input>,
         transport::redis::RedisComponent,
         transport::HeartbeatAndAlertComponent,
+        DSComponent,
         THComponent
     >;
     using M = infra::RealTimeMonad<TheEnvironment>;
     using R = infra::MonadRunner<M>;
-    using TB = basic::transaction::ExclusiveSingleKeyAsyncWatchableStorageTransactionBroker<
-        M
-        , TransactionKey
-        , TransactionData
-        , TransactionDataVersion
-        , TransactionDataSummary
-        , TransactionDataCheckSummary
-        , TransactionDataDelta
-        , infra::ArrayComparerWithSkip<int64_t, 3>
-    >;
 
     TheEnvironment env;
-    env.THComponent::operator=(
-        THComponent {"127.0.0.1:2379", [&env](std::string const &s) {
-            env.log(infra::LogLevel::Info, s);
-        }}
-    );
 
+    auto channel = grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials());
+    env.DSComponent::operator=(DSComponent {
+        channel, [&env](std::string const &s) {
+            env.log(infra::LogLevel::Info, s);
+        }
+    });
+    env.THComponent::operator=(THComponent {
+        channel, [&env](std::string const &s) {
+            env.log(infra::LogLevel::Info, s);
+        }
+    });
+    
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::redis::RedisComponent>()
-        (&env, "db_subscription server", transport::ConnectionLocator::parse("127.0.0.1:4072"));
+        (&env, "transaction redundancy test server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
 
     R r(&env);
-    auto facility = M::fromAbstractOnOrderFacility<TI::FacilityInput,TI::FacilityOutput>(
-        new TB()
-    );
-    r.registerOnOrderFacility("facility", facility);
 
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacility
-        <TI::BasicFacilityInput,TI::FacilityOutput>(
+    using TF = basic::transaction::v2::TransactionFacility<
+        M, TI, DI
+        , CheckVersion
+        , CheckVersionSlice
+        , CheckSummary
+        , ProcessCommandOnLocalData
+    >;
+    auto dataStore = std::make_shared<TF::DataStore>();
+    using DM = basic::transaction::current::TransactionDeltaMerger<
+        DI, false, M::PossiblyMultiThreaded
+        , ApplyVersionSlice
+        , ApplyDataSlice
+    >;
+    TF tf(dataStore);
+    tf.setDeltaProcessor(ProcessCommandOnLocalData([&env](std::string const &s) {
+        env.log(infra::LogLevel::Warning, s);
+    }));
+    auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
+        R, TI, DI, DM
+    >(
         r
-        , facility
+        , "transaction_server_components"
+        , &tf
+    );
+
+    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacilityWithExternalEffects
+        <TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
         , transport::ConnectionLocator::parse("127.0.0.1:6379:::test_etcd_transaction_queue")
-        , "transaction_server_wrapper_"
+        , "transaction_wrapper_"
         , std::nullopt //no hook
     );
+    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapLocalOnOrderFacility
+        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , transport::ConnectionLocator::parse("127.0.0.1:6379:::test_etcd_subscription_queue")
+        , "subscription_wrapper_"
+        , std::nullopt //no hook
+    );
+
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
     r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_server");
