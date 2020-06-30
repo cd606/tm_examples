@@ -144,10 +144,34 @@ int main() {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[2]);
+                    basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
+                    auto currentData = dataStorePtr->dataMap_[Key {}];
+                    if (!currentData.data) {
+                        env.log(infra::LogLevel::Info, "Please wait until we have data before sending inject command");
+                        return std::nullopt;
+                    }
+                    auto versionIter = currentData.version.accounts.find(parts[1]);
+                    std::map<std::string, std::optional<int64_t>> currentAccountVer;
+                    if (versionIter != currentData.version.accounts.end()) {
+                        currentAccountVer[parts[1]] = versionIter->second;
+                    }
+                    auto dataIter = currentData.data->accounts.find(parts[1]);
+                    std::map<std::string, std::optional<AccountData>> currentAccount;
+                    if (dataIter != currentData.data->accounts.end()) {
+                        currentAccount[parts[1]] = dataIter->second;
+                    }
                     return TI::Transaction { TI::UpdateAction {
                         Key {}
-                        , std::nullopt
-                        , std::nullopt
+                        , VersionSlice {
+                            currentData.version.overallStat
+                            , currentAccountVer
+                            , std::nullopt
+                        }
+                        , DataSlice {
+                            currentData.data->overallStat
+                            , currentAccount
+                            , std::nullopt
+                        }
                         , InjectData {
                             parts[1]
                             , amount
