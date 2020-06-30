@@ -188,10 +188,50 @@ int main() {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[3]);
+                    basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
+                    auto currentData = dataStorePtr->dataMap_[Key {}];
+                    if (!currentData.data) {
+                        env.log(infra::LogLevel::Info, "Please wait until we have data before sending transfer command");
+                        return std::nullopt;
+                    }
+                    auto versionIter = currentData.version.accounts.find(parts[1]);
+                    std::map<std::string, std::optional<int64_t>> currentAccountVer;
+                    if (versionIter == currentData.version.accounts.end()) {
+                        env.log(infra::LogLevel::Info, "No version info for account '"+parts[1]+"'");
+                        return std::nullopt;
+                    }
+                    currentAccountVer[parts[1]] = versionIter->second;
+                    versionIter = currentData.version.accounts.find(parts[2]);
+                    if (versionIter == currentData.version.accounts.end()) {
+                        env.log(infra::LogLevel::Info, "No version info for account '"+parts[2]+"'");
+                        return std::nullopt;
+                    }
+                    currentAccountVer[parts[2]] = versionIter->second;
+                    auto dataIter = currentData.data->accounts.find(parts[1]);
+                    std::map<std::string, std::optional<AccountData>> currentAccount;
+                    if (dataIter == currentData.data->accounts.end()) {
+                        env.log(infra::LogLevel::Info, "No data for account '"+parts[1]+"'");
+                        return std::nullopt;
+                    }
+                    currentAccount[parts[1]] = dataIter->second;
+                    dataIter = currentData.data->accounts.find(parts[2]);
+                    if (dataIter == currentData.data->accounts.end()) {
+                        env.log(infra::LogLevel::Info, "No data for account '"+parts[2]+"'");
+                        return std::nullopt;
+                    }
+                    currentAccount[parts[2]] = dataIter->second;
                     return TI::Transaction { TI::UpdateAction {
                         Key {}
-                        , std::nullopt
-                        , std::nullopt
+                        , VersionSlice {
+                            std::nullopt
+                            , currentAccountVer
+                            , currentData.version.pendingTransfers
+                        }
+                        , DataSlice {
+                            std::nullopt
+                            , currentAccount
+                            , currentData.data->pendingTransfers
+                        }
                         , TransferData {
                             parts[1]
                             , parts[2]
@@ -207,6 +247,7 @@ int main() {
                     env.log(infra::LogLevel::Info, "Process command usage: process");
                     return std::nullopt;
                 }
+                //we deliberately don't have version/summary check for process
                 return TI::Transaction { TI::UpdateAction {
                     Key {}
                     , std::nullopt
@@ -218,10 +259,38 @@ int main() {
                     env.log(infra::LogLevel::Info, "Close command usage: close acocunt");
                     return std::nullopt;
                 }
+                basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
+                auto currentData = dataStorePtr->dataMap_[Key {}];
+                if (!currentData.data) {
+                    env.log(infra::LogLevel::Info, "Please wait until we have data before sending close command");
+                    return std::nullopt;
+                }
+                auto versionIter = currentData.version.accounts.find(parts[1]);
+                std::map<std::string, std::optional<int64_t>> currentAccountVer;
+                if (versionIter == currentData.version.accounts.end()) {
+                    env.log(infra::LogLevel::Info, "No version info for account '"+parts[1]+"'");
+                    return std::nullopt;
+                }
+                currentAccountVer[parts[1]] = versionIter->second;
+                auto dataIter = currentData.data->accounts.find(parts[1]);
+                std::map<std::string, std::optional<AccountData>> currentAccount;
+                if (dataIter == currentData.data->accounts.end()) {
+                    env.log(infra::LogLevel::Info, "No data for account '"+parts[1]+"'");
+                    return std::nullopt;
+                }
+                currentAccount[parts[1]] = dataIter->second;
                 return TI::Transaction { TI::UpdateAction {
                     Key {}
-                    , std::nullopt
-                    , std::nullopt
+                    , VersionSlice {
+                        currentData.version.overallStat
+                        , currentAccountVer
+                        , std::nullopt
+                    }
+                    , DataSlice {
+                        currentData.data->overallStat
+                        , currentAccount
+                        , std::nullopt
+                    }
                     , CloseAccount { parts[1] }
                 } };
             } else {
