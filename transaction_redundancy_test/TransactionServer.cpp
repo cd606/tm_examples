@@ -17,6 +17,8 @@
 #endif
 #include <libetcd/rpc.grpc.pb.h>
 #include <libetcd/kv.pb.h>
+#include "v3lock.pb.h"
+#include "v3lock.grpc.pb.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -24,6 +26,7 @@
 #include <thread>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 
 #include "TransactionInterface.hpp"
 
@@ -318,30 +321,111 @@ public:
 };
 
 class THComponent : public basic::transaction::current::TransactionEnvComponent<TI> {
+public:
+    //"None" means no inter-process lock is applied
+    //"Simple" means using etcd server-side lock. 
+    // This lock guarantees low-level progress and 
+    // is robust against stopping failure (because
+    // it comes with a lease). Because this is not
+    // supported by the offscale-libetcd-cpp library
+    // , we had to generate the grpc bindings from
+    // protobuf file.
+    //"Compound" means using a two-integer lock that
+    // we maintain by ourselves. This lock is lockout-free
+    // , but is not robust against stopping failure. 
+    // lock_helpers/LockHelper.ts is a tool to 
+    // manage the lock from the outside.
+    enum class LockChoice {
+        None 
+        , Simple 
+        , Compound
+    };
 private:
+    LockChoice lockChoice_;
     std::shared_ptr<grpc::ChannelInterface> channel_;
     std::function<void(std::string)> logger_;
 
     inline static const std::string LOCK_NUMBER_KEY = "trtest:lock_number";
     inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_queue";
-public:
-    THComponent()
-        : channel_(), logger_()
-    {}
-    THComponent &operator=(THComponent &&c) {
-        if (this != &c) {
-            //only copy these!
-            channel_ = std::move(c.channel_);
-            logger_ = std::move(c.logger_);
+
+    int64_t leaseID_ = 0;
+    std::string lockKey_ = "";
+
+    int64_t acquireSimpleLock() {
+        {
+            auto leaseStub = etcdserverpb::Lease::NewStub(channel_);
+            grpc::ClientContext leaseCtx;
+            leaseCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            etcdserverpb::LeaseGrantRequest getLease;
+            getLease.set_ttl(5);
+            getLease.set_id(0);
+            etcdserverpb::LeaseGrantResponse leaseResponse;
+            leaseStub->LeaseGrant(&leaseCtx, getLease, &leaseResponse);
+
+            leaseID_ = leaseResponse.id();
         }
-        return *this;
-    } 
-    THComponent(std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
-        : channel_(channel), logger_(logger)
-    {}
-    virtual ~THComponent() {
+
+        int64_t ret;
+
+        {
+            auto lockStub = v3lockpb::Lock::NewStub(channel_);
+            grpc::ClientContext lockCtx;
+            lockCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            v3lockpb::LockRequest getLock;
+            getLock.set_name("trtestlock");
+            getLock.set_lease(leaseID_);
+            v3lockpb::LockResponse lockResponse;
+            lockStub->Lock(&lockCtx, getLock, &lockResponse);
+
+            lockKey_ = lockResponse.key();
+            ret = lockResponse.header().revision();
+        }
+
+        std::ostringstream oss;
+        oss << "[THComponent::acquireSimpleLock] Acquired lock '"
+            << lockKey_ << "' with lease ID " << leaseID_;
+        logger_(oss.str());
+
+        return ret;
     }
-    TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &name) override final {
+
+    int64_t releaseSimpleLock() {
+        {
+            auto lockStub = v3lockpb::Lock::NewStub(channel_);
+            grpc::ClientContext lockCtx;
+            lockCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            v3lockpb::UnlockRequest unlock;
+            unlock.set_key(lockKey_);
+            v3lockpb::UnlockResponse unlockResponse;
+            lockStub->Unlock(&lockCtx, unlock, &unlockResponse);
+        }
+
+        int64_t ret;
+
+        {
+            auto leaseStub = etcdserverpb::Lease::NewStub(channel_);
+            grpc::ClientContext leaseCtx;
+            leaseCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            etcdserverpb::LeaseRevokeRequest revokeLease;
+            revokeLease.set_id(leaseID_);
+            etcdserverpb::LeaseRevokeResponse revokeLeaseResponse;
+            leaseStub->LeaseRevoke(&leaseCtx, revokeLease, &revokeLeaseResponse);
+
+            ret = revokeLeaseResponse.header().revision();
+        }
+
+        std::ostringstream oss;
+        oss << "[THComponent::acquireSimpleLock] Released lock '"
+            << lockKey_ << "' and lease ID " << leaseID_;
+        logger_(oss.str());
+
+        lockKey_ = "";
+        leaseID_ = 0;
+
+        return ret;
+    }
+
+    int64_t acquireCompundLock() {
         int64_t numVersion = 0;
 
         auto kvStub = etcdserverpb::KV::NewStub(channel_);
@@ -378,7 +462,7 @@ public:
 
             if (putResp.succeeded()) {
                 std::ostringstream oss;
-                oss << "Acquiring lock with number " << numVersion;
+                oss << "[THComponent::acquireCompoundLock] Acquiring lock with number " << numVersion;
                 logger_(oss.str());
                 break;
             }
@@ -407,16 +491,17 @@ public:
 
             //here since someone else is holding the lock
             //, we will sleep somewhat
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
         std::ostringstream oss;
-        oss << "Lock acquired with number " << numVersion;
+        oss << "[THComponent::acquireCompoundLock] Lock acquired with number " << numVersion;
         logger_(oss.str());
 
         return ret;
     }
-    TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &name) override final {
+
+    int64_t releaseCompoundLock() {
         int64_t queueVersion = 0;
 
         auto kvStub = etcdserverpb::KV::NewStub(channel_);
@@ -460,10 +545,53 @@ public:
         }
 
         std::ostringstream oss;
-        oss << "Released lock";
+        oss << "[THComponent::releaseCompoundLock] Released lock";
         logger_(oss.str());
 
         return ret;
+    }
+public:
+    THComponent()
+        : lockChoice_(LockChoice::None), channel_(), logger_()
+    {}
+    THComponent &operator=(THComponent &&c) {
+        if (this != &c) {
+            //only copy these!
+            lockChoice_ = c.lockChoice_;
+            channel_ = std::move(c.channel_);
+            logger_ = std::move(c.logger_);
+        }
+        return *this;
+    } 
+    THComponent(LockChoice lockChoice, std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
+        : lockChoice_(lockChoice), channel_(channel), logger_(logger)
+    {}
+    virtual ~THComponent() {
+    }
+    TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &name) override final {
+        switch (lockChoice_) {
+        case LockChoice::None:
+            return 0;
+        case LockChoice::Simple:
+            return acquireSimpleLock();
+        case LockChoice::Compound:
+            return acquireCompundLock();
+        default:
+            return 0;
+        }
+        
+    }
+    TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &name) override final {
+        switch (lockChoice_) {
+        case LockChoice::None:
+            return 0;
+        case LockChoice::Simple:
+            return releaseSimpleLock();
+        case LockChoice::Compound:
+            return releaseCompoundLock();
+        default:
+            return 0;
+        }
     }
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
         //Since the whole database is represented as a list
@@ -542,6 +670,32 @@ public:
 };
 
 int main(int argc, char **argv) {
+    namespace po = boost::program_options;
+
+    po::options_description desc("allowed options");
+    desc.add_options()
+        ("help", "display help message")
+        ("lock_choice", po::value<std::string>(), "lock choice (none, simple or compound)")
+    ;
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
+        return 0;
+    }
+
+    THComponent::LockChoice lockChoice = THComponent::LockChoice::None;
+    if (vm.count("lock_choice")) {
+        auto choiceStr = vm["lock_choice"].as<std::string>();
+        if (choiceStr == "simple") {
+            lockChoice = THComponent::LockChoice::Simple;
+        } else if (choiceStr == "compound") {
+            lockChoice = THComponent::LockChoice::Compound;
+        }
+    }
+
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
@@ -569,7 +723,7 @@ int main(int argc, char **argv) {
         }
     });
     env.THComponent::operator=(THComponent {
-        channel, [&env](std::string const &s) {
+        lockChoice, channel, [&env](std::string const &s) {
             env.log(infra::LogLevel::Info, s);
         }
     });
