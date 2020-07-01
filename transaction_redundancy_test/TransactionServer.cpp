@@ -321,6 +321,9 @@ class THComponent : public basic::transaction::current::TransactionEnvComponent<
 private:
     std::shared_ptr<grpc::ChannelInterface> channel_;
     std::function<void(std::string)> logger_;
+
+    inline static const std::string LOCK_NUMBER_KEY = "trtest:lock_number";
+    inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_key";
 public:
     THComponent()
         : channel_(), logger_()
@@ -339,10 +342,128 @@ public:
     virtual ~THComponent() {
     }
     TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &name) override final {
-        return 0;
+        int64_t numVersion = 0;
+
+        auto kvStub = etcdserverpb::KV::NewStub(channel_);
+
+        while (true) {
+            //This is a spinlock, we hope we can obtain the lock number quickly
+            numVersion = 0;
+
+            etcdserverpb::RangeRequest getNum;
+            getNum.set_key(LOCK_NUMBER_KEY);
+
+            etcdserverpb::RangeResponse numResponse;
+            grpc::ClientContext kvCtx;
+            kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            kvStub->Range(&kvCtx, getNum, &numResponse);
+            if (numResponse.kvs_size() > 0) {
+                numVersion = numResponse.kvs(0).version();
+            }
+            
+            etcdserverpb::TxnRequest txn;
+            auto *cmp = txn.add_compare();
+            cmp->set_result(etcdserverpb::Compare::EQUAL);
+            cmp->set_target(etcdserverpb::Compare::VERSION);
+            cmp->set_key(LOCK_NUMBER_KEY);
+            cmp->set_version(numVersion);
+            auto *action = txn.add_success();
+            auto *put = action->mutable_request_put();
+            put->set_key(LOCK_NUMBER_KEY);
+
+            etcdserverpb::TxnResponse putResp;
+            grpc::ClientContext txnCtx;
+            txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            kvStub->Txn(&txnCtx, txn, &putResp);
+
+            if (putResp.succeeded()) {
+                std::ostringstream oss;
+                oss << "Acquiring lock with number " << numVersion;
+                logger_(oss.str());
+                break;
+            }
+        }
+
+        int64_t ret = 0;
+
+        while (true) {
+            int64_t queueVersion = 0;
+
+            etcdserverpb::RangeRequest getQueue;
+            getQueue.set_key(LOCK_QUEUE_KEY);
+
+            etcdserverpb::RangeResponse queueResponse;
+            grpc::ClientContext kvCtx;
+            kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            kvStub->Range(&kvCtx, getQueue, &queueResponse);
+            if (queueResponse.kvs_size() > 0) {
+                queueVersion = queueResponse.kvs(0).version();
+            }
+
+            if (queueVersion == numVersion) {
+                ret = queueResponse.header().revision();
+                break;
+            }
+
+            //here since someone else is holding the lock
+            //, we will sleep somewhat
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        std::ostringstream oss;
+        oss << "Lock acquired with number " << numVersion;
+        logger_(oss.str());
+
+        return ret;
     }
     TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &name) override final {
-        return 0;
+        int64_t queueVersion = 0;
+
+        auto kvStub = etcdserverpb::KV::NewStub(channel_);
+        
+        int64_t ret = 0;
+
+        while (true) {
+            //This is a spinlock, we hope we can increase the queue number quickly
+            queueVersion = 0;
+
+            etcdserverpb::RangeRequest getQueue;
+            getQueue.set_key(LOCK_QUEUE_KEY);
+
+            etcdserverpb::RangeResponse queueResponse;
+            grpc::ClientContext kvCtx;
+            kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            kvStub->Range(&kvCtx, getQueue, &queueResponse);
+            if (queueResponse.kvs_size() > 0) {
+                queueVersion = queueResponse.kvs(0).version();
+            }
+            
+            etcdserverpb::TxnRequest txn;
+            auto *cmp = txn.add_compare();
+            cmp->set_result(etcdserverpb::Compare::EQUAL);
+            cmp->set_target(etcdserverpb::Compare::VERSION);
+            cmp->set_key(LOCK_QUEUE_KEY);
+            cmp->set_version(queueVersion);
+            auto *action = txn.add_success();
+            auto *put = action->mutable_request_put();
+            put->set_key(LOCK_QUEUE_KEY);
+        
+            etcdserverpb::TxnResponse putResp;
+            grpc::ClientContext txnCtx;
+            txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            kvStub->Txn(&txnCtx, txn, &putResp);
+
+            if (putResp.succeeded()) {
+                ret = putResp.header().revision();
+                break;
+            }
+        }
+
+        std::ostringstream oss;
+        oss << "Released lock";
+        logger_(oss.str());
+
+        return ret;
     }
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
         //Since the whole database is represented as a list
