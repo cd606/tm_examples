@@ -323,7 +323,7 @@ private:
     std::function<void(std::string)> logger_;
 
     inline static const std::string LOCK_NUMBER_KEY = "trtest:lock_number";
-    inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_key";
+    inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_queue";
 public:
     THComponent()
         : channel_(), logger_()

@@ -4,7 +4,7 @@ import { setTimeout } from 'timers';
 
 (async () => {
     const LOCK_NUMBER_KEY = "trtest:lock_number";
-    const LOCK_QUEUE_KEY = "trtest:lock_key";
+    const LOCK_QUEUE_KEY = "trtest:lock_queue";
     if (yargs.argv.init !== undefined) {
         const client = new Etcd3();
         await client.stm().transact(tx => {
