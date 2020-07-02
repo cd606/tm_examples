@@ -7,6 +7,7 @@
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
+#include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/multicast/MulticastComponent.hpp>
@@ -17,6 +18,7 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/MultiTransportSubscriber.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -52,58 +54,17 @@ int main(int argc, char **argv) {
         std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
         return 1;
     }
-    std::string rabbitMQTopic;
-    std::variant<
-        transport::multicast::MulticastComponent::NoTopicSelection
-        , std::string
-        , std::regex
-    > multicastTopic;
-    std::variant<
-        transport::zeromq::ZeroMQComponent::NoTopicSelection
-        , std::string
-        , std::regex
-    > zeroMQTopic;
-    std::string redisTopic;
-    if (transport == "rabbitmq") {
-        if (!vm.count("topic")) {
-            rabbitMQTopic = "#";
-        } else {
-            rabbitMQTopic = vm["topic"].as<std::string>();
-        }
-    } else if (transport == "mcast") {
-        if (!vm.count("topic")) {
-            multicastTopic = transport::multicast::MulticastComponent::NoTopicSelection {};
-        } else {
-            std::string topic = vm["topic"].as<std::string>();
-            if (boost::starts_with(topic, "r/") && boost::ends_with(topic, "/") && topic.length() > 3) {
-                multicastTopic = std::regex {topic.substr(2, topic.length()-3)};
-            } else {
-                multicastTopic = topic;
-            }
-        }
-    } else if (transport == "zmq") {
-        if (!vm.count("topic")) {
-            zeroMQTopic = transport::zeromq::ZeroMQComponent::NoTopicSelection {};
-        } else {
-            std::string topic = vm["topic"].as<std::string>();
-            if (boost::starts_with(topic, "r/") && boost::ends_with(topic, "/") && topic.length() > 3) {
-                zeroMQTopic = std::regex {topic.substr(2, topic.length()-3)};
-            } else {
-                zeroMQTopic = topic;
-            }
-        }
-    } else if (transport == "redis") {
-        if (!vm.count("topic")) {
-            redisTopic = "*";
-        } else {
-            redisTopic = vm["topic"].as<std::string>();
-        }
-    }
+
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
         return 1;
     }
-    auto address = transport::ConnectionLocator::parse(vm["address"].as<std::string>());
+    auto address =vm["address"].as<std::string>();
+
+    std::string topic;
+    if (vm.count("topic")) {
+        topic = vm["topic"].as<std::string>();
+    }
 
     std::optional<int> summaryPeriod = std::nullopt;
     if (vm.count("summaryPeriod")) {
@@ -135,43 +96,80 @@ int main(int argc, char **argv) {
     R r(&env);
 
     {
-        auto importer =
-                (transport == "rabbitmq")
-            ?
-                transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-                ::createImporter(address, rabbitMQTopic)
-            :
-                (
-                    (transport == "mcast")
-                ?
-                    transport::multicast::MulticastImporterExporter<TheEnvironment>
-                    ::createImporter(address, multicastTopic)
-                :
-                    (
-                        (transport == "zmq")
-                    ?
-                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                        ::createImporter(address, zeroMQTopic)
-                    :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createImporter(address, redisTopic)                   
-                    )
-                )
-            ;
+        auto initialImporter = M::simpleImporter<basic::VoidStruct>(
+            [](M::PublisherCall<basic::VoidStruct> &p) {
+                p(basic::VoidStruct {});
+            }
+        );
+        auto createKey = M::liftMaybe<basic::VoidStruct>(
+            [address,topic,transport](basic::VoidStruct &&) -> std::optional<transport::MultiTransportSubscriberInput> {
+                transport::MultiTransportSubscriberConnectionType conn;
+                if (transport == "rabbitmq") {
+                    conn = transport::MultiTransportSubscriberConnectionType::RabbitMQ;
+                } else if (transport == "mcast") {
+                    conn = transport::MultiTransportSubscriberConnectionType::Multicast;
+                } else if (transport == "zmq") {
+                    conn = transport::MultiTransportSubscriberConnectionType::ZeroMQ;
+                } else if (transport == "redis") {
+                    conn = transport::MultiTransportSubscriberConnectionType::Redis;
+                } else {
+                    return std::nullopt;
+                }
+                return transport::MultiTransportSubscriberInput { {
+                    transport::MultiTransportSubscriberAddSubscription {
+                        conn
+                        , address
+                        , topic
+                    }
+                } };
+            }
+        );
+        auto keyify = M::template kleisli<transport::MultiTransportSubscriberInput>(
+            basic::CommonFlowUtilComponents<M>::template keyify<transport::MultiTransportSubscriberInput>()
+        );
+        auto multiSub = M::onOrderFacilityWithExternalEffects(
+            new transport::MultiTransportSubscriber<TheEnvironment, basic::ByteData>()
+        );
+        auto printSubRes = M::pureExporter<M::KeyedData<transport::MultiTransportSubscriberInput, transport::MultiTransportSubscriberOutput>>(
+            [&env](M::KeyedData<transport::MultiTransportSubscriberInput, transport::MultiTransportSubscriberOutput> &&subRes) {
+                std::visit([&env](auto &&x) {
+                    using T = std::decay_t<decltype(x)>;
+                    if constexpr (std::is_same_v<T, transport::MultiTransportSubscriberAddSubscriptionResponse>) {
+                        std::ostringstream oss;
+                        oss << "Got subscription with id " << x.subscriptionID;
+                        env.log(infra::LogLevel::Info, oss.str());
+                    }
+                }, std::move(subRes.data.value));
+            }
+        );
 
+        auto subKey = r.execute(
+            "keyify", keyify
+            , r.execute(
+                "createKey", createKey
+                , r.importItem("initialImporter", initialImporter)
+            )
+        );
+        r.placeOrderWithFacilityWithExternalEffects(
+            std::move(subKey), "multiSub", multiSub
+            , r.exporterAsSink("printSubRes", printSubRes)
+        );
+        
         struct SharedState {
             std::mutex mutex;
             uint64_t messageCount;
             SharedState() : mutex(), messageCount(0) {}
         };
         std::shared_ptr<SharedState> sharedState = std::make_shared<SharedState>();
+        
+        r.preservePointer(sharedState);
 
-        auto perMessage = M::simpleExporter<basic::ByteDataWithTopic>([sharedState,printPerMessage,messageIsText](M::InnerData<basic::ByteDataWithTopic> &&data) {
+        auto perMessage = M::simpleExporter<basic::TypedDataWithTopic<basic::ByteData>>([sharedState,printPerMessage,messageIsText](M::InnerData<basic::TypedDataWithTopic<basic::ByteData>> &&data) {
             if (printPerMessage) {
                 std::ostringstream oss;
                 if (messageIsText) {
                     oss << "topic='" << data.timedData.value.topic
-                        << "',content='" << data.timedData.value.content
+                        << "',content='" << data.timedData.value.content.content
                         << "'";
                 } else {
                     oss << data.timedData.value;
@@ -184,7 +182,7 @@ int main(int argc, char **argv) {
             }
         });
 
-        r.exportItem("perMessage", perMessage, r.importItem("importer", importer));
+        r.exportItem("perMessage", perMessage, r.facilityWithExternalEffectsAsSource(multiSub));
 
         if (summaryPeriod) {
             auto clockImporter = 
