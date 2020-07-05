@@ -14,6 +14,7 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/TransactionClient.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
+#include <tm_kit/basic/MonadRunnerUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -87,26 +88,23 @@ int main() {
 
     //We start by listening to the heartbeat from servers
 
-    auto createHeartbeatListenKey = M::simpleImporter<M::Key<transport::MultiTransportBroadcastListenerInput>>(
-        [](M::PublisherCall<M::Key<transport::MultiTransportBroadcastListenerInput>> &pub) {
-            pub(infra::withtime_utils::keyify<transport::MultiTransportBroadcastListenerInput,TheEnvironment>(
-                transport::MultiTransportBroadcastListenerInput { {
-                    transport::MultiTransportBroadcastListenerAddSubscription {
-                        transport::MultiTransportBroadcastListenerConnectionType::Redis
-                        , "127.0.0.1:6379"
-                        , "heartbeats.transaction_test_server"
-                    }
-                } }
-            ));
-        }
+    auto createHeartbeatListenKey = M::constFirstPushKeyImporter(
+        transport::MultiTransportBroadcastListenerInput { {
+            transport::MultiTransportBroadcastListenerAddSubscription {
+                transport::MultiTransportBroadcastListenerConnectionType::Redis
+                , "127.0.0.1:6379"
+                , "heartbeats.transaction_test_server"
+            }
+        } }
     );
-    auto listenToHeartbeat = M::onOrderFacilityWithExternalEffects(
-        new transport::MultiTransportBroadcastListener<TheEnvironment, transport::HeartbeatMessage>()
-    );
-    
-    r.placeOrderWithFacilityWithExternalEffectsAndForget(
-        r.importItem("createHeartbeatListenKey", createHeartbeatListenKey)
-        , "listenToHeartbeat", listenToHeartbeat
+    auto heartbeat = basic::MonadRunnerUtilComponents<R>::importWithTrigger(
+        r
+        , r.importItem("createHeartbeatListenKey", createHeartbeatListenKey)
+        , M::onOrderFacilityWithExternalEffects(
+            new transport::MultiTransportBroadcastListener<TheEnvironment, transport::HeartbeatMessage>()
+        )
+        , std::nullopt //the trigger response is not needed
+        , "heartbeatListener"
     );
 
     //Now that we have the heartbeats, we process them into 
@@ -148,7 +146,7 @@ int main() {
         "createSubscriptionFacilityCommand", createSubscriptionFacilityCommand
         , r.execute(
             "discardTopicFromHeartbeat", discardTopicFromHeartbeat
-            , r.facilityWithExternalEffectsAsSource(listenToHeartbeat)
+            , std::move(heartbeat)
         )
     );
     auto facilityCommandTimerInput = r.importItem("facilityCommandTimer", facilityCommandTimer);
