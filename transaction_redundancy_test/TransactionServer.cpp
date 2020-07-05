@@ -10,6 +10,7 @@
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
 
 #include <grpcpp/grpcpp.h>
 #ifdef _MSC_VER
@@ -676,6 +677,7 @@ int main(int argc, char **argv) {
     desc.add_options()
         ("help", "display help message")
         ("lock_choice", po::value<std::string>(), "lock choice (none, simple or compound)")
+        ("queue_name_prefix", po::value<std::string>(), "queue name prefix for processing commands")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -694,6 +696,11 @@ int main(int argc, char **argv) {
         } else if (choiceStr == "compound") {
             lockChoice = THComponent::LockChoice::Compound;
         }
+    }
+
+    std::string queueNamePrefix = "test_etcd";
+    if (vm.count("queue_name_prefix")) {
+        queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
     }
 
     using TheEnvironment = infra::Environment<
@@ -762,7 +769,7 @@ int main(int argc, char **argv) {
         <TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::test_etcd_transaction_queue")
+        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue")
         , "transaction_wrapper_"
         , std::nullopt //no hook
     );
@@ -770,17 +777,32 @@ int main(int argc, char **argv) {
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::test_etcd_subscription_queue")
+        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue")
         , "subscription_wrapper_"
         , std::nullopt //no hook
     );
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, "heartbeats.transaction_test_server", std::chrono::seconds(1));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
     r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_server");
     r.finalize();
 
-    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
+    env.setStatus("transaction_queue"
+        , transport::HeartbeatMessage::Status::Good
+        , transport::HeartbeatMessageToRemoteFacilityCommand::buildStatusInfo(
+            transport::MultiTransportRemoteFacilityConnectionType::Redis
+            , "127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue"
+        )
+    );
+    env.setStatus("subscription_queue"
+        , transport::HeartbeatMessage::Status::Good
+        , transport::HeartbeatMessageToRemoteFacilityCommand::buildStatusInfo(
+            transport::MultiTransportRemoteFacilityConnectionType::Redis
+            , "127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue"
+        )
+    );
     env.sendAlert("transaction_redundancy_test.server.info", infra::LogLevel::Info, "Transaction redundancy test server started");
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "Transaction redundancy test server started");

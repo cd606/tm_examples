@@ -18,7 +18,7 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
-#include <tm_kit/transport/MultiTransportSubscriber.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -102,21 +102,21 @@ int main(int argc, char **argv) {
             }
         );
         auto createKey = M::liftMaybe<basic::VoidStruct>(
-            [address,topic,transport](basic::VoidStruct &&) -> std::optional<transport::MultiTransportSubscriberInput> {
-                transport::MultiTransportSubscriberConnectionType conn;
+            [address,topic,transport](basic::VoidStruct &&) -> std::optional<transport::MultiTransportBroadcastListenerInput> {
+                transport::MultiTransportBroadcastListenerConnectionType conn;
                 if (transport == "rabbitmq") {
-                    conn = transport::MultiTransportSubscriberConnectionType::RabbitMQ;
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ;
                 } else if (transport == "mcast") {
-                    conn = transport::MultiTransportSubscriberConnectionType::Multicast;
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::Multicast;
                 } else if (transport == "zmq") {
-                    conn = transport::MultiTransportSubscriberConnectionType::ZeroMQ;
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::ZeroMQ;
                 } else if (transport == "redis") {
-                    conn = transport::MultiTransportSubscriberConnectionType::Redis;
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::Redis;
                 } else {
                     return std::nullopt;
                 }
-                return transport::MultiTransportSubscriberInput { {
-                    transport::MultiTransportSubscriberAddSubscription {
+                return transport::MultiTransportBroadcastListenerInput { {
+                    transport::MultiTransportBroadcastListenerAddSubscription {
                         conn
                         , address
                         , topic
@@ -124,24 +124,24 @@ int main(int argc, char **argv) {
                 } };
             }
         );
-        auto keyify = M::template kleisli<transport::MultiTransportSubscriberInput>(
-            basic::CommonFlowUtilComponents<M>::template keyify<transport::MultiTransportSubscriberInput>()
+        auto keyify = M::template kleisli<transport::MultiTransportBroadcastListenerInput>(
+            basic::CommonFlowUtilComponents<M>::template keyify<transport::MultiTransportBroadcastListenerInput>()
         );
         auto multiSub = M::onOrderFacilityWithExternalEffects(
-            new transport::MultiTransportSubscriber<TheEnvironment, basic::ByteData>()
+            new transport::MultiTransportBroadcastListener<TheEnvironment, basic::ByteData>()
         );
-        auto printSubRes = M::pureExporter<M::KeyedData<transport::MultiTransportSubscriberInput, transport::MultiTransportSubscriberOutput>>(
-            [&env](M::KeyedData<transport::MultiTransportSubscriberInput, transport::MultiTransportSubscriberOutput> &&subRes) {
+        /*auto printSubRes = M::pureExporter<M::KeyedData<transport::MultiTransportBroadcastListenerInput, transport::MultiTransportBroadcastListenerOutput>>(
+            [&env](M::KeyedData<transport::MultiTransportBroadcastListenerInput, transport::MultiTransportBroadcastListenerOutput> &&subRes) {
                 std::visit([&env](auto &&x) {
                     using T = std::decay_t<decltype(x)>;
-                    if constexpr (std::is_same_v<T, transport::MultiTransportSubscriberAddSubscriptionResponse>) {
+                    if constexpr (std::is_same_v<T, transport::MultiTransportBroadcastListenerAddSubscriptionResponse>) {
                         std::ostringstream oss;
                         oss << "Got subscription with id " << x.subscriptionID;
                         env.log(infra::LogLevel::Info, oss.str());
                     }
                 }, std::move(subRes.data.value));
             }
-        );
+        );*/
 
         auto subKey = r.execute(
             "keyify", keyify
@@ -150,11 +150,15 @@ int main(int argc, char **argv) {
                 , r.importItem("initialImporter", initialImporter)
             )
         );
+        /*
         r.placeOrderWithFacilityWithExternalEffects(
             std::move(subKey), "multiSub", multiSub
             , r.exporterAsSink("printSubRes", printSubRes)
         );
-        
+        */
+        r.placeOrderWithFacilityWithExternalEffectsAndForget(
+            std::move(subKey), "multiSub", multiSub
+        );
         struct SharedState {
             std::mutex mutex;
             uint64_t messageCount;
