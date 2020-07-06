@@ -115,10 +115,16 @@ int main(int argc, char **argv) {
                 } else {
                     return std::nullopt;
                 }
+                transport::ConnectionLocator locator;
+                try {
+                    locator = transport::ConnectionLocator::parse(address);
+                } catch (transport::ConnectionLocatorParseError const &) {
+                    return std::nullopt;
+                }
                 return transport::MultiTransportBroadcastListenerInput { {
                     transport::MultiTransportBroadcastListenerAddSubscription {
                         conn
-                        , address
+                        , locator
                         , topic
                     }
                 } };

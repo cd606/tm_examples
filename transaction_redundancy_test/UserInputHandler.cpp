@@ -1,5 +1,6 @@
 #include <linenoise.h>
 #include <iostream>
+#include <fstream>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
@@ -29,7 +30,7 @@
 using namespace dev::cd606::tm;
 using namespace test;
 
-int main() {
+int main(int argc, char **argv) {
     using DI = basic::transaction::current::DataStreamInterface<
         int64_t
         , Key
@@ -92,7 +93,7 @@ int main() {
         transport::MultiTransportBroadcastListenerInput { {
             transport::MultiTransportBroadcastListenerAddSubscription {
                 transport::MultiTransportBroadcastListenerConnectionType::Redis
-                , "127.0.0.1:6379"
+                , transport::ConnectionLocator::parse("127.0.0.1:6379")
                 , "heartbeats.transaction_test_server"
             }
         } }
@@ -155,53 +156,45 @@ int main() {
         , r.actionAsSink_2_1(createSubscriptionFacilityCommand)
     ); //"2_1" means using the second ("1", since we count from 0) input sink of an action with "2" inputs
 
-    r.connect(std::move(subscriptionFacilityCmd), r.vieFacilityAsSink("subscriptionFacility", subscriptionFacility));
-
     //Now the subscription facility is there, we can subscribe
     //Please note that we MUST issue a subscribe command for each
     //new server added into the subscription facility
 
-    auto addDataSubscription = M::liftMaybe<transport::MultiTransportRemoteFacilityActionResult>(
-        [](transport::MultiTransportRemoteFacilityActionResult &&action)
+    using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
+
+    auto vieInputInject = [](transport::MultiTransportRemoteFacilityAction &&action) {
+        return std::move(action);
+    };
+    auto vieSelfLoopCreator = infra::KleisliUtils<M>::liftMaybe<transport::MultiTransportRemoteFacilityActionResult>(
+        [](transport::MultiTransportRemoteFacilityActionResult &&res)
             -> std::optional<M::Key<std::tuple<transport::ConnectionLocator,GS::Input>>> {
-            if (action.actionType != transport::MultiTransportRemoteFacilityActionType::Register) {
+            if (std::get<0>(res).actionType != transport::MultiTransportRemoteFacilityActionType::Register) {
                 return std::nullopt;
             }
             return infra::withtime_utils::keyify<
                 std::tuple<transport::ConnectionLocator,GS::Input>
                 , TheEnvironment
             >(std::tuple<transport::ConnectionLocator,GS::Input> {
-                action.connectionLocator 
+                std::get<0>(res).connectionLocator 
                 , GS::Input { GS::Subscription {
                     { Key {} }
                 } }
             });
         }
     );
-    
-    auto addDataSubscriptionCmd = r.execute(
-        "addDataSubscription", addDataSubscription
-        , r.vieFacilityAsSource(subscriptionFacility)
-    );
-    //Why do we need this identity function in the graph?
-    //The reason is that by default the output from any on order facility
-    //has a max connectivity limit of 1. Here we want to have multiple
-    //downstream processors for output from subscription, so either We 
-    //can manually manipulate that, or we can do something like this where
-    //we hook up an action (which has no max output connectivity limit by
-    //default) to the facility. Normally, the hooked-up action might choose
-    //to do something, for example discarding the key part, but here one of
-    //the downstream processors does need the key, therefore the safest way 
-    //is just to hook up an identity function.
+    auto synchronizer = [](transport::MultiTransportRemoteFacilityActionResult &&res, transport::MultiTransportRemoteFacilityAction &&) -> transport::MultiTransportRemoteFacilityActionResult {
+        return std::move(res);
+    };
 
-    using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
-    auto gsReceiver = M::kleisli<FullSubscriptionOutput>(
-        basic::CommonFlowUtilComponents<M>::idFunc<FullSubscriptionOutput>()
-    );
-    r.placeOrderWithVIEFacility(
-        std::move(addDataSubscriptionCmd)
+    auto subscriptionFacilityLoopOutput = basic::MonadRunnerUtilComponents<R>::setupVIEFacilitySelfLoopAndWait(
+        r
+        , std::move(subscriptionFacilityCmd)
+        , std::move(vieInputInject)
+        , std::move(vieSelfLoopCreator)
         , subscriptionFacility
-        , r.actionAsSink("gsReceiver", gsReceiver)
+        , std::move(synchronizer)
+        , "subscriptionFacilityLoop"
+        , "subscriptionFacility"
     );
 
     //Now we can print the subscription data
@@ -260,7 +253,7 @@ int main() {
     );
 
     r.exportItem("fullDataPrinter", fullDataPrinter
-        , r.execute("getFullData", getFullData, r.actionAsSource(gsReceiver)));
+        , r.execute("getFullData", getFullData, subscriptionFacilityLoopOutput.facilityOutput.clone()));
 
     //Next, we manage the subscription IDs
 
@@ -296,21 +289,21 @@ int main() {
         }
     );
     auto subscriptionIDRemover = M::pureExporter<transport::MultiTransportRemoteFacilityActionResult>(
-        [&env,&ids,&idMutex](transport::MultiTransportRemoteFacilityActionResult &&action) {
-            if (action.actionType == transport::MultiTransportRemoteFacilityActionType::Deregister) {
+        [&env,&ids,&idMutex](transport::MultiTransportRemoteFacilityActionResult &&res) {
+            if (std::get<0>(res).actionType == transport::MultiTransportRemoteFacilityActionType::Deregister) {
                 std::lock_guard<std::mutex> _(idMutex);
-                ids.erase(action.connectionLocator);
+                ids.erase(std::get<0>(res).connectionLocator);
                 std::ostringstream oss;
-                oss << "Subscription ID for " << action.connectionLocator.toSerializationFormat() << " removed because the server is disconnected";
+                oss << "Subscription ID for " << std::get<0>(res).connectionLocator.toSerializationFormat() << " removed because the server is disconnected";
                 env.log(infra::LogLevel::Info, oss.str());
             }
         }
     );
 
     r.exportItem("subscriptionIDManager", subscriptionIDManager
-        , r.actionAsSource(gsReceiver));
+        , subscriptionFacilityLoopOutput.facilityOutput.clone());
     r.exportItem("subscriptionIDRemover", subscriptionIDRemover
-        , r.vieFacilityAsSource(subscriptionFacility));
+        , subscriptionFacilityLoopOutput.processedFacilityExtraOutput.clone());
 
     //Next, we set up the main command parser, which will, among others
     //, generate an "exit" command
@@ -366,12 +359,12 @@ int main() {
         }
     );
 
-    r.placeOrderWithVIEFacilityAndForget(
-        r.execute(
+    subscriptionFacilityLoopOutput.callIntoFacility(
+        r
+        , r.execute(
             "exitCommandHandler", exitCommandHandler
             , r.importItem("lineImporter", lineImporter)
         )
-        , subscriptionFacility
     );
 
     //Now we can handle the transaction part.
@@ -611,6 +604,11 @@ int main() {
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
     r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_client");
+
+    if (argc > 1) {
+        std::ofstream ofs(argv[1]);
+        r.writeGraphVizDescription(ofs, "transaction_redundancy_test_client");
+    }
     
     r.finalize();
 
