@@ -22,6 +22,7 @@
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacility.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 #include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
 
@@ -122,7 +123,7 @@ int main(int argc, char **argv) {
         , std::regex("subscription_queue")
         , std::chrono::seconds(3)
     );
-
+    
     auto facilityCommandTimer = basic::real_time_clock::ClockImporter<TheEnvironment>
         ::createRecurringClockImporter<basic::VoidStruct>(
             std::chrono::system_clock::now()
@@ -133,16 +134,6 @@ int main(int argc, char **argv) {
             }
         );
 
-    auto subscriptionFacility = M::vieOnOrderFacility(
-        new transport::MultiTransportRemoteFacility<
-            TheEnvironment
-            , GS::Input
-            , GS::Output
-            , std::string
-            , transport::MultiTransportRemoteFacilityDispatchStrategy::Designated
-        >
-    );
-
     auto subscriptionFacilityCmd = r.execute(
         "createSubscriptionFacilityCommand", createSubscriptionFacilityCommand
         , r.execute(
@@ -150,6 +141,17 @@ int main(int argc, char **argv) {
             , std::move(heartbeat)
         )
     );
+    auto subscriptionFacilityCmdAsArrayNode = M::liftPure<transport::MultiTransportRemoteFacilityAction>(
+        [](transport::MultiTransportRemoteFacilityAction &&a) -> std::array<transport::MultiTransportRemoteFacilityAction, 1> {
+            return {std::move(a)};
+        }
+    );
+    auto subscriptionFacilityCmdAsArray = r.execute(
+        "subscriptionFacilityCmdAsArray"
+        , subscriptionFacilityCmdAsArrayNode
+        , std::move(subscriptionFacilityCmd)
+    );
+
     auto facilityCommandTimerInput = r.importItem("facilityCommandTimer", facilityCommandTimer);
     r.connect(
         facilityCommandTimerInput.clone()
@@ -162,39 +164,31 @@ int main(int argc, char **argv) {
 
     using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
 
-    auto vieInputInject = [](transport::MultiTransportRemoteFacilityAction &&action) {
-        return std::move(action);
-    };
-    auto vieSelfLoopCreator = infra::KleisliUtils<M>::liftMaybe<transport::MultiTransportRemoteFacilityActionResult>(
-        [](transport::MultiTransportRemoteFacilityActionResult &&res)
-            -> std::optional<M::Key<std::tuple<transport::ConnectionLocator,GS::Input>>> {
-            if (std::get<0>(res).actionType != transport::MultiTransportRemoteFacilityActionType::Register) {
-                return std::nullopt;
-            }
-            return infra::withtime_utils::keyify<
-                std::tuple<transport::ConnectionLocator,GS::Input>
-                , TheEnvironment
-            >(std::tuple<transport::ConnectionLocator,GS::Input> {
-                std::get<0>(res).connectionLocator 
-                , GS::Input { GS::Subscription {
-                    { Key {} }
-                } }
-            });
-        }
-    );
-    auto synchronizer = [](transport::MultiTransportRemoteFacilityActionResult &&res, transport::MultiTransportRemoteFacilityAction &&) -> transport::MultiTransportRemoteFacilityActionResult {
-        return std::move(res);
-    };
-
-    auto subscriptionFacilityLoopOutput = basic::MonadRunnerUtilComponents<R>::setupVIEFacilitySelfLoopAndWait(
-        r
-        , std::move(subscriptionFacilityCmd)
-        , std::move(vieInputInject)
-        , std::move(vieSelfLoopCreator)
-        , subscriptionFacility
-        , std::move(synchronizer)
-        , "subscriptionFacilityLoop"
-        , "subscriptionFacility"
+    auto subscriptionFacility = std::get<0>(
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+            ::setupDistinguishedRemoteFacilities<
+                std::tuple<std::string, GS::Input, GS::Output>
+            >(
+                r 
+                , std::move(subscriptionFacilityCmdAsArray)
+                , {
+                    GS::Input { GS::Subscription {
+                        { Key {} }
+                    } }
+                }
+                , {
+                    [](GS::Input const &, GS::Output const &o) -> bool {
+                        return std::visit(
+                            [](auto const &x) -> bool {
+                                auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                                return ret;
+                            }, o.value
+                        );
+                    }
+                }
+                , {"transactionFacility"}
+                , "transactionFacilitySection"
+            )
     );
 
     //Now we can print the subscription data
@@ -252,8 +246,15 @@ int main(int argc, char **argv) {
         }
     );
 
+    subscriptionFacility.feedOrderResults(
+        r
+        , r.actionAsSink("getFullData", getFullData)
+    );
+
     r.exportItem("fullDataPrinter", fullDataPrinter
-        , r.execute("getFullData", getFullData, subscriptionFacilityLoopOutput.facilityOutput.clone()));
+        , r.actionAsSource(getFullData)
+    );
+
 
     //Next, we manage the subscription IDs
 
@@ -288,22 +289,26 @@ int main(int argc, char **argv) {
             }, std::move(o.data.value));
         }
     );
-    auto subscriptionIDRemover = M::pureExporter<transport::MultiTransportRemoteFacilityActionResult>(
-        [&env,&ids,&idMutex](transport::MultiTransportRemoteFacilityActionResult &&res) {
-            if (std::get<0>(res).actionType == transport::MultiTransportRemoteFacilityActionType::Deregister) {
+    auto subscriptionIDRemover = M::pureExporter<std::tuple<transport::ConnectionLocator, bool>>(
+        [&env,&ids,&idMutex](std::tuple<transport::ConnectionLocator, bool> &&x) {
+            if (!std::get<1>(x)) {
                 std::lock_guard<std::mutex> _(idMutex);
-                ids.erase(std::get<0>(res).connectionLocator);
+                ids.erase(std::get<0>(x));
                 std::ostringstream oss;
-                oss << "Subscription ID for " << std::get<0>(res).connectionLocator.toSerializationFormat() << " removed because the server is disconnected";
+                oss << "Subscription ID for " << std::get<0>(x).toSerializationFormat() << " removed because the server is disconnected";
                 env.log(infra::LogLevel::Info, oss.str());
             }
         }
     );
 
-    r.exportItem("subscriptionIDManager", subscriptionIDManager
-        , subscriptionFacilityLoopOutput.facilityOutput.clone());
-    r.exportItem("subscriptionIDRemover", subscriptionIDRemover
-        , subscriptionFacilityLoopOutput.processedFacilityExtraOutput.clone());
+    subscriptionFacility.feedOrderResults(
+        r 
+        , r.exporterAsSink("subscriptionIDManager", subscriptionIDManager)
+    );
+    subscriptionFacility.feedConnectionChanges(
+        r 
+        , r.exporterAsSink("subscriptionIDRemover", subscriptionIDRemover)
+    );
 
     //Next, we set up the main command parser, which will, among others
     //, generate an "exit" command
@@ -330,7 +335,7 @@ int main(int argc, char **argv) {
     //We add the exit handler here to unsubscribe from all servers
 
     auto exitCommandHandler = M::liftMulti<std::vector<std::string>>(
-        [&ids,&idMutex](std::vector<std::string> const &parts) 
+        [&env,&ids,&idMutex](std::vector<std::string> const &parts) 
             -> std::vector<M::Key<std::tuple<transport::ConnectionLocator, GS::Input>>> {
             if (!parts.empty() && parts[0] == "exit") {
                 std::lock_guard<std::mutex> _(idMutex);
@@ -352,6 +357,10 @@ int main(int argc, char **argv) {
                         )
                     );
                 }
+                if (ret.empty()) {
+                    env.log(infra::LogLevel::Info, "Nothing to unsubscribe, exiting");
+                    exit(0);
+                }
                 return ret;
             } else {
                 return {};
@@ -359,7 +368,7 @@ int main(int argc, char **argv) {
         }
     );
 
-    subscriptionFacilityLoopOutput.callIntoFacility(
+    subscriptionFacility.orderReceiver(
         r
         , r.execute(
             "exitCommandHandler", exitCommandHandler
@@ -379,26 +388,37 @@ int main(int argc, char **argv) {
         , std::chrono::seconds(3)
     );
 
-    auto transactionFacility = M::localOnOrderFacility(
-        new transport::MultiTransportRemoteFacility<
-            TheEnvironment
-            , TI::Transaction
-            , TI::TransactionResponse
-            , std::string
-            , transport::MultiTransportRemoteFacilityDispatchStrategy::Random
-        >
+    auto facilityCommandAsArray = M::liftPure<transport::MultiTransportRemoteFacilityAction>(
+        [](transport::MultiTransportRemoteFacilityAction &&a) -> std::array<transport::MultiTransportRemoteFacilityAction, 1> {
+            return {std::move(a)};
+        }
     );
 
     auto transactionFacilityCmd = r.execute(
         "createTransactionFacilityCommand", createTransactionFacilityCommand
         , r.actionAsSource(discardTopicFromHeartbeat)
     );
+    auto transactionFacilityCmdAsArray = r.execute(
+        "facilityCommandAsArray", facilityCommandAsArray
+        , transactionFacilityCmd.clone()
+    );
+    auto transactionFacility = std::get<0>(
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+            ::setupNonDistinguishedRemoteFacilities<
+                std::tuple<std::string, TI::Transaction, TI::TransactionResponse>
+            >(
+                r 
+                , std::move(transactionFacilityCmdAsArray)
+                , {"transactionFacility"}
+                , "transactionFacilitySection"
+            )
+    );
+
     r.connect(
         facilityCommandTimerInput.clone()
         , r.actionAsSink_2_1(createTransactionFacilityCommand)
     ); 
-    r.connect(std::move(transactionFacilityCmd), r.localFacilityAsSink("transactionFacility", transactionFacility));
-
+    
     auto transactionCommandParser = M::liftMaybe<std::vector<std::string>>(
         [&env,dataStorePtr](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
             if (parts.empty()) {
@@ -583,15 +603,15 @@ int main(int argc, char **argv) {
         }
     );
 
-    r.placeOrderWithLocalFacility(
-        r.execute(
+    transactionFacility(
+        r
+        , r.execute(
             "keyifyTI", keyifyTI
             , r.execute(
                 "transactionCommandParser", transactionCommandParser
                 , r.importItem(lineImporter)
             )
         )
-        , transactionFacility
         , r.actionAsSink("tiReceiver", tiReceiver)
     );
     r.exportItem(
