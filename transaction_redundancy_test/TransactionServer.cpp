@@ -789,20 +789,6 @@ int main(int argc, char **argv) {
     r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_server");
     r.finalize();
 
-    env.setStatus("transaction_queue"
-        , transport::HeartbeatMessage::Status::Good
-        , transport::HeartbeatMessageToRemoteFacilityCommand::buildStatusInfo(
-            transport::MultiTransportRemoteFacilityConnectionType::Redis
-            , "127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue"
-        )
-    );
-    env.setStatus("subscription_queue"
-        , transport::HeartbeatMessage::Status::Good
-        , transport::HeartbeatMessageToRemoteFacilityCommand::buildStatusInfo(
-            transport::MultiTransportRemoteFacilityConnectionType::Redis
-            , "127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue"
-        )
-    );
     env.sendAlert("transaction_redundancy_test.server.info", infra::LogLevel::Info, "Transaction redundancy test server started");
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "Transaction redundancy test server started");

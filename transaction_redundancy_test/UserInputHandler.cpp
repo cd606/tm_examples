@@ -88,110 +88,93 @@ int main(int argc, char **argv) {
 
     R r(&env);
 
-    //We start by listening to the heartbeat from servers
+    //We create the facilities
+    //We use a very big helper function,
+    //the meanings of the parameters are commented one by one
 
-    auto createHeartbeatListenKey = M::constFirstPushKeyImporter(
-        transport::MultiTransportBroadcastListenerInput { {
-            transport::MultiTransportBroadcastListenerAddSubscription {
+    //The returned value is a 2-tuple, each tuple element is a variadic-tuple
+    //, with one element in such variadic-tuple corresponding to a facility.
+
+    auto facilities =
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::SetupRemoteFacilities<
+            std::tuple<
+                std::tuple<std::string, GS::Input, GS::Output>
+            >
+            , std::tuple<
+                std::tuple<std::string, TI::Transaction, TI::TransactionResponse>
+            >
+        >::run(
+            //The runner
+            r 
+            //The protocol/address/topic to listen for heartbeat
+            , transport::MultiTransportBroadcastListenerAddSubscription {
                 transport::MultiTransportBroadcastListenerConnectionType::Redis
                 , transport::ConnectionLocator::parse("127.0.0.1:6379")
                 , "heartbeats.transaction_test_server"
             }
-        } }
-    );
-    auto heartbeat = basic::MonadRunnerUtilComponents<R>::importWithTrigger(
-        r
-        , r.importItem("createHeartbeatListenKey", createHeartbeatListenKey)
-        , M::onOrderFacilityWithExternalEffects(
-            new transport::MultiTransportBroadcastListener<TheEnvironment, transport::HeartbeatMessage>()
-        )
-        , std::nullopt //the trigger response is not needed
-        , "heartbeatListener"
-    );
-
-    //Now that we have the heartbeats, we process them into 
-    //management commands for subscription facility
-
-    auto discardTopicFromHeartbeat = M::liftPure<basic::TypedDataWithTopic<transport::HeartbeatMessage>>(
-        [](basic::TypedDataWithTopic<transport::HeartbeatMessage> &&d) {
-            return std::move(d.content);
-        }
-    );
-
-    auto createSubscriptionFacilityCommand = transport::heartbeatMessageToRemoteFacilityCommand<M>(
-        std::regex("transaction redundancy test server")
-        , std::regex("subscription_queue")
-        , std::chrono::seconds(3)
-    );
-    
-    auto facilityCommandTimer = basic::real_time_clock::ClockImporter<TheEnvironment>
-        ::createRecurringClockImporter<basic::VoidStruct>(
-            std::chrono::system_clock::now()
-            , std::chrono::system_clock::now()+std::chrono::hours(24)
-            , std::chrono::seconds(5)
-            , [](typename TheEnvironment::TimePointType const &tp) {
-                return basic::VoidStruct {};
+            //The server identifier in heartbeat
+            , std::regex("transaction redundancy test server")
+            //The names of the facilities in the server-side graph
+            //(in case of doubt, look at the generated server-side graph)
+            //The "distinguished" ones must come first and the "non-distinguished"
+            //ones come afterwards. In the "distinguished" ones, the order 
+            //is the actual order we will issue registration, so if one of them
+            //depends on another, the dependent must come later. All the
+            //"non-distinguished" ones are registered together in the end.
+            //"Distinguished" ones are the ones that client wants to interact
+            //severally, for example, here for subscription, the client needs to
+            //issue one subscription per server instance, therefore they are 
+            //"distinguished". The "non-distinguished" ones are fungible, the client
+            //randomly interacts with any of them and does not need to know
+            //which is which
+            , {
+                "transaction_server_components/subscription_handler"
+                , "transaction_server_components/transaction_handler"
             }
+            //The TTL of heartbeat. If heartbeat is missing for this amount of time
+            //, we need to de-register the facilities
+            , std::chrono::seconds(3)
+            //How often do we check for TTL liveliness
+            , std::chrono::seconds(5)
+            //For the "distinguished" ones, we always send one initial request 
+            //right after registration, and this parameter provides the initial
+            //request objects for the "distinguished" ones, preserving the order
+            , {
+                GS::Input { GS::Subscription {
+                    { Key {} }
+                } }
+            }
+            //For the "distinguished" ones, we also always wait for the initial
+            //reply to the initial request to come back, before moving on to 
+            //register the next "distinguished" one (or the "non-distinguished"
+            //ones), here we provide the checkers (always given as predicates
+            //taking in const references) for each "distinguished" facility, 
+            //preserving the order
+            , {
+                [](GS::Input const &, GS::Output const &o) -> bool {
+                    return std::visit(
+                        [](auto const &x) -> bool {
+                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                            return ret;
+                        }, o.value
+                    );
+                }
+            }
+            //These are the client-side graph node names for all the facilities
+            //, keeping the same order as the server-side names
+            , {
+                "subscription", "transaction"
+            }
+            //This is the prefix to use for all the components created in this
+            //helper function during graph generation
+            , "facilities"
         );
 
-    auto subscriptionFacilityCmd = r.execute(
-        "createSubscriptionFacilityCommand", createSubscriptionFacilityCommand
-        , r.execute(
-            "discardTopicFromHeartbeat", discardTopicFromHeartbeat
-            , std::move(heartbeat)
-        )
-    );
-    auto subscriptionFacilityCmdAsArrayNode = M::liftPure<transport::MultiTransportRemoteFacilityAction>(
-        [](transport::MultiTransportRemoteFacilityAction &&a) -> std::array<transport::MultiTransportRemoteFacilityAction, 1> {
-            return {std::move(a)};
-        }
-    );
-    auto subscriptionFacilityCmdAsArray = r.execute(
-        "subscriptionFacilityCmdAsArray"
-        , subscriptionFacilityCmdAsArrayNode
-        , std::move(subscriptionFacilityCmd)
-    );
+    auto subscriptionFacility = std::get<0>(std::get<0>(facilities));
+    auto transactionFacility = std::get<0>(std::get<1>(facilities));
 
-    auto facilityCommandTimerInput = r.importItem("facilityCommandTimer", facilityCommandTimer);
-    r.connect(
-        facilityCommandTimerInput.clone()
-        , r.actionAsSink_2_1(createSubscriptionFacilityCommand)
-    ); //"2_1" means using the second ("1", since we count from 0) input sink of an action with "2" inputs
-
-    //Now the subscription facility is there, we can subscribe
-    //Please note that we MUST issue a subscribe command for each
-    //new server added into the subscription facility
-
-    using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
-
-    auto subscriptionFacility = std::get<0>(
-        transport::MultiTransportRemoteFacilityManagingUtils<R>
-            ::setupDistinguishedRemoteFacilities<
-                std::tuple<std::string, GS::Input, GS::Output>
-            >(
-                r 
-                , std::move(subscriptionFacilityCmdAsArray)
-                , {
-                    GS::Input { GS::Subscription {
-                        { Key {} }
-                    } }
-                }
-                , {
-                    [](GS::Input const &, GS::Output const &o) -> bool {
-                        return std::visit(
-                            [](auto const &x) -> bool {
-                                auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
-                                return ret;
-                            }, o.value
-                        );
-                    }
-                }
-                , {"transactionFacility"}
-                , "transactionFacilitySection"
-            )
-    );
-
-    //Now we can print the subscription data
+    //Now we manage the subscription data
 
     auto dataStorePtr = std::make_shared<basic::transaction::current::TransactionDataStore<DI>>();
     r.preservePointer(dataStorePtr);
@@ -201,8 +184,12 @@ int main(int argc, char **argv) {
         , ApplyVersionSlice
         , ApplyDataSlice
     >;
+
     //getFullData might be as well written as three nodes in the graph
     //but by operating in KleisliUtils, we can merge them into one node
+    
+    using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
+    
     auto getFullData = M::kleisli<FullSubscriptionOutput>(
         infra::KleisliUtils<M>::compose<FullSubscriptionOutput>(
             infra::KleisliUtils<M>::liftPure<FullSubscriptionOutput>(
@@ -254,7 +241,6 @@ int main(int argc, char **argv) {
     r.exportItem("fullDataPrinter", fullDataPrinter
         , r.actionAsSource(getFullData)
     );
-
 
     //Next, we manage the subscription IDs
 
@@ -377,47 +363,6 @@ int main(int argc, char **argv) {
     );
 
     //Now we can handle the transaction part.
-    //Transaction part is managed somewhat similarly to the subscription
-    //part, but since we only have to send a transaction command to one
-    //server, it is simpler. The command parsing takes up most of the space
-    //in this part
-
-    auto createTransactionFacilityCommand = transport::heartbeatMessageToRemoteFacilityCommand<M>(
-        std::regex("transaction redundancy test server")
-        , std::regex("transaction_queue")
-        , std::chrono::seconds(3)
-    );
-
-    auto facilityCommandAsArray = M::liftPure<transport::MultiTransportRemoteFacilityAction>(
-        [](transport::MultiTransportRemoteFacilityAction &&a) -> std::array<transport::MultiTransportRemoteFacilityAction, 1> {
-            return {std::move(a)};
-        }
-    );
-
-    auto transactionFacilityCmd = r.execute(
-        "createTransactionFacilityCommand", createTransactionFacilityCommand
-        , r.actionAsSource(discardTopicFromHeartbeat)
-    );
-    auto transactionFacilityCmdAsArray = r.execute(
-        "facilityCommandAsArray", facilityCommandAsArray
-        , transactionFacilityCmd.clone()
-    );
-    auto transactionFacility = std::get<0>(
-        transport::MultiTransportRemoteFacilityManagingUtils<R>
-            ::setupNonDistinguishedRemoteFacilities<
-                std::tuple<std::string, TI::Transaction, TI::TransactionResponse>
-            >(
-                r 
-                , std::move(transactionFacilityCmdAsArray)
-                , {"transactionFacility"}
-                , "transactionFacilitySection"
-            )
-    );
-
-    r.connect(
-        facilityCommandTimerInput.clone()
-        , r.actionAsSink_2_1(createTransactionFacilityCommand)
-    ); 
     
     auto transactionCommandParser = M::liftMaybe<std::vector<std::string>>(
         [&env,dataStorePtr](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
