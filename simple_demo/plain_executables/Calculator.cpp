@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
         , std::nullopt //hook
     );
 
-    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.calculator.heartbeat", std::chrono::seconds(10));
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.calculator.heartbeat", std::chrono::seconds(1));
 
     r.finalize();
 

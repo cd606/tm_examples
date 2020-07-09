@@ -21,6 +21,8 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacility.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -85,12 +87,30 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
     if (isReal) {
-        auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
-                    ::WithIdentity<std::string>::createTypedRPCOnOrderFacility<CalculateCommand, CalculateResult>(
-                        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_queue")
-                    );
-        r.registerOnOrderFacility("facility", facility);
-        calc = R::facilityConnector(facility);
+        auto facilities =
+            transport::MultiTransportRemoteFacilityManagingUtils<R>
+            ::SetupRemoteFacilities<
+                std::tuple<>
+                , std::tuple<
+                    std::tuple<std::string, CalculateCommand, CalculateResult>
+                >
+            >::run(
+                r 
+                , transport::MultiTransportBroadcastListenerAddSubscription {
+                    transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ
+                    , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]")
+                    , "simple_demo.plain_executables.calculator.heartbeat"
+                }
+                , std::regex("simple_demo plain Calculator")
+                , {"facility"}
+                , std::chrono::seconds(3)
+                , std::chrono::seconds(5)
+                , {}
+                , {}
+                , {"facility"}
+                , "facilities"
+            );
+        calc = std::get<0>(std::get<1>(facilities));
     } else {
         calc = &(MockCalculatorCombination<
                     R
