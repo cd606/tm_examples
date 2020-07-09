@@ -14,14 +14,14 @@
 
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
 using namespace dev::cd606::tm;
 
 template <
     class R
     , class CommandToBeSecured
-    , class ImporterExporterTransport
-    , class OnOrderFacilityTransport
+    , class ResponseToBeSecured
     , std::enable_if_t<
         std::is_base_of_v<
             basic::real_time_clock::ClockComponent
@@ -37,23 +37,35 @@ template <
         ,int
         > = 0
 >
-void DHClientSideCombination(
+auto DHClientSideCombination(
     R &r
-    , std::mutex &dhClientHelperMutex
-    , std::unique_ptr<DHClientHelper> &dhClientHelper
     , std::array<unsigned char, 32> serverPublicKey
-    , std::string const &dhQueueLocator
-    , std::string const &dhRestartExchangeLocator
-    , std::string const &dhRestartTopic
-) {
+    , transport::MultiTransportBroadcastListenerAddSubscription const &heartbeatChannelSpec
+    , std::regex const &serverNameRE
+    , std::string const &nameOfFacilityToBeSecuredOnServerSide
+    , std::string const &heartbeatDecryptionKey
+)
+    -> typename R::template FacilitioidConnector<CommandToBeSecured,ResponseToBeSecured>
+{
     using Env = typename R::EnvironmentType;
-    using M = typename R::MonadType;
 
+    Env *env = r.environment();
+
+    auto dhClientHelper = std::make_shared<DHClientHelper>(
+        boost::hana::curry<2>(
+            std::mem_fn(&ClientSideSignatureAndAESBasedIdentityAttacherComponent<CommandToBeSecured>::set_aes_key)
+        )(env)
+    );
+    auto dhClientHelperMutex = std::make_shared<std::mutex>();
+
+    r.preservePointer(dhClientHelper);
+    r.preservePointer(dhClientHelperMutex);
+    
     auto verifier = std::make_shared<VerifyHelper>();
     r.preservePointer(verifier);
     verifier->addKey("", serverPublicKey);
     transport::WireToUserHook verifyHook = {
-        [verifier](basic::ByteData &&d) -> std::optional<basic::ByteData> {
+        [verifier,env](basic::ByteData &&d) -> std::optional<basic::ByteData> {
             auto x = verifier->verify(std::move(d));
             if (x) {
                 return std::move(std::get<1>(*x));
@@ -68,55 +80,65 @@ void DHClientSideCombination(
         }
     };
 
-    auto restartListener = ImporterExporterTransport
-                        ::template createTypedImporter<DHHelperRestarted>(
-        transport::ConnectionLocator::parse(dhRestartExchangeLocator)
-        , dhRestartTopic
-        , verifyHook
-    );
-    r.registerImporter("restartListener", restartListener);
+    auto aes = std::make_shared<AESHook>();
+    r.preservePointer(aes);
+    aes->setKey(AESHook::keyFromString(heartbeatDecryptionKey));
 
-    Env *env = r.environment();
-    auto oneShot = basic::real_time_clock::template ClockImporter<Env>
-                    ::template createOneShotClockConstImporter<basic::TypedDataWithTopic<DHHelperRestarted>>(
-        env->now()+std::chrono::milliseconds(100)
-        , basic::TypedDataWithTopic<DHHelperRestarted> { dhRestartTopic, DHHelperRestarted {} }
-    );
-    r.registerImporter("oneShot", oneShot);
-
-    auto createDHCommand = M::template liftPure<basic::TypedDataWithTopic<DHHelperRestarted>>(
-        [env,&dhClientHelper,&dhClientHelperMutex](basic::TypedDataWithTopic<DHHelperRestarted> &&) {
-            std::lock_guard<std::mutex> _(dhClientHelperMutex);
-            dhClientHelper.reset(
-                new DHClientHelper(
-                    boost::hana::curry<2>(
-                        std::mem_fn(&ClientSideSignatureAndAESBasedIdentityAttacherComponent<CommandToBeSecured>::set_aes_key)
-                    )(env)
-                )
-            );
-            return infra::withtime_utils::keyify<DHHelperCommand, Env>(dhClientHelper->buildCommand());
+    auto heartbeatHook = transport::composeWireToUserHook(
+        verifyHook
+        , transport::WireToUserHook {
+            boost::hana::curry<2>(std::mem_fn(&AESHook::decode))(aes.get())
         }
     );
-    auto dhHandler = M::template pureExporter<typename M::template KeyedData<DHHelperCommand, DHHelperReply>>(
-        [&dhClientHelper,&dhClientHelperMutex](typename M::template KeyedData<DHHelperCommand, DHHelperReply> &&data) {
-            std::lock_guard<std::mutex> _(dhClientHelperMutex);
-            dhClientHelper->process(std::move(data.data));
-        }
-    );
-    auto dhFacility = OnOrderFacilityTransport
-                    ::template WithIdentity<std::string>
-                    ::template createTypedRPCOnOrderFacility<DHHelperCommand, DHHelperReply>(
-        transport::ConnectionLocator::parse(dhQueueLocator)
-        , transport::ByteDataHookPair {
-            emptyHook, verifyHook
-        }
-    );
-    r.registerAction("createDHCommand", createDHCommand);
-    r.registerExporter("dhHandler", dhHandler);
-    r.registerOnOrderFacility("dhFacility", dhFacility);
+  
+    auto facilities =
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::template SetupRemoteFacilities<
+            std::tuple<
+                std::tuple<std::string, DHHelperCommand, DHHelperReply>
+            >
+            , std::tuple<
+                std::tuple<std::string, CommandToBeSecured, ResponseToBeSecured>
+            >
+        >::run(
+            r 
+            , heartbeatChannelSpec
+            , serverNameRE
+            , {
+                "dh_server_facility", nameOfFacilityToBeSecuredOnServerSide
+            }
+            , std::chrono::seconds(3)
+            , std::chrono::seconds(5)
+            , {
+                [env,dhClientHelper,dhClientHelperMutex]() -> DHHelperCommand {
+                    env->log(infra::LogLevel::Info, "Creating DH client command");
+                    std::lock_guard<std::mutex> _(*dhClientHelperMutex);
+                    dhClientHelper->reset(); //this forces a regeneration of key
+                    return dhClientHelper->buildCommand();
+                }
+            }
+            , {
+                [dhClientHelper,dhClientHelperMutex](DHHelperCommand const &, DHHelperReply const &data) -> bool {
+                    std::lock_guard<std::mutex> _(*dhClientHelperMutex);
+                    dhClientHelper->process(data);
+                    return true;
+                }
+            }
+            , {
+                "dhClient", "facility"
+            }
+            , "facilities"
+            , heartbeatHook
+            , [emptyHook,verifyHook](std::string const &, transport::ConnectionLocator const &)
+                -> std::optional<transport::ByteDataHookPair>
+                {
+                    return transport::ByteDataHookPair {
+                        emptyHook, verifyHook
+                    };
+                }
+        );
 
-    r.placeOrderWithFacility(r.execute(createDHCommand, r.importItem(oneShot)), dhFacility, r.exporterAsSink(dhHandler));
-    r.execute(createDHCommand, r.importItem(restartListener));
+    return std::get<0>(std::get<1>(facilities));
 }
 
 #endif

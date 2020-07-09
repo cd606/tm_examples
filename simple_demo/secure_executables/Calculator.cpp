@@ -127,10 +127,6 @@ int main(int argc, char **argv) {
         , main_logic_pub_key
     );
 
-    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "simple_demo secure Calculator", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
-    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
-
     infra::MonadRunner<M> r(&env);
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
@@ -140,33 +136,22 @@ int main(int argc, char **argv) {
         , std::nullopt //hook
     );
 
-    /*
     DHServerSideCombination<
         infra::MonadRunner<M>
         , CalculateCommand
-        , transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
-    >(
-        r
-        , my_prv_key
-        , "127.0.0.1::guest:guest:test_dh_queue"
-        , "127.0.0.1::guest:guest:amq.topic[durable=true]"
-        , "calculator_dh.restarted"
-    );*/
-    DHServerSideCombination<
-        infra::MonadRunner<M>
-        , CalculateCommand
-        , transport::redis::RedisImporterExporter<TheEnvironment>
         , transport::redis::RedisOnOrderFacility<TheEnvironment>
+        , transport::rabbitmq::RabbitMQComponent
     >(
         r
         , my_prv_key
-        , "localhost:6379:::test_dh_queue"
-        , "localhost:6379"
-        , "calculator_dh.restarted"
+        , transport::ConnectionLocator::parse("localhost:6379:::test_dh_queue") //facility locator
+        , "simple_demo secure Calculator" //server name for heartbeat
+        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]") //heartbeat locator
+        , "testkey" //encrypt heartbeat with this key
     );
 
-    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.calculator.heartbeat", std::chrono::seconds(10));
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.calculator.heartbeat", std::chrono::seconds(1));
+    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
     r.finalize();
 

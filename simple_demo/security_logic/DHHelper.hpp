@@ -56,8 +56,9 @@ public:
     DHClientHelper(std::function<void(std::array<unsigned char, 16> const &)> localKeyUpdater);
     ~DHClientHelper();
     
+    void reset();
     DHHelperCommand buildCommand();
-    void process(DHHelperReply &&input);
+    void process(DHHelperReply const &input);
 };
 
 #endif

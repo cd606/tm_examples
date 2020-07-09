@@ -21,6 +21,7 @@ public:
     AESHook &operator=(AESHook const &) = delete;
     AESHook(AESHook &&);
     AESHook &operator=(AESHook &&);
+    static std::array<unsigned char,KeyLength/8> keyFromString(std::string const &s);
     void setKey(std::array<unsigned char,KeyLength/8> const &key);
     dev::cd606::tm::basic::ByteData encode(dev::cd606::tm::basic::ByteData &&);
     std::optional<dev::cd606::tm::basic::ByteData> decode(dev::cd606::tm::basic::ByteData &&);

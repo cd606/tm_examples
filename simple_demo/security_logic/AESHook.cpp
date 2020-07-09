@@ -93,6 +93,15 @@ AESHook::AESHook() : impl_(std::make_unique<AESHookImpl>()) {}
 AESHook::~AESHook() {}
 AESHook::AESHook(AESHook &&) = default;
 AESHook &AESHook::operator=(AESHook &&) = default;
+std::array<unsigned char,AESHook::KeyLength/8> AESHook::keyFromString(std::string const &s) {
+    if (s.length() < AESHook::KeyLength/8) {
+        return keyFromString(s+std::string(AESHook::KeyLength/8-s.length(), ' '));
+    } else {
+        std::array<unsigned char,AESHook::KeyLength/8> ret;
+        std::memcpy(ret.data(), s.c_str(), AESHook::KeyLength/8);
+        return ret;
+    }
+}
 void AESHook::setKey(std::array<unsigned char,AESHook::KeyLength/8> const &key) {
     impl_->setKey(key);
 }

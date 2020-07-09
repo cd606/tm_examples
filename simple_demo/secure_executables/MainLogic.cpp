@@ -129,8 +129,6 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     r.registerAction("removeTopic", removeTopic);
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
-    auto dhClientHelperPtr = std::unique_ptr<DHClientHelper>(); //empty
-    auto mutexPtr = std::make_unique<std::mutex>();
     if (isReal) {
         //This is the key to sign messages going out to calculate server
         std::array<unsigned char, 64> my_private_key { 
@@ -158,43 +156,22 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             )
         );
 
-        std::shared_ptr<DHClientHelper> dhClientHelper;
-        /*
-        DHClientSideCombination<
+        calc = DHClientSideCombination<
             R
             , CalculateCommand
-            , transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-            , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
+            , CalculateResult
         >(
             r 
-            , *mutexPtr
-            , dhClientHelperPtr
             , calculate_server_public_key
-            , "127.0.0.1::guest:guest:test_dh_queue"
-            , "127.0.0.1::guest:guest:amq.topic[durable=true]"
-            , "calculator_dh.restarted"
-        );*/
-        DHClientSideCombination<
-            R
-            , CalculateCommand
-            , transport::redis::RedisImporterExporter<TheEnvironment>
-            , transport::redis::RedisOnOrderFacility<TheEnvironment>
-        >(
-            r 
-            , *mutexPtr
-            , dhClientHelperPtr
-            , calculate_server_public_key
-            , "localhost:6379:::test_dh_queue"
-            , "localhost:6379"
-            , "calculator_dh.restarted"
+            , transport::MultiTransportBroadcastListenerAddSubscription {
+                transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ
+                , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]")
+                , "simple_demo.secure_executables.calculator.heartbeat"
+            }
+            , std::regex("simple_demo secure Calculator")
+            , "facility"
+            , "testkey" //decrypt heartbeat with this key
         );
-        
-        auto facility = transport::redis::RedisOnOrderFacility<TheEnvironment>
-                    ::WithIdentity<std::string>::createTypedRPCOnOrderFacility<CalculateCommand, CalculateResult>(
-                        transport::ConnectionLocator::parse("localhost:6379:::test_queue")
-                    );
-        r.registerOnOrderFacility("facility", facility);
-        calc = R::facilityConnector(facility);
     } else {
         calc = &(MockCalculatorCombination<
                     R

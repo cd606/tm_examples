@@ -42,13 +42,16 @@ public:
     DHClientHelperImpl(std::function<void(std::array<unsigned char, 16> const &)> localKeyUpdater)
         : localKeyUpdater_(localKeyUpdater), x_() {}
     ~DHClientHelperImpl() {}
+    void reset() {
+        x_ = X25519Private {};
+    }
     DHHelperCommand buildCommand() {
         const unsigned char *pub = x_.GetPublicKey(nullptr);
         return DHHelperCommand {
             dev::cd606::tm::basic::ByteData { std::string {pub, pub+32} }
         };
     }
-    void process(DHHelperReply &&input) {
+    void process(DHHelperReply const &input) {
         std::array<unsigned char, 16> sharedKey;
         x_.CreateSharedKey(
             reinterpret_cast<const unsigned char *>(input.serverPub.content.c_str())
@@ -57,15 +60,21 @@ public:
         );
         localKeyUpdater_(sharedKey);
     }
+    std::function<void(std::array<unsigned char, 16> const &)> localKeyUpdater() const {
+        return localKeyUpdater_;
+    }
 };
 
 DHClientHelper::DHClientHelper(std::function<void(std::array<unsigned char, 16> const &)> localKeyUpdater)
     : impl_(std::make_unique<DHClientHelperImpl>(localKeyUpdater)) {}
 DHClientHelper::~DHClientHelper() {}
     
+void DHClientHelper::reset() {
+    impl_->reset();
+}
 DHHelperCommand DHClientHelper::buildCommand() {
     return impl_->buildCommand();
 }
-void DHClientHelper::process(DHHelperReply &&input) {
-    impl_->process(std::move(input));
+void DHClientHelper::process(DHHelperReply const &input) {
+    impl_->process(input);
 }

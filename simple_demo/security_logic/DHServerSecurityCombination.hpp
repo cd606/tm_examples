@@ -12,16 +12,13 @@
 #include <unordered_map>
 #include <mutex>
 
-#include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
-
 using namespace dev::cd606::tm;
 
 template <
     class R
     , class CommandToBeSecured
-    , class ImporterExporterTransport
     , class OnOrderFacilityTransport
+    , class HeartbeatTransportComponent
     , std::enable_if_t<
         std::is_base_of_v<
             basic::real_time_clock::ClockComponent
@@ -40,9 +37,10 @@ template <
 void DHServerSideCombination(
     R &r
     , std::array<unsigned char, 64> privateKey
-    , std::string const &dhQueueLocator
-    , std::string const &dhRestartExchangeLocator
-    , std::string const &dhRestartTopic
+    , transport::ConnectionLocator const &dhQueueLocator
+    , std::string const &heartbeatServerName
+    , transport::ConnectionLocator const &heartbeatLocator
+    , std::string const &heartbeatEncryptionKey
 ) {
     using Env = typename R::EnvironmentType;
     using M = typename R::MonadType;
@@ -74,25 +72,26 @@ void DHServerSideCombination(
         <DHHelperCommand, DHHelperReply>(
           r 
         , facility
-        , transport::ConnectionLocator::parse(dhQueueLocator)
+        , dhQueueLocator
         , "dh_server_wrapper_"
         , transport::ByteDataHookPair {
             signHook, emptyHook
         } //the outgoing data is signed, the incoming data does not need extra hook
     );
 
-    auto oneShot = basic::real_time_clock::ClockImporter<Env>::template createOneShotClockConstImporter<basic::TypedDataWithTopic<DHHelperRestarted>>(
-        r.environment()->now()+std::chrono::milliseconds(100)
-        , basic::TypedDataWithTopic<DHHelperRestarted> {dhRestartTopic, DHHelperRestarted {}}
-    );
+    auto aes = std::make_shared<AESHook>();
+    r.preservePointer(aes);
+    aes->setKey(AESHook::keyFromString(heartbeatEncryptionKey));
 
-    auto restartPublisher = ImporterExporterTransport::template createTypedExporter
-        <DHHelperRestarted>(
-        transport::ConnectionLocator::parse(dhRestartExchangeLocator)
+    auto heartbeatHook = transport::composeUserToWireHook(
+        transport::UserToWireHook {
+            boost::hana::curry<2>(std::mem_fn(&AESHook::encode))(aes.get())
+        }
         , signHook
     );
-    r.registerExporter("restartPublisher", restartPublisher);
-    r.exportItem(restartPublisher, r.importItem("dh_create_restart_message", oneShot));
+
+    transport::HeartbeatAndAlertComponentInitializer<Env,HeartbeatTransportComponent>()
+        (r.environment(), heartbeatServerName, heartbeatLocator, heartbeatHook);
 }
 
 #endif

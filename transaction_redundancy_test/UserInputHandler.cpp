@@ -139,11 +139,15 @@ int main(int argc, char **argv) {
             , std::chrono::seconds(5)
             //For the "distinguished" ones, we always send one initial request 
             //right after registration, and this parameter provides the initial
-            //request objects for the "distinguished" ones, preserving the order
+            //request objects for the "distinguished" ones, preserving the order.
+            //Note that we do not actually provide the initial request objects, but
+            //provide producers for such objects. This allows for more flexibility.
             , {
-                GS::Input { GS::Subscription {
+                []() -> GS::Input {
+                    return GS::Input { GS::Subscription {
                     { Key {} }
-                } }
+                    } };
+                }
             }
             //For the "distinguished" ones, we also always wait for the initial
             //reply to the initial request to come back, before moving on to 
