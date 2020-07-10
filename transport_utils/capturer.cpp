@@ -8,6 +8,7 @@
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
+#include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/multicast/MulticastComponent.hpp>
@@ -18,6 +19,7 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -55,58 +57,18 @@ int main(int argc, char **argv) {
         std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
         return 1;
     }
-    std::string rabbitMQTopic;
-    std::variant<
-        transport::multicast::MulticastComponent::NoTopicSelection
-        , std::string
-        , std::regex
-    > multicastTopic;
-    std::variant<
-        transport::zeromq::ZeroMQComponent::NoTopicSelection
-        , std::string
-        , std::regex
-    > zeroMQTopic;
-    std::string redisTopic;
-    if (transport == "rabbitmq") {
-        if (!vm.count("topic")) {
-            rabbitMQTopic = "#";
-        } else {
-            rabbitMQTopic = vm["topic"].as<std::string>();
-        }
-    } else if (transport == "mcast") {
-        if (!vm.count("topic")) {
-            multicastTopic = transport::multicast::MulticastComponent::NoTopicSelection {};
-        } else {
-            std::string topic = vm["topic"].as<std::string>();
-            if (boost::starts_with(topic, "r/") && boost::ends_with(topic, "/") && topic.length() > 3) {
-                multicastTopic = std::regex {topic.substr(2, topic.length()-3)};
-            } else {
-                multicastTopic = topic;
-            }
-        }
-    } else if (transport == "zmq") {
-        if (!vm.count("topic")) {
-            zeroMQTopic = transport::zeromq::ZeroMQComponent::NoTopicSelection {};
-        } else {
-            std::string topic = vm["topic"].as<std::string>();
-            if (boost::starts_with(topic, "r/") && boost::ends_with(topic, "/") && topic.length() > 3) {
-                zeroMQTopic = std::regex {topic.substr(2, topic.length()-3)};
-            } else {
-                zeroMQTopic = topic;
-            }
-        }
-    } else if (transport == "redis") {
-        if (!vm.count("topic")) {
-            redisTopic = "*";
-        } else {
-            redisTopic = vm["topic"].as<std::string>();
-        }
-    }
+    
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
         return 1;
     }
-    auto address = transport::ConnectionLocator::parse(vm["address"].as<std::string>());
+    auto address = vm["address"].as<std::string>();
+    
+    std::string topic;
+    if (vm.count("topic")) {
+        topic = vm["topic"].as<std::string>();
+    }
+
     if (!vm.count("output")) {
         std::cerr << "No output file given!\n";
         return 1;
@@ -136,29 +98,65 @@ int main(int argc, char **argv) {
     std::ofstream ofs(vm["output"].as<std::string>());
 
     {
-        auto importer =
-                (transport == "rabbitmq")
-            ?
-                transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-                ::createImporter(address, rabbitMQTopic)
-            :
-                (
-                    (transport == "mcast")
-                ?
-                    transport::multicast::MulticastImporterExporter<TheEnvironment>
-                    ::createImporter(address, multicastTopic)
-                :
-                    (
-                        (transport == "zmq")
-                    ?
-                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                        ::createImporter(address, zeroMQTopic)
-                    :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createImporter(address, redisTopic)                   
-                    )
-                )
-            ;
+        auto initialImporter = M::simpleImporter<basic::VoidStruct>(
+            [](M::PublisherCall<basic::VoidStruct> &p) {
+                p(basic::VoidStruct {});
+            }
+        );
+        auto createKey = M::liftMaybe<basic::VoidStruct>(
+            [address,topic,transport](basic::VoidStruct &&) -> std::optional<transport::MultiTransportBroadcastListenerInput> {
+                transport::MultiTransportBroadcastListenerConnectionType conn;
+                if (transport == "rabbitmq") {
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ;
+                } else if (transport == "mcast") {
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::Multicast;
+                } else if (transport == "zmq") {
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::ZeroMQ;
+                } else if (transport == "redis") {
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::Redis;
+                } else {
+                    return std::nullopt;
+                }
+                transport::ConnectionLocator locator;
+                try {
+                    locator = transport::ConnectionLocator::parse(address);
+                } catch (transport::ConnectionLocatorParseError const &) {
+                    return std::nullopt;
+                }
+                return transport::MultiTransportBroadcastListenerInput { {
+                    transport::MultiTransportBroadcastListenerAddSubscription {
+                        conn
+                        , locator
+                        , topic
+                    }
+                } };
+            }
+        );
+        auto keyify = M::template kleisli<transport::MultiTransportBroadcastListenerInput>(
+            basic::CommonFlowUtilComponents<M>::template keyify<transport::MultiTransportBroadcastListenerInput>()
+        );
+        auto multiSub = M::onOrderFacilityWithExternalEffects(
+            new transport::MultiTransportBroadcastListener<TheEnvironment, basic::ByteData>()
+        );
+
+        auto subKey = r.execute(
+            "keyify", keyify
+            , r.execute(
+                "createKey", createKey
+                , r.importItem("initialImporter", initialImporter)
+            )
+        );
+
+        r.placeOrderWithFacilityWithExternalEffectsAndForget(
+            std::move(subKey), "multiSub", multiSub
+        );
+
+        auto removeOneLevel =
+            M::liftPure<basic::TypedDataWithTopic<basic::ByteData>>(
+                [](basic::TypedDataWithTopic<basic::ByteData> &&x) -> basic::ByteDataWithTopic {
+                    return {std::move(x.topic), std::move(x.content.content)};
+                }
+            );
 
         auto fileWriter =
             basic::ByteDataWithTopicRecordFileImporterExporter<M>
@@ -169,11 +167,12 @@ int main(int argc, char **argv) {
                 , true //separate thread
             );
 
-        r.exportItem("fileWriter", fileWriter, r.importItem("importer", importer));
+        r.exportItem("fileWriter", fileWriter, 
+            r.execute("removeOneLevel", removeOneLevel, r.facilityWithExternalEffectsAsSource(multiSub)));
 
         if (summaryPeriod) {
-            auto counter = M::liftPure<basic::ByteDataWithTopic>(
-                [](basic::ByteDataWithTopic &&data) -> uint64_t {
+            auto counter = M::liftPure<basic::TypedDataWithTopic<basic::ByteData>>(
+                [](basic::TypedDataWithTopic<basic::ByteData> &&data) -> uint64_t {
                     static uint64_t counter = 0;
                     return (++counter);
                 }
@@ -196,13 +195,12 @@ int main(int argc, char **argv) {
                     return std::nullopt;
                 }
             );
-            auto emptyExporter = M::simpleExporter<basic::VoidStruct>(
-                [](M::InnerData<basic::VoidStruct> &&) {}
-            );
+            auto emptyExporter = M::trivialExporter<basic::VoidStruct>();
+
             auto notUsed = r.execute("perClockUpdate", perClockUpdate, r.importItem("clockImporter", clockImporter));
             r.execute(perClockUpdate, 
                 r.execute("counter", counter, 
-                    r.importItem(importer)));
+                    r.facilityWithExternalEffectsAsSource(multiSub)));
             r.exportItem("emptyExporter", emptyExporter, std::move(notUsed));
         }
     }
