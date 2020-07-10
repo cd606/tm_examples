@@ -29,7 +29,7 @@ switch (printMode) {
     case "cbor":
         printer = function(topic : string, data : Buffer) {
             try {
-                let x = cbor.decodeFirstSync(data);
+                let x = cbor.decode(data);
                 let xRep = util.inspect(x, {showHidden: false, depth: null, colors: true});
                 console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${xRep}`);
             } catch (e) {
