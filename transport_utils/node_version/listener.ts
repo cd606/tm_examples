@@ -6,6 +6,44 @@ import * as proto from 'protobufjs'
 import * as dateFormat from 'dateformat'
 import * as fs from 'fs'
 
+yargs
+    .scriptName("listener")
+    .usage("$0 <options>")
+    .option('--address', {
+        describe: 'PROTOCOL://LOCATOR'
+        , type: 'string'
+        , nargs: 1
+        , demand: true
+    })
+    .option('--topic', {
+        describe: 'topic to subscribe'
+        , type: 'string'
+        , nargs: 1
+        , demand: true
+    })
+    .option('--printMode', {
+        describe: 'length|string|cbor|none|bytes|protobuf:FILE_NAME:TYPE_NAME'
+        , type: 'string'
+        , nargs: 1
+        , demand: false
+        , default: "length"
+    })
+    .option('--summaryPeriod', {
+        describe: 'summary period in seconds'
+        , type: 'number'
+        , nargs: 1
+        , demand: false
+        , default: 0
+    })
+    .option('--captureFile', {
+        describe: 'capture file name'
+        , type: 'string'
+        , nargs: 1
+        , demand: false
+        , default: ''
+    })
+    ;
+
 let address = yargs.argv.address as string;
 let topic = yargs.argv.topic as string;
 let printMode = "length";
@@ -38,6 +76,8 @@ switch (printMode) {
         }
         break;
     case "none":
+        printer = function(_topic : string, _data : Buffer) {
+        }
         break;
     case "bytes":
         printer = function(topic : string, data : Buffer) {
