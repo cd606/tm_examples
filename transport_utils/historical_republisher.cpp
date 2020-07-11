@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
         );
         infra::MonadRunner<Monad> r(&env);
         
-        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
+        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
             ifs, 
             {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
             {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
@@ -247,8 +247,30 @@ int main(int argc, char **argv) {
                 )
             ;
 
+        auto filter = Monad::kleisli<basic::ByteDataWithTopic>(
+            basic::CommonFlowUtilComponents<Monad>
+                ::pureFilter<basic::ByteDataWithTopic>(
+                    [](basic::ByteDataWithTopic const &d) {
+                        return (!d.content.empty());
+                    }
+                )
+        );
+
         r.exportItem("publisher", publisher
-            , r.importItem("importer", importer));
+            , r.execute("filter", filter, r.importItem("importer", importer)));
+
+        auto exiter = Monad::simpleExporter<basic::ByteDataWithTopic>(
+            [](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+                if (d.timedData.finalFlag) {
+                    d.environment->log(infra::LogLevel::Info, "Got the final update!");
+                    std::thread([]() {
+                        std::this_thread::sleep_for(std::chrono::seconds(10));
+                        exit(0);
+                    }).detach();
+                }
+            }
+        );
+        r.exportItem("exiter", exiter, r.importItem(importer));
 
         r.finalize();
 
