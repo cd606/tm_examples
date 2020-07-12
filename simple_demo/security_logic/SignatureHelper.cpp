@@ -16,13 +16,18 @@ public:
         name_(name), signer_(privateKey.data(), 64) {}
     ~SignHelperImpl() {}
     dev::cd606::tm::basic::ByteData sign(dev::cd606::tm::basic::ByteData &&data) {       
-        std::size_t origLen = data.content.length();
-        std::string outputContent { std::move(data.content) };
-        outputContent.resize(origLen+64);
-        auto const *p = reinterpret_cast<unsigned char const *>(outputContent.c_str());
-        auto *signArea = const_cast<unsigned char *>(p+origLen);
-        signer_.SignMessage(p, origLen, signArea);
-        return dev::cd606::tm::basic::ByteData {std::move(outputContent)};
+        std::array<unsigned char, 64> signature;
+        signer_.SignMessage(
+            reinterpret_cast<unsigned char const *>(data.content.c_str())
+            , data.content.length()
+            , signature.data()
+        );
+        std::tuple<dev::cd606::tm::basic::ByteData, dev::cd606::tm::basic::ByteData const *> t {dev::cd606::tm::basic::ByteData {std::string(reinterpret_cast<char const *>(signature.data()), signature.size())}, &data};
+        auto res = dev::cd606::tm::basic::bytedata_utils::RunCBORSerializerWithNameList<
+            std::tuple<dev::cd606::tm::basic::ByteData, dev::cd606::tm::basic::ByteData const *>
+            , 2
+        >::apply(t, {"signature", "data"});
+        return dev::cd606::tm::basic::ByteData {std::string(reinterpret_cast<char const *>(res.data()), res.size())};
     }
 };
 
@@ -56,20 +61,32 @@ public:
         });
     }
     std::optional<std::tuple<std::string,dev::cd606::tm::basic::ByteData>> verify(dev::cd606::tm::basic::ByteData &&data) {       
-        std::size_t origLen = data.content.length();
-        if (origLen < 64) {
+         auto res = dev::cd606::tm::basic::bytedata_utils::RunCBORDeserializerWithNameList<
+            std::tuple<dev::cd606::tm::basic::ByteData, dev::cd606::tm::basic::ByteData>
+            , 2
+        >::apply(std::string_view {data.content}, 0, {"signature", "data"});
+        if (!res) {
             return std::nullopt;
         }
-        dev::cd606::tm::basic::ByteData output {std::move(data)};
-        origLen -= 64;
+        if (std::get<1>(*res) != data.content.length()) {
+            return std::nullopt;
+        }
+        auto const &dataWithSignature = std::get<0>(*res);
+        auto const &signature = std::get<0>(dataWithSignature);
+        auto const &signedData = std::get<1>(dataWithSignature);
+        if (signature.content.length() != 64) {
+            return std::nullopt;
+        }
+
         bool result = false;
-        auto const *p = reinterpret_cast<const unsigned char *>(output.content.c_str());
-        auto const *q = p+origLen;
+        
+        auto const *p = reinterpret_cast<const unsigned char *>(signedData.content.c_str());
+        auto const *q = reinterpret_cast<const unsigned char *>(signature.content.c_str());
         std::string name;
         {
             std::lock_guard<std::mutex> _(mutex_);
             for (auto const &item : verifiers_) {
-                result = result || item.second->VeifySignature(p, origLen, q);
+                result = result || item.second->VeifySignature(p, signedData.content.length(), q);
                 if (result) {
                     name = item.first;
                     break;
@@ -77,8 +94,7 @@ public:
             }
         }
         if (result) {
-            output.content.resize(origLen);
-            return std::tuple<std::string, dev::cd606::tm::basic::ByteData> {std::move(name), std::move(output)};
+            return std::tuple<std::string, dev::cd606::tm::basic::ByteData> {std::move(name), std::move(signedData)};
         } else {
             return std::nullopt;
         }

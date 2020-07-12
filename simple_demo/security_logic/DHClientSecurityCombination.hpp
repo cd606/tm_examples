@@ -129,12 +129,16 @@ auto DHClientSideCombination(
             }
             , "facilities"
             , heartbeatHook
-            , [emptyHook,verifyHook](std::string const &, transport::ConnectionLocator const &)
+            , [emptyHook,verifyHook](std::string const &remoteName, transport::ConnectionLocator const &)
                 -> std::optional<transport::ByteDataHookPair>
                 {
-                    return transport::ByteDataHookPair {
-                        emptyHook, verifyHook
-                    };
+                    if (remoteName == "dh_server_facility") {
+                        return transport::ByteDataHookPair {
+                            emptyHook, verifyHook
+                        };
+                    } else {
+                        return std::nullopt;
+                    }
                 }
         );
 
