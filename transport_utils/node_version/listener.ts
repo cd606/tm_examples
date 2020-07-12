@@ -5,6 +5,7 @@ import * as util from 'util'
 import * as proto from 'protobufjs'
 import * as dateFormat from 'dateformat'
 import * as fs from 'fs'
+import * as Stream from 'stream'
 
 yargs
     .scriptName("listener")
@@ -116,21 +117,19 @@ if (yargs.argv.captureFile !== undefined) {
     captureFile = yargs.argv.captureFile as string;
 }
 
-let captureFileHandle = null;
-if (captureFile !== "") {
-    captureFileHandle = fs.openSync(captureFile, 'w');
-    fs.writeSync(captureFileHandle, Buffer.from([0x01, 0x23, 0x45, 0x67]));
-    fs.fdatasyncSync(captureFileHandle);
-}
-
 let count = 0;
+let printStream = new Stream.Writable({
+    write: function(chunk : [string, Buffer], _encoding, callback) {
+        ++count;
+        printer(chunk[0], chunk[1]);
+        callback();
+    }
+    , objectMode : true
+});
 
-let s = MultiTransportListener.inputStream(address, topic);
-s.on('data', function(chunk : [string, Buffer]) {
-    ++count;
-    printer(chunk[0], chunk[1]);
-    if (captureFileHandle !== null) {
-        let buffer = new Buffer(4+8+4+chunk[0].length+4+chunk[1].length+1);
+let encoder = new Stream.Transform({
+    transform : function(chunk : [string, Buffer], _encoding, callback) {
+        let buffer = Buffer.alloc(4+8+4+chunk[0].length+4+chunk[1].length+1);
         buffer[0] = 0x76;
         buffer[1] = 0x54;
         buffer[2] = 0x32;
@@ -142,17 +141,23 @@ s.on('data', function(chunk : [string, Buffer]) {
         chunk[1].copy(buffer, 20+chunk[0].length);
         buffer[buffer.length-1] = 0x0;
 
-        fs.writeFileSync(captureFileHandle, buffer);
-        fs.fdatasyncSync(captureFileHandle);
+        this.push(buffer);
+        callback();
     }
+    , objectMode : true
 });
-s.on('end', function() {
-    process.exit(0);
-})
+
+let s = MultiTransportListener.inputStream(address, topic);
+s.pipe(printStream);
+
+if (captureFile !== "") {
+    let fsOutput = fs.createWriteStream(captureFile);
+    fsOutput.write(Buffer.from([0x01, 0x23, 0x45, 0x67]));
+    s.pipe(encoder).pipe(fsOutput);
+}
 
 if (summaryPeriod !== 0) {
     setInterval(function() {
         console.log(`${dateFormat(new Date(), dateFormatStr)}: Received ${count} messages so far`);
     }, summaryPeriod*1000);
 }
-
