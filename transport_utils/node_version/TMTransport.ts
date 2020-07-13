@@ -4,7 +4,6 @@ import * as redis from 'redis'
 import * as zmq from 'zeromq'
 import * as cbor from 'cbor'
 import * as Stream from 'stream'
-import { callbackify } from 'util'
 
 export enum Transport {
     Multicast
