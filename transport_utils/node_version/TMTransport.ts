@@ -4,6 +4,7 @@ import * as redis from 'redis'
 import * as zmq from 'zeromq'
 import * as cbor from 'cbor'
 import * as Stream from 'stream'
+import { callbackify } from 'util'
 
 export enum Transport {
     Multicast
@@ -33,8 +34,8 @@ export interface ConnectionLocator {
     , properties : Record<string, string>
 }
 
-export class MultiTransportListener {
-    private static parseConnectionLocator(locatorStr : string) : ConnectionLocator {
+class TMTransportUtils {
+    static parseConnectionLocator(locatorStr : string) : ConnectionLocator {
         let idx = locatorStr.indexOf('[');
         let mainPortion : string;
         let propertyPortion : string;
@@ -94,7 +95,7 @@ export class MultiTransportListener {
         }
         return ret;
     }
-    private static parseAddress(address : string) : [Transport, ConnectionLocator] {
+    static parseAddress(address : string) : [Transport, ConnectionLocator] {
         if (address.startsWith("multicast://")) {
             return [Transport.Multicast, this.parseConnectionLocator(address.substr("multicast://".length))];
         } else if (address.startsWith("rabbitmq://")) {
@@ -107,7 +108,7 @@ export class MultiTransportListener {
             return null;
         }
     }
-    private static parseComplexTopic(topic : string) : TopicSpec {
+    static parseComplexTopic(topic : string) : TopicSpec {
         if (topic === "") {
             return {matchType : TopicMatchType.MatchAll, exactString : "", regex : null};
         } else if (topic.length > 3 && topic.startsWith("r/") && topic.endsWith("/")) {
@@ -116,7 +117,7 @@ export class MultiTransportListener {
             return {matchType : TopicMatchType.MatchExact, exactString : topic, regex : null};
         }
     }
-    private static parseTopic(transport : Transport, topic : string) : TopicSpec {
+    static parseTopic(transport : Transport, topic : string) : TopicSpec {
         switch (transport) {
             case Transport.Multicast:
                 return this.parseComplexTopic(topic);
@@ -130,7 +131,9 @@ export class MultiTransportListener {
                 return null;
         }
     }
+}
 
+export class MultiTransportListener {
     private static multicastInputToStream(locator : ConnectionLocator, topic : TopicSpec, stream : Stream.Readable) {
         let filter = function(s : string) {return true;}    
         switch (topic.matchType) {
@@ -256,14 +259,34 @@ export class MultiTransportListener {
         })();
     }
 
-    static inputStream(address : string, topic : string) : Stream.Readable {
-        let parsedAddr = this.parseAddress(address);
-        if (parsedAddr == null) {
-            return;
+    private static defaultTopic(transport : Transport) : string {
+        switch (transport) {
+            case Transport.Multicast:
+                return "";
+            case Transport.RabbitMQ:
+                return "#";
+            case Transport.Redis:
+                return "*";
+            case Transport.ZeroMQ:
+                return "";
+            default:
+                return "";
         }
-        let parsedTopic = this.parseTopic(parsedAddr[0], topic);
+    }
+
+    static inputStream(address : string, topic? : string) : Stream.Readable {
+        let parsedAddr = TMTransportUtils.parseAddress(address);
+        if (parsedAddr == null) {
+            return null;
+        }
+        let parsedTopic : TopicSpec = null;
+        if (topic) {
+            parsedTopic = TMTransportUtils.parseTopic(parsedAddr[0], topic);
+        } else {
+            parsedTopic = TMTransportUtils.parseTopic(parsedAddr[0], this.defaultTopic(parsedAddr[0]));
+        }
         if (parsedTopic == null) {
-            return;
+            return null;
         }
         let s = new Stream.Readable({
             read : function() {}
@@ -286,5 +309,89 @@ export class MultiTransportListener {
                 return;
         }
         return s;
+    }
+}
+
+export class MultiTransportPublisher {
+    private static multicastWrite(locator : ConnectionLocator) : (chunk : [string, Buffer], encoding : BufferEncoding) => void {
+        let sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+        sock.bind(locator.port, function() {
+            sock.setBroadcast(true);
+            if ("ttl" in locator.properties) {
+                sock.setMulticastTTL(parseInt(locator.properties.ttl));
+            }
+            sock.addMembership(locator.host);
+        });
+        return function(chunk : [string, Buffer], _encoding : BufferEncoding) {
+            sock.send(cbor.encode(chunk), locator.port, locator.host);
+        }
+    }
+    private static async rabbitmqWrite(locator : ConnectionLocator) : Promise<(chunk : [string, Buffer], encoding : BufferEncoding) => void> {
+        let url = `amqp://${locator.username}:${locator.password}@${locator.host}${locator.port>0?`:${locator.port}`:''}`;
+        if ("vhost" in locator.properties) {
+            url += `/${locator.properties.vhost}`;
+        }
+        let connection = await amqp.connect(url);
+        let channel = await connection.createChannel();
+        let exchange = locator.identifier;
+        return function(chunk : [string, Buffer], encoding : BufferEncoding) {
+            channel.publish(
+                exchange
+                , chunk[0]
+                , chunk[1]
+                , {
+                    contentEncoding : encoding
+                    , deliveryMode : 1
+                    , expiration: "1000"
+                }
+            );
+        }
+    }
+    private static redisWrite(locator : ConnectionLocator) : (chunk : [string, Buffer], encoding : BufferEncoding) => void {
+        let publisher = redis.createClient({
+            host : locator.host
+            , port : ((locator.port>0)?locator.port:6379)
+        });
+        return function(chunk : [string, Buffer], _encoding : BufferEncoding) {
+            publisher.send_command("PUBLISH", [chunk[0], chunk[1]]);
+        }
+    }
+    private static zeromqWrite(locator : ConnectionLocator) : (chunk : [string, Buffer], encoding : BufferEncoding) => void {
+        let sock = new zmq.Publisher();
+        sock.bind(`tcp://${locator.host}:${locator.port}`);
+        return function(chunk : [string, Buffer], _encoding : BufferEncoding) {
+            sock.send(cbor.encode(chunk));
+        };
+    }
+    static async outputStream(address : string) : Promise<Stream.Writable> {
+        let parsedAddr = TMTransportUtils.parseAddress(address);
+        if (parsedAddr == null) {
+            return null;
+        }
+        let writeFunc = function(_chunk : [string, Buffer], _encoding : BufferEncoding) {
+        }
+        switch (parsedAddr[0]) {
+            case Transport.Multicast:
+                writeFunc = this.multicastWrite(parsedAddr[1]);
+                break;
+            case Transport.RabbitMQ:
+                writeFunc = await this.rabbitmqWrite(parsedAddr[1]);
+                break;
+            case Transport.Redis:
+                writeFunc = this.redisWrite(parsedAddr[1]);
+                break;
+            case Transport.ZeroMQ:
+                writeFunc = this.zeromqWrite(parsedAddr[1]);
+                break;
+            default:
+                return null;
+        }
+        return new Stream.Writable({
+            write : function(chunk : [string, Buffer], encoding : BufferEncoding, callback) {
+                writeFunc(chunk, encoding);
+                callback();
+            }
+            , objectMode : true
+        });
     }
 }

@@ -1,4 +1,4 @@
-import {MultiTransportListener} from './MultiTransportListener'
+import {MultiTransportListener} from './TMTransport'
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'
