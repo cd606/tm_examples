@@ -1,7 +1,7 @@
 import * as cbor from 'cbor'
 import * as yargs from 'yargs'
 import * as util from 'util'
-import {MultiTransportFacilityClient, FacilityOutput} from '../../transport_utils/node_version/TMTransport'
+import {MultiTransportFacilityClient, FacilityOutput} from '../../../tm_transport/node_lib/TMTransport'
 import * as Stream from 'stream'
 
 enum Command {

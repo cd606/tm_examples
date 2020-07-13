@@ -1,4 +1,4 @@
-import {MultiTransportListener, MultiTransportPublisher} from './TMTransport'
+import {MultiTransportListener, MultiTransportPublisher} from '../../../tm_transport/node_lib/TMTransport'
 import * as yargs from 'yargs'
 import * as dateFormat from 'dateformat'
 import * as Stream from 'stream'

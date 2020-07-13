@@ -1,4 +1,4 @@
-import {MultiTransportListener} from './TMTransport'
+import {MultiTransportListener} from '../../../tm_transport/node_lib/TMTransport'
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'
