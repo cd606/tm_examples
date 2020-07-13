@@ -1,45 +1,8 @@
-import * as amqp from 'amqplib'
-import {v4 as uuidv4} from "uuid"
 import * as cbor from 'cbor'
 import * as yargs from 'yargs'
 import * as util from 'util'
-
-interface Connection {
-    channel : amqp.Channel
-    , queue : string
-};
-
-async function start() : Promise<Connection> {
-    const url = 'amqp://guest:guest@127.0.0.1';
-    let connection = await amqp.connect(url);
-    let channel = await connection.createChannel();
-    let replyQueue = await channel.assertQueue('', {exclusive: true});
-    channel.consume(replyQueue.queue, function(msg) {
-        let isFinal = false;
-        let res = undefined;
-        if (msg.properties.contentEncoding == 'with_final') {
-            if (msg.content.byteLength > 0) {
-                res = cbor.decodeAllSync(msg.content.slice(0, msg.content.byteLength-1));
-                isFinal = (msg.content[msg.content.byteLength-1] != 0);
-            } else {
-                isFinal = false;
-            }
-        } else {
-            res = cbor.decodeAllSync(msg.content);
-            isFinal = false;
-        }
-        if (res !== undefined) {
-            console.log(`Got update: ${util.inspect(res, {showHidden: false, depth: null})} (ID: ${msg.properties.correlationId}) (isFinal: ${isFinal})`);
-        }
-        if (isFinal) {
-            setTimeout(function() {
-                connection.close();
-                process.exit(0);
-            }, 500);
-        }
-    }, {noAck : true});
-    return {channel: channel, queue: replyQueue.queue};
-}
+import {MultiTransportFacilityClient, FacilityOutput} from '../../transport_utils/node_version/TMTransport'
+import * as Stream from 'stream'
 
 enum Command {
     Subscribe
@@ -60,30 +23,41 @@ interface Args {
     , id : string
 };
 
-function sendCommand(queue : string, conn : Connection, cmd : Buffer) {
-    conn.channel.sendToQueue(
-        queue
-        , cbor.encode(["node_client", cmd])
-        , {
-            correlationId : uuidv4()
-            , contentEncoding : 'with_final'
-            , replyTo: conn.queue
-            , deliveryMode: 1
-            , expiration: '5000'
-        }
-    );
+function sendCommand(stream : Stream.Writable, cmd : any) {
+    stream.write(cbor.encode(["node_client", cbor.encode(cmd)]));
 }
 
 async function run(args : Args) {
-    let conn = await start();
+    let subscriptionStream = await MultiTransportFacilityClient.facilityStream(
+        "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
+    );
+    let transactionStream = await MultiTransportFacilityClient.facilityStream(
+        "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
+    );
+    let keyify = MultiTransportFacilityClient.keyify();
+    let resultHandlingStream = new Stream.Writable({
+        write : function(chunk : FacilityOutput, _encoding, callback) {
+            let result = cbor.decodeAllSync(chunk.output);
+            console.log(`Got update: ${util.inspect(result, {showHidden: false, depth: null})} (ID: ${chunk.id}) (isFinal: ${chunk.isFinal})`);
+            callback();
+            if (chunk.isFinal) {
+                setTimeout(function() {
+                    process.exit(0);
+                }, 500);
+            }
+        }
+        , objectMode : true
+    });
     switch (args.command) {
         case Command.Subscribe:
-            sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
+            sendCommand(keyify, [
                 0, {keys: [0]}
-            ]));
+            ]);
             break;
         case Command.Update:
-            sendCommand("test_db_one_list_cmd_transaction_queue", conn, cbor.encode([
+            keyify.pipe(transactionStream).pipe(resultHandlingStream);
+            sendCommand(keyify, [
                 1
                 , {
                     key: 0
@@ -99,10 +73,11 @@ async function run(args : Args) {
                         ]}
                     }
                 }
-            ]));
+            ]);
             break;
         case Command.Delete:
-            sendCommand("test_db_one_list_cmd_transaction_queue", conn, cbor.encode([
+            keyify.pipe(transactionStream).pipe(resultHandlingStream);
+            sendCommand(keyify, [
                 1
                 , {
                     key: 0
@@ -113,28 +88,30 @@ async function run(args : Args) {
                         , inserts_updates: {items: []}
                     }
                 }
-            ]));
+            ]);
             break;
         case Command.Unsubscribe:
+            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
             if (args.id != "") {
-                sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+                sendCommand(keyify, [
                     1
                     , {
                         original_subscription_id: args.id
                     }
-                ]));
+                ]);
             } else {
-                sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+                sendCommand(keyify, [
                     3
                     , 0
-                ]));
+                ]);
             }
             break;
         case Command.List:
-            sendCommand("test_db_one_list_cmd_subscription_queue", conn, cbor.encode([
+            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
+            sendCommand(keyify, [
                 2
                 , 0
-            ]));
+            ]);
             break;
         default:
             break;

@@ -4,6 +4,7 @@ import * as redis from 'redis'
 import * as zmq from 'zeromq'
 import * as cbor from 'cbor'
 import * as Stream from 'stream'
+import {v4 as uuidv4} from "uuid"
 
 export enum Transport {
     Multicast
@@ -392,5 +393,178 @@ export class MultiTransportPublisher {
             }
             , objectMode : true
         });
+    }
+}
+
+export interface FacilityOutput {
+    id : string
+    , originalInput : Buffer
+    , output : Buffer
+    , isFinal : boolean
+}
+
+export class MultiTransportFacilityClient {
+    private static async rabbitmqFacilityStream(locator : ConnectionLocator) : Promise<Stream.Duplex> {
+        let url = `amqp://${locator.username}:${locator.password}@${locator.host}${locator.port>0?`:${locator.port}`:''}`;
+        if ("vhost" in locator.properties) {
+            url += `/${locator.properties.vhost}`;
+        }
+        let connection = await amqp.connect(url);
+        let channel = await connection.createChannel();
+        let replyQueue = await channel.assertQueue('', {exclusive: true});
+
+        let inputMap = new Map<string, Buffer>();
+
+        let stream = new Stream.Duplex({
+            write : function(chunk : [string, Buffer], _encoding, callback) {
+                inputMap.set(chunk[0], chunk[1]);
+                channel.sendToQueue(
+                    locator.identifier
+                    , chunk[1]
+                    , {
+                        correlationId : chunk[0]
+                        , contentEncoding : 'with_final'
+                        , replyTo: replyQueue.queue
+                        , deliveryMode: (("persistent" in locator.properties && locator.properties.persistent === "true")?2:1)
+                        , expiration: '5000'
+                    }
+                );
+                callback();
+            }
+            , read : function() {}
+            , objectMode : true
+        });
+        channel.consume(replyQueue.queue, function(msg) : void {
+            let isFinal = false;
+            let res : Buffer = null;
+            let id = msg.properties.correlationId;
+            let input : Buffer = null;
+
+            if (!inputMap.has(id)) {
+                return;
+            }
+            input = inputMap.get(id);
+
+            if (msg.properties.contentEncoding == 'with_final') {
+                if (msg.content.byteLength > 0) {
+                    res = msg.content.slice(0, msg.content.byteLength-1);
+                    isFinal = (msg.content[msg.content.byteLength-1] != 0);
+                } else {
+                    res = null;
+                    isFinal = false;
+                }
+            } else {
+                res = msg.content;
+                isFinal = false;
+            }
+            if (res != null) {
+                if (isFinal) {
+                    inputMap.delete(id);
+                }
+                let output : FacilityOutput = {
+                    id: id
+                    , originalInput : input
+                    , output : res
+                    , isFinal : isFinal
+                };
+                stream.push(output);
+            }
+        }, {noAck : true});
+
+        return stream;
+    }
+    private static redisFacilityStream(locator : ConnectionLocator) : Stream.Duplex {
+        let publisher = redis.createClient({
+            host : locator.host
+            , port : ((locator.port>0)?locator.port:6379)
+        });
+        let subscriber = redis.createClient({
+            host : locator.host
+            , port : ((locator.port>0)?locator.port:6379)
+            , return_buffers : true
+        });
+        
+        let streamID = uuidv4();
+        let inputMap = new Map<string, Buffer>();
+        let stream = new Stream.Duplex({
+            write : function(chunk : [string, Buffer], _encoding, callback) {
+                inputMap.set(chunk[0], chunk[1]);
+                publisher.send_command("PUBLISH", [streamID, cbor.encode(chunk)]);
+                callback();
+            }
+            , read : function() {}   
+            , objectMode: true
+        })
+
+        let handleMessage = function(message : Buffer) : void {
+            let parsed = cbor.decodeAllSync(message);
+            if (parsed.length != 2) {
+                return;
+            }
+
+            let isFinal = false;
+            let res : Buffer = null;
+            let id = parsed[0];
+            let input : Buffer = null;
+
+            if (!inputMap.has(id)) {
+                return;
+            }
+            input = inputMap.get(id);
+
+            if (parsed[1].byteLength > 0) {
+                res = parsed[1].slice(0, parsed[1].byteLength-1);
+                isFinal = ((parsed[1])[parsed[1].byteLength-1] != 0);
+            } else {
+                res = null;
+                isFinal = false;
+            }
+
+            if (res != null) {
+                if (isFinal) {
+                    inputMap.delete(id);
+                }
+                let output : FacilityOutput = {
+                    id: id
+                    , originalInput : input
+                    , output : res
+                    , isFinal : isFinal
+                };
+                stream.push(output);
+            }
+        }
+
+        subscriber.on('message_buffer', function(_channel : string, message : Buffer) {
+            handleMessage(message);
+        });
+        subscriber.on('message', function(_channel : string, message : Buffer) {
+            handleMessage(message);
+        });
+        subscriber.subscribe(streamID);
+
+        return stream;
+    }
+    static async facilityStream(address : string) : Promise<Stream.Duplex> {
+        let parsedAddr = TMTransportUtils.parseAddress(address);
+        if (parsedAddr == null) {
+            return null;
+        }
+        switch (parsedAddr[0]) {
+            case Transport.RabbitMQ:
+                return this.rabbitmqFacilityStream(parsedAddr[1]);
+            case Transport.Redis:
+                return this.redisFacilityStream(parsedAddr[1]);
+            default:
+                return null;
+        }
+    }
+    static keyify() : Stream.Transform {
+        return new Stream.Transform({
+            transform : function(chunk : Buffer, _encoding, callback) {
+                this.push([uuidv4(), chunk]);
+                callback();
+            }
+            , readableObjectMode : true
+        })
     }
 }
