@@ -44,10 +44,11 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::string queueName = "test_etcd_queue";
-    if (vm.count("queue_name")) {
-        queueName = vm["queue_name"].as<std::string>();
+    if (!vm.count("queue_name")) {
+        std::cerr << "Please provide queue name\n";
+        return 1;
     }
+    std::string queueName = vm["queue_name"].as<std::string>();
 
     std::string broadcastChannel = "redis://127.0.0.1:6379";
     auto parsedBroadcastChannel = *transport::parseMultiTransportBroadcastChannel(broadcastChannel);

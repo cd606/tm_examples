@@ -42,10 +42,11 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::string queueNamePrefix = "test_etcd";
-    if (vm.count("queue_name_prefix")) {
-        queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
+    if (!vm.count("queue_name_prefix")) {
+        std::cerr << "Please provide queue name prefix\n";
+        return 1;
     }
+    std::string queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
