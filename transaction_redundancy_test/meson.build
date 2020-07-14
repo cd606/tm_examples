@@ -18,7 +18,19 @@ executable(
 # headers and sources
 executable(
     'transaction_server'
-    , ['TransactionServer.cpp', 'TransactionInterface.cpp', 'v3lock.grpc.pb.cc', 'v3lock.pb.cc']
+    , ['TransactionServer.cpp', 'TransactionServerComponents.cpp', 'TransactionInterface.cpp', 'v3lock.grpc.pb.cc', 'v3lock.pb.cc']
+    , include_directories: inc
+    , dependencies: [common_deps, transaction_redundancy_test_dep]
+)
+executable(
+    'transaction_reverse_broadcast_server'
+    , ['TransactionReverseBroadcastServer.cpp', 'TransactionServerComponents.cpp', 'TransactionInterface.cpp', 'v3lock.grpc.pb.cc', 'v3lock.pb.cc']
+    , include_directories: inc
+    , dependencies: [common_deps, transaction_redundancy_test_dep]
+)
+executable(
+    'user_input_reverse_broadcast_handler'
+    , ['UserInputReverseBroadcastHandler.cpp', 'TransactionInterface.cpp']
     , include_directories: inc
     , dependencies: [common_deps, transaction_redundancy_test_dep]
 )

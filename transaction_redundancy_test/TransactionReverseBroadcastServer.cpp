@@ -3,12 +3,14 @@
 #include <tm_kit/infra/RealTimeMonad.hpp>
 
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/MonadRunnerUtils.hpp>
 
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -21,7 +23,7 @@ int main(int argc, char **argv) {
     desc.add_options()
         ("help", "display help message")
         ("lock_choice", po::value<std::string>(), "lock choice (none, simple or compound)")
-        ("queue_name_prefix", po::value<std::string>(), "queue name prefix for processing commands")
+        ("queue_name", po::value<std::string>(), "queue name for processing subscription commands")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -42,18 +44,19 @@ int main(int argc, char **argv) {
         }
     }
 
-    std::string queueNamePrefix = "test_etcd";
-    if (vm.count("queue_name_prefix")) {
-        queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
+    std::string queueName = "test_etcd_queue";
+    if (vm.count("queue_name")) {
+        queueName = vm["queue_name"].as<std::string>();
     }
+
+    std::string broadcastChannel = "redis://127.0.0.1:6379";
+    auto parsedBroadcastChannel = *transport::parseMultiTransportBroadcastChannel(broadcastChannel);
+    std::string broadcastTopic = "etcd_test.transaction_commands";
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
-        transport::ServerSideSimpleIdentityCheckerComponent<
-            std::string
-            , TI::Transaction>,
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
             , GS::Input>,
@@ -80,62 +83,85 @@ int main(int argc, char **argv) {
     });
     
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::redis::RedisComponent>()
-        (&env, "transaction redundancy test server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
+        (&env, "transaction redundancy test reverse broadcast server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
 
     R r(&env);
 
-    using TF = basic::transaction::v2::TransactionFacility<
+    using TE = basic::transaction::v2::TransactionHandlingExporter<
         M, TI, DI
         , CheckVersion
         , CheckVersionSlice
         , CheckSummary
         , ProcessCommandOnLocalData
     >;
-    auto dataStore = std::make_shared<TF::DataStore>();
+    auto dataStore = std::make_shared<TE::DataStore>();
     using DM = basic::transaction::current::TransactionDeltaMerger<
         DI, false, M::PossiblyMultiThreaded
         , ApplyVersionSlice
         , ApplyDataSlice
     >;
-    TF tf(dataStore);
-    tf.setDeltaProcessor(ProcessCommandOnLocalData([&env](std::string const &s) {
+    TE te(dataStore);
+    te.setDeltaProcessor(ProcessCommandOnLocalData([&env](std::string const &s) {
         env.log(infra::LogLevel::Warning, s);
     }));
-    auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
+    auto transactionLogicCombinationRes = basic::transaction::v2::silentTransactionLogicCombination<
         R, TI, DI, DM
     >(
         r
         , "transaction_server_components"
-        , &tf
+        , &te
     );
 
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacilityWithExternalEffects
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
-        r
-        , transactionLogicCombinationRes.transactionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue")
-        , "transaction_wrapper_"
-        , std::nullopt //no hook
+    auto broadcastKey = M::constFirstPushKeyImporter(
+        transport::MultiTransportBroadcastListenerInput { 
+            transport::MultiTransportBroadcastListenerAddSubscription {
+                std::get<0>(parsedBroadcastChannel)
+                , std::get<1>(parsedBroadcastChannel)
+                , broadcastTopic
+            }
+        }
     );
+    r.registerImporter("broadcastKey", broadcastKey);
+    auto discardTopic = M::template liftPure<basic::TypedDataWithTopic<TI::TransactionWithAccountInfo>>(
+        [](basic::TypedDataWithTopic<TI::TransactionWithAccountInfo> &&d) {
+            return std::move(d.content);
+        }
+    );
+    r.registerAction("discardTopic", discardTopic);
+    auto transactionInput = basic::MonadRunnerUtilComponents<R>::importWithTrigger(
+        r
+        , r.importItem(broadcastKey)
+        , M::onOrderFacilityWithExternalEffects(
+            new transport::MultiTransportBroadcastListener<TheEnvironment, TI::TransactionWithAccountInfo>()
+        )
+        , std::nullopt //the trigger response is not needed
+        , "transactionInput"
+    );
+
+    transactionLogicCombinationRes.transactionHandler(
+        r
+        , r.execute(discardTopic, std::move(transactionInput))
+    );
+
     transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapLocalOnOrderFacility
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue")
+        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueName)
         , "subscription_wrapper_"
         , std::nullopt //no hook
     );
 
-    transport::attachHeartbeatAndAlertComponent(r, &env, "heartbeats.transaction_test_server", std::chrono::seconds(1));
+    transport::attachHeartbeatAndAlertComponent(r, &env, "heartbeats.transaction_test_reverse_broadcast_server", std::chrono::seconds(1));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
-    r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_server");
+    r.writeGraphVizDescription(graphOss, "transaction_redundancy_test_reverse_broadcast_server");
     r.finalize();
 
     env.sendAlert("transaction_redundancy_test.server.info", infra::LogLevel::Info, "Transaction redundancy test server started");
     env.log(infra::LogLevel::Info, graphOss.str());
-    env.log(infra::LogLevel::Info, "Transaction redundancy test server started");
+    env.log(infra::LogLevel::Info, "Transaction redundancy test reverse broadcast server started");
 
     infra::terminationController(infra::RunForever {});
 

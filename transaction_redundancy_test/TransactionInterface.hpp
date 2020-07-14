@@ -1,5 +1,5 @@
-#ifndef COMMAND_INTERFACE_HPP_
-#define COMMAND_INTERFACE_HPP_
+#ifndef TRANSACTION_INTERFACE_HPP_
+#define TRANSACTION_INTERFACE_HPP_
 
 #include "DBData.hpp"
 #include <tm_kit/infra/VersionedData.hpp>
