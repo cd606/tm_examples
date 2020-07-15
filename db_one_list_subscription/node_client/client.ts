@@ -24,16 +24,22 @@ interface Args {
 };
 
 function sendCommand(stream : Stream.Writable, cmd : any) {
-    stream.write(cbor.encode(["node_client", cbor.encode(cmd)]));
+    stream.write(cbor.encode(cmd));
+}
+
+function attachMyIdentity(data : Buffer) : Buffer {
+    return cbor.encode(["node_client", data]);
 }
 
 async function run(args : Args) {
-    let subscriptionStream = await MultiTransportFacilityClient.facilityStream(
-        "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
-    );
-    let transactionStream = await MultiTransportFacilityClient.facilityStream(
-        "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
-    );
+    let subscriptionStream = await MultiTransportFacilityClient.facilityStream({
+        address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
+        , identityAttacher : attachMyIdentity
+    });
+    let transactionStream = await MultiTransportFacilityClient.facilityStream({
+        address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
+        , identityAttacher : attachMyIdentity
+    });
     let keyify = MultiTransportFacilityClient.keyify();
     let resultHandlingStream = new Stream.Writable({
         write : function(chunk : FacilityOutput, _encoding, callback) {
@@ -50,13 +56,15 @@ async function run(args : Args) {
     });
     switch (args.command) {
         case Command.Subscribe:
-            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
+            keyify.pipe(subscriptionStream[0]);
+            subscriptionStream[1].pipe(resultHandlingStream);
             sendCommand(keyify, [
                 0, {keys: [0]}
             ]);
             break;
         case Command.Update:
-            keyify.pipe(transactionStream).pipe(resultHandlingStream);
+            keyify.pipe(transactionStream[0]);
+            transactionStream[1].pipe(resultHandlingStream);
             sendCommand(keyify, [
                 1
                 , {
@@ -76,7 +84,8 @@ async function run(args : Args) {
             ]);
             break;
         case Command.Delete:
-            keyify.pipe(transactionStream).pipe(resultHandlingStream);
+            keyify.pipe(transactionStream[0]);
+            transactionStream[1].pipe(resultHandlingStream);
             sendCommand(keyify, [
                 1
                 , {
@@ -91,7 +100,8 @@ async function run(args : Args) {
             ]);
             break;
         case Command.Unsubscribe:
-            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
+            keyify.pipe(subscriptionStream[0]);
+            subscriptionStream[1].pipe(resultHandlingStream);
             if (args.id != "") {
                 sendCommand(keyify, [
                     1
@@ -107,7 +117,8 @@ async function run(args : Args) {
             }
             break;
         case Command.List:
-            keyify.pipe(subscriptionStream).pipe(resultHandlingStream);
+            keyify.pipe(subscriptionStream[0]);
+            subscriptionStream[1].pipe(resultHandlingStream);
             sendCommand(keyify, [
                 2
                 , 0

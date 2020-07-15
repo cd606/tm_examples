@@ -1,5 +1,8 @@
-import {TMHelper} from "./tm_helpers"
-import { runInContext } from "vm";
+import {MultiTransportFacilityClient, FacilityOutput} from '../../../tm_transport/node_lib/TMTransport'
+import * as Stream from 'stream'
+import {load, Type} from "protobufjs"
+import {eddsa as EDDSA} from "elliptic"
+import * as cbor from 'cbor'
 
 const signature_key_bytes = Buffer.from([
     0x89,0xD9,0xE6,0xED,0x17,0xD6,0x7B,0x30,0xE6,0x16,0xAC,0xB4,0xE6,0xD0,0xAD,0x47,
@@ -25,22 +28,40 @@ switch (modeStr) {
 }
 let cmd = process.argv[3];
 
-let tmHelper = new TMHelper();
+let attacher : (Buffer) => Buffer = null;
+
 switch (mode) {
     case Mode.Sign:
-        tmHelper.set_identity(signature_key_bytes);
+        let signature_key = new EDDSA("ed25519").keyFromSecret(signature_key_bytes);
+        attacher = function(data : Buffer) {
+            let signature = signature_key.sign(data);
+            return cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data});
+        }
         break;
     case Mode.Plain:
-        tmHelper.set_identity("simple_demo_client.ts");
+        attacher = function(data : Buffer) {
+            return cbor.encode(["simple_demo_client.ts", data]);
+        }
         break;
     default:
         break;
 }
 
-function callback(isFinal : boolean, data : {}) {
-    let obj = {isFinal : isFinal, data : data};
-    console.log(obj);
+function printStream(t : Type) : Stream.Writable {
+    return new Stream.Writable({
+        write : function(chunk : FacilityOutput, _encoding, callback) {
+            let parsed = t.decode(chunk.output);
+            console.log({isFinal : chunk.isFinal, data : parsed});
+            if (chunk.isFinal) {
+                setTimeout(function() {
+                    process.exit(0);
+                }, 500);
+            }
+        }
+        , objectMode : true
+    });
 }
+
 async function runConfigure(args : Array<string>) {
     let enabled : boolean;
     switch (args[0]) {
@@ -54,45 +75,45 @@ async function runConfigure(args : Array<string>) {
         console.log('Usage ... configure enable|disable');
         process.exit();
     }
-    await tmHelper.set_incoming_and_outgoing_type(
-        '../proto/defs.proto'
-        , 'simple_demo.ConfigureResult'
-        , 'simple_demo.ConfigureCommand'
-    );
-    tmHelper.enable_identity();
-    await tmHelper.send_request(
-        'localhost::guest:guest:test_config_queue'
-        , {enabled: enabled}
-        , callback
-    );
+    let root = await load('../proto/defs.proto');
+    let inputT = root.lookupType('simple_demo.ConfigureCommand');
+    let outputT = root.lookupType('simple_demo.ConfigureResult');
+    let streams = await MultiTransportFacilityClient.facilityStream({
+        address : 'rabbitmq://127.0.0.1::guest:guest:test_config_queue'
+        , identityAttacher : attacher
+    });
+    let keyify = MultiTransportFacilityClient.keyify();
+    keyify.pipe(streams[0]);
+    streams[1].pipe(printStream(outputT));
+    keyify.write(inputT.encode({enabled : enabled}).finish());
 }
 async function runQuery(args: Array<string>) {
-    await tmHelper.set_incoming_and_outgoing_type(
-        '../proto/defs.proto'
-        , 'simple_demo.OutstandingCommandsResult'
-        , 'simple_demo.OutstandingCommandsQuery'
-    );
-    tmHelper.disable_identity();
-    await tmHelper.send_request(
-        'localhost::guest:guest:test_query_queue'
-        , {}
-        , callback
-    );
+    let root = await load('../proto/defs.proto');
+    let inputT = root.lookupType('simple_demo.OutstandingCommandsQuery');
+    let outputT = root.lookupType('simple_demo.OutstandingCommandsResult');
+    let streams = await MultiTransportFacilityClient.facilityStream({
+        address : 'rabbitmq://127.0.0.1::guest:guest:test_query_queue'
+    });
+    let keyify = MultiTransportFacilityClient.keyify();
+    keyify.pipe(streams[0]);
+    streams[1].pipe(printStream(outputT));
+    keyify.write(inputT.encode({}).finish());
 }
 async function runClear(args: Array<string>) {
     const ids = args.map((x) => parseInt(x));
-    await tmHelper.set_incoming_and_outgoing_type(
-        '../proto/defs.proto'
-        , 'simple_demo.ClearCommandsResult'
-        , 'simple_demo.ClearCommands'
-    );
-    tmHelper.enable_identity();
-    await tmHelper.send_request(
-        'localhost::guest:guest:test_clear_queue'
-        , {ids: ids}
-        , callback
-    );
+    let root = await load('../proto/defs.proto');
+    let inputT = root.lookupType('simple_demo.ClearCommands');
+    let outputT = root.lookupType('simple_demo.ClearCommandsResult');
+    let streams = await MultiTransportFacilityClient.facilityStream({
+        address : 'rabbitmq://127.0.0.1::guest:guest:test_clear_queue'
+        , identityAttacher : attacher
+    });
+    let keyify = MultiTransportFacilityClient.keyify();
+    keyify.pipe(streams[0]);
+    streams[1].pipe(printStream(outputT));
+    keyify.write(inputT.encode({ids: ids}).finish());
 }
+
 async function runClient(args : Array<string>) {
     switch (cmd) {
     case 'configure':
