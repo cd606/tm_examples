@@ -8,6 +8,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
+#include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
@@ -61,17 +62,11 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         <GS::Input,GS::Output>(
         transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
     );
+    r.registerOnOrderFacility("facility", facility);
 
-    auto dataStorePtr = std::make_shared<basic::transaction::v2::TransactionDataStore<DI>>();
-    r.preservePointer(dataStorePtr);
-
-    auto extractKeyedOutput = M::kleisli<M::KeyedData<GS::Input,GS::Output>>(
-        basic::CommonFlowUtilComponents<M>::extractIDAndDataFromKeyedData<GS::Input,GS::Output>()
-    );
-
-    auto printAck = M::simpleExporter<M::Key<GS::Output>>(
-        [&env](M::InnerData<M::Key<GS::Output>> &&o) {
-            auto id = o.timedData.value.id();
+    auto printAck = M::simpleExporter<M::KeyedData<GS::Input,GS::Output>>(
+        [&env](M::InnerData<M::KeyedData<GS::Input,GS::Output>> &&o) {
+            auto id = o.timedData.value.key.id();
             std::visit([&id,&env](auto const &x) {
                 using T = std::decay_t<decltype(x)>;
                 if constexpr (std::is_same_v<T,GS::Subscription>) {
@@ -93,7 +88,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
                     oss << "Got unsubscribe-all ack from " << env.id_to_string(id);
                     env.log(infra::LogLevel::Info, oss.str());
                 }
-            }, o.timedData.value.key().value);
+            }, o.timedData.value.data.value);
             if (o.timedData.finalFlag) {
                 env.log(infra::LogLevel::Info, "Got final update, exiting");
                 exit(0);
@@ -101,72 +96,41 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         }
     );
 
-    auto getOutput = infra::KleisliUtils<M>::liftMaybe<GS::Output>(
-        [](GS::Output &&o) -> std::optional<DI::Update> {
-            return std::visit([](auto &&x) -> std::optional<DI::Update> {
-                using T = std::decay_t<decltype(x)>;
-                if constexpr (std::is_same_v<T,DI::Update>) {
-                    return std::move(x);
-                } else {
-                    return std::nullopt;
-                }
-            }, std::move(o.value));
-        }
-    );
-    
-    using DM = basic::transaction::v2::TransactionDeltaMerger<
-        DI, true, M::PossiblyMultiThreaded
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
-    >;
-    auto deltaMerger = infra::KleisliUtils<M>::liftPure<DI::Update>(DM {dataStorePtr});
-    
-    auto getFullOutput = M::kleisli<M::Key<GS::Output>>(
-        basic::CommonFlowUtilComponents<M>::withKey<GS::Output>(
-            infra::KleisliUtils<M>::compose<GS::Output>(std::move(getOutput), std::move(deltaMerger))
-        )
-    );
-
-    auto printFullUpdate = M::pureExporter<M::Key<DI::Update>>(
-        [&env](M::Key<DI::Update> &&update) {
+    auto printFullUpdate = M::pureExporter<M::KeyedData<GS::Input,DI::FullUpdate>>(
+        [&env](M::KeyedData<GS::Input,DI::FullUpdate> &&update) {
             std::ostringstream oss;
             oss << "Got full update {";
-            oss << "globalVersion=" << update.key().version;
+            oss << "globalVersion=" << update.data.version;
             oss << ",updates=[";
             int ii = 0;
-            for (auto const &item : update.key().data) {
-                std::visit([&oss,&ii](auto const &x) {
-                    using T = std::decay_t<decltype(x)>;
-                    if constexpr (std::is_same_v<T,DI::OneFullUpdateItem>) {
-                        if (ii > 0) {
-                            oss << ",";
+            for (auto const &item : update.data.data) {
+                if (ii > 0) {
+                    oss << ",";
+                }
+                ++ii;
+                oss << "{key=" << item.groupID;
+                oss << ",version=" << item.version;
+                if (item.data) {
+                    oss << ",data=[";
+                    int jj = 0;
+                    for (auto const &row : *(item.data)) {
+                        if (jj > 0) {
+                            oss << ',';
                         }
-                        ++ii;
-                        oss << "{key=" << x.groupID;
-                        oss << ",version=" << x.version;
-                        if (x.data) {
-                            oss << ",data=[";
-                            int jj = 0;
-                            for (auto const &row : *(x.data)) {
-                                if (jj > 0) {
-                                    oss << ',';
-                                }
-                                ++jj;
-                                oss << "{name='" << row.first.name << "'";
-                                oss << ",amount=" << row.second.amount;
-                                oss << ",stat=" << row.second.stat;
-                                oss << "}";
-                            }
-                            oss << "]";
-                        } else {
-                            oss << ",data=(deleted)";
-                        }
+                        ++jj;
+                        oss << "{name='" << row.first.name << "'";
+                        oss << ",amount=" << row.second.amount;
+                        oss << ",stat=" << row.second.stat;
                         oss << "}";
                     }
-                }, item);
+                    oss << "]";
+                } else {
+                    oss << ",data=(deleted)";
+                }
+                oss << "}";
             }
             oss << "]";
-            oss << "} (from " << env.id_to_string(update.id()) << ")";
+            oss << "} (from " << env.id_to_string(update.key.id()) << ")";
             env.log(infra::LogLevel::Info, oss.str());
         }
     );
@@ -201,20 +165,24 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         basic::CommonFlowUtilComponents<M>::keyify<GS::Input>()
     );
 
-    auto initialImporter = M::simpleImporter<basic::VoidStruct>(
-        [](M::PublisherCall<basic::VoidStruct> &p) {
-            p(basic::VoidStruct {});
-        }
-        , infra::LiftParameters<std::chrono::system_clock::time_point>()
-            .SuggestThreaded(true)
+    auto initialImporter = M::constFirstPushImporter(
+        basic::VoidStruct {}
     );
 
     auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
     auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
-    r.placeOrderWithFacility(std::move(keyedCommand), "facility", facility, r.actionAsSink("extractKeyedOutput", extractKeyedOutput));
-    auto keyedOutput = r.actionAsSource(extractKeyedOutput);
-    r.exportItem("printAck", printAck, keyedOutput.clone());
-    r.exportItem("printFullUpdate", printFullUpdate, r.execute("getFullOutput", getFullOutput, keyedOutput.clone()));
+    auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
+        R, DI, typename GS::Input
+        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
+        , ApplyDelta
+    >(
+        r 
+        , "outputHandling"
+        , R::facilityConnector(facility)
+        , std::move(keyedCommand)
+    );
+    r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
+    r.exportItem("printFullUpdate", printFullUpdate, std::move(clientOutputs.fullUpdates.clone()));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";

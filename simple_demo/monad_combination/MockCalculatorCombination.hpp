@@ -19,7 +19,7 @@ public:
     static void service(
         R &r
         , typename R::template Source<MockInput> &&source
-        , typename R::template Sink<MockOutput> const &sink) 
+        , std::optional<typename R::template Sink<MockOutput>> const &sink) 
     {       
         auto clockFacility = ClockFacility::template createClockCallback<simple_demo::CalculateCommand, bool>(
             [](std::chrono::system_clock::time_point const &, std::size_t thisIdx, std::size_t totalCount) {
@@ -43,29 +43,36 @@ public:
             }
         );
 
-        using ClockFacilityOutput = KeyedData<ClockFacilityInput, bool>;       
-        auto facilityCallback = M::template liftPure<ClockFacilityOutput>(
-            [](ClockFacilityOutput &&data) -> MockOutput {
-                simple_demo::CalculateResult res;
-                res.set_id(data.key.key().inputData.id());
-                if (data.data) {
-                    res.set_result(-1.0);
-                } else {
-                    res.set_result(data.key.key().inputData.value()*2.0);
+        if (sink) {
+            using ClockFacilityOutput = KeyedData<ClockFacilityInput, bool>;       
+            auto facilityCallback = M::template liftPure<ClockFacilityOutput>(
+                [](ClockFacilityOutput &&data) -> MockOutput {
+                    simple_demo::CalculateResult res;
+                    res.set_id(data.key.key().inputData.id());
+                    if (data.data) {
+                        res.set_result(-1.0);
+                    } else {
+                        res.set_result(data.key.key().inputData.value()*2.0);
+                    }
+                    return { 
+                        {data.key.id(), data.key.key().inputData}
+                        , std::move(res)
+                    };
                 }
-                return { 
-                    {data.key.id(), data.key.key().inputData}
-                    , std::move(res)
-                };
-            }
-        );
+            );
 
-        r.placeOrderWithFacility(
-            r.execute("createFacilityKey", createFacilityKey, std::move(source))
-            , "clockFacility", clockFacility
-            , r.actionAsSink("facilityCallback", facilityCallback)
-        );
-        r.connect(r.actionAsSource(facilityCallback), sink);
+            r.placeOrderWithFacility(
+                r.execute("createFacilityKey", createFacilityKey, std::move(source))
+                , "clockFacility", clockFacility
+                , r.actionAsSink("facilityCallback", facilityCallback)
+            );
+            r.connect(r.actionAsSource(facilityCallback), *sink);
+        } else {
+            r.placeOrderWithFacilityAndForget(
+                r.execute("createFacilityKey", createFacilityKey, std::move(source))
+                , "clockFacility", clockFacility
+            );
+        }        
     }
 };
 

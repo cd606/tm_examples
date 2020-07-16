@@ -131,70 +131,52 @@ int main(int argc, char **argv) {
 
     //Now we manage the subscription data
 
-    auto dataStorePtr = std::make_shared<basic::transaction::current::TransactionDataStore<DI>>();
-    r.preservePointer(dataStorePtr);
-
-    using DM = basic::transaction::v2::TransactionDeltaMerger<
-        DI, true, M::PossiblyMultiThreaded
+    std::shared_ptr<basic::transaction::current::TransactionDataStore<DI>> dataStorePtr;
+    auto subscriptionOutputs = basic::transaction::v2::basicDataStreamClientCombination<
+        R, DI, std::tuple<transport::ConnectionLocator, GS::Input>
         , ApplyVersionSlice
         , ApplyDataSlice
-    >;
+    >(
+        r 
+        , "subscripionOutputHandling"
+        , subscriptionFacility.feedOrderResults
+        , &dataStorePtr
+    );
 
     //getFullData might be as well written as three nodes in the graph
     //but by operating in KleisliUtils, we can merge them into one node
     
-    using FullSubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
+    using SubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
+    using FullSubscriptionData = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,DI::FullUpdate>;
     
-    auto getFullData = M::kleisli<FullSubscriptionOutput>(
-        infra::KleisliUtils<M>::compose<FullSubscriptionOutput>(
-            infra::KleisliUtils<M>::liftPure<FullSubscriptionOutput>(
-                [](FullSubscriptionOutput &&data) -> GS::Output {
-                    return std::move(data.data);
-                }
-            )
-            , infra::KleisliUtils<M>::compose<GS::Output>(
-                basic::CommonFlowUtilComponents<M>::pickOneFromWrappedValue<GS::Output,DI::Update>()
-                , infra::KleisliUtils<M>::liftPure<DI::Update>(DM {dataStorePtr})
-            )
-        )
-    );
-    auto fullDataPrinter = M::pureExporter<DI::Update>(
-        [&env](DI::Update &&theUpdate) {
+    auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
+        [&env](FullSubscriptionData &&theUpdate) {
             std::ostringstream oss;
             oss << "Got full data update {";
-            oss << "globalVersion=" << theUpdate.version;
+            oss << "globalVersion=" << theUpdate.data.version;
             oss << ",dataItems=[";
             int ii = 0;
-            for (auto const &item : theUpdate.data) {
-                std::visit([&oss,&ii](auto const &x) {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(x)>, DI::OneFullUpdateItem>) {
-                        if (ii > 0) {
-                            oss << ',';
-                        }
-                        oss << "{version=" << x.version;
-                        oss << ",data=";
-                        if (x.data) {
-                            oss << *(x.data);
-                        } else {
-                            oss << "(deleted)";
-                        }
-                        oss << "}";
-                        ++ii;
-                    }
-                }, item);
+            for (auto const &item : theUpdate.data.data) {
+                if (ii > 0) {
+                    oss << ',';
+                }
+                oss << "{version=" << item.version;
+                oss << ",data=";
+                if (item.data) {
+                    oss << *(item.data);
+                } else {
+                    oss << "(deleted)";
+                }
+                oss << "}";
+                ++ii;
             }
             oss << "]}";
             env.log(infra::LogLevel::Info, oss.str());
         }
     );
 
-    subscriptionFacility.feedOrderResults(
-        r
-        , r.actionAsSink("getFullData", getFullData)
-    );
-
     r.exportItem("fullDataPrinter", fullDataPrinter
-        , r.actionAsSource(getFullData)
+        , std::move(subscriptionOutputs)
     );
 
     //Next, we manage the subscription IDs
@@ -202,8 +184,8 @@ int main(int argc, char **argv) {
     std::unordered_map<transport::ConnectionLocator, TheEnvironment::IDType> ids;
     std::mutex idMutex;
 
-    auto subscriptionIDManager = M::pureExporter<FullSubscriptionOutput>(
-        [&env,&ids,&idMutex](FullSubscriptionOutput &&o) {
+    auto subscriptionIDManager = M::pureExporter<SubscriptionOutput>(
+        [&env,&ids,&idMutex](SubscriptionOutput &&o) {
             std::lock_guard<std::mutex> _(idMutex);
             auto id = o.key.id();
             auto locator = std::get<0>(o.key.key());

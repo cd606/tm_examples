@@ -12,6 +12,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
+#include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/MonadRunnerUtils.hpp>
 
@@ -62,28 +63,12 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
         typename M::EnvironmentType::IDType, DI
     >;
 
-    //suggestThreaded is optional because OnOrderFacility uses recursive
-    //mutexes. If OnOrderFacility uses simple mutexes, then we must have
-    //suggestThreaded here, otherwise, the graph loop will be modifying the 
-    //key list in the OnOrderFacility from within an OnOrderFacility callback,
-    //and the simple mutex will deadlock upon reentrace.
-    auto extractKeyedOutput = M::template kleisli<typename M::template KeyedData<typename GS::Input,typename GS::Output>>(
-        basic::CommonFlowUtilComponents<M>::template extractIDAndDataFromKeyedData<typename GS::Input,typename GS::Output>()
-        , infra::LiftParameters<std::chrono::system_clock::time_point>()
-            //.SuggestThreaded(true)
-            .DelaySimulator(
-                [](int which, std::chrono::system_clock::time_point const &) -> std::chrono::system_clock::duration {
-                    return std::chrono::milliseconds(100);
-                }
-            )
-    );
-
     std::shared_ptr<int> unsubscriptionCount = std::make_shared<int>(0);
     r.preservePointer(unsubscriptionCount);
 
-    auto printAck = M::template simpleExporter<typename M::template Key<typename GS::Output>>(
-        [&env,unsubscriptionCount](typename M::template InnerData<typename M::template Key<typename GS::Output>> &&o) {
-            auto id = o.timedData.value.id();
+    auto printAck = M::template simpleExporter<typename M::template KeyedData<typename GS::Input, typename GS::Output>>(
+        [&env,unsubscriptionCount](typename M::template InnerData<typename M::template KeyedData<typename GS::Input, typename GS::Output>> &&o) {
+            auto id = o.timedData.value.key.id();
             std::visit([&id,&env,&unsubscriptionCount](auto const &x) {
                 using T = std::decay_t<decltype(x)>;
                 if constexpr (std::is_same_v<T,typename GS::Subscription>) {
@@ -110,90 +95,58 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                     oss << "Got unsubscribe-all ack from " << env.id_to_string(id);
                     env.log(infra::LogLevel::Info, oss.str());
                 }
-            }, o.timedData.value.key().value);
+            }, o.timedData.value.data.value);
         }
     );
 
-    auto getOutput = infra::KleisliUtils<M>::template liftMaybe<typename GS::Output>(
-        [](typename GS::Output &&o) -> std::optional<DI::Update> {
-            return std::visit([](auto &&x) -> std::optional<DI::Update> {
-                using T = std::decay_t<decltype(x)>;
-                if constexpr (std::is_same_v<T,DI::Update>) {
-                    return std::move(x);
-                } else {
-                    return std::nullopt;
-                }
-            }, std::move(o.value));
-        }
-    );
-    
-    auto dataStorePtr = std::make_shared<basic::transaction::v2::TransactionDataStore<DI,std::hash<Key>,M::PossiblyMultiThreaded>>();
-    r.preservePointer(dataStorePtr);
-
-    using DM = basic::transaction::v2::TransactionDeltaMerger<
-        DI, true, M::PossiblyMultiThreaded
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
-    >;
-    auto deltaMerger = infra::KleisliUtils<M>::template liftPure<DI::Update>(DM {dataStorePtr});
-    
-    auto getFullOutput = M::template kleisli<typename M::template Key<typename GS::Output>>(
-        basic::CommonFlowUtilComponents<M>::template withKey<typename GS::Output>(
-            infra::KleisliUtils<M>::template compose<typename GS::Output>(std::move(getOutput), std::move(deltaMerger))
-        )
-    );
-
-    auto printFullUpdate = M::template pureExporter<typename M::template Key<DI::Update>>(
-        [&env](typename M::template Key<DI::Update> &&update) {
+    auto printFullUpdate = M::template liftPure<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
+        [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) -> typename M::EnvironmentType::IDType {
             std::ostringstream oss;
             oss << "Got full update {";
-            oss << "globalVersion=" << update.key().version;
+            oss << "globalVersion=" << update.data.version;
             oss << ",updates=[";
             int ii = 0;
-            for (auto const &item : update.key().data) {
-                std::visit([&oss,&ii](auto const &x) {
-                    using T = std::decay_t<decltype(x)>;
-                    if constexpr (std::is_same_v<T,DI::OneFullUpdateItem>) {
-                        if (ii > 0) {
-                            oss << ",";
+            for (auto const &item : update.data.data) {
+                if (ii > 0) {
+                    oss << ",";
+                }
+                ++ii;
+                oss << "{key=" << item.groupID;
+                oss << ",version=" << item.version;
+                if (item.data) {
+                    oss << ",data=[";
+                    int jj = 0;
+                    for (auto const &row : *(item.data)) {
+                        if (jj > 0) {
+                            oss << ',';
                         }
-                        ++ii;
-                        oss << "{key=" << x.groupID;
-                        oss << ",version=" << x.version;
-                        if (x.data) {
-                            oss << ",data=[";
-                            int jj = 0;
-                            for (auto const &row : *(x.data)) {
-                                if (jj > 0) {
-                                    oss << ',';
-                                }
-                                ++jj;
-                                oss << "{name='" << row.first.name << "'";
-                                oss << ",amount=" << row.second.amount;
-                                oss << ",stat=" << row.second.stat;
-                                oss << "}";
-                            }
-                            oss << "]";
-                        } else {
-                            oss << ",data=(deleted)";
-                        }
+                        ++jj;
+                        oss << "{name='" << row.first.name << "'";
+                        oss << ",amount=" << row.second.amount;
+                        oss << ",stat=" << row.second.stat;
                         oss << "}";
                     }
-                }, item);
+                    oss << "]";
+                } else {
+                    oss << ",data=(deleted)";
+                }
+                oss << "}";
             }
             oss << "]";
-            oss << "} (from " << env.id_to_string(update.id()) << ")";
+            oss << "} (from " << env.id_to_string(update.key.id()) << ")";
             env.log(infra::LogLevel::Info, oss.str());
+
+            return update.key.id();
         }
     );
     
-    auto unsubscriber = M::template liftMaybe<typename M::template Key<typename DI::Update>>(
-        [](typename M::template Key<typename DI::Update> &&data) -> std::optional<typename GS::Input> {
+    auto unsubscriber = M::template liftMaybe<typename M::EnvironmentType::IDType>(
+        [](typename M::EnvironmentType::IDType &&id) -> std::optional<typename GS::Input> {
             static std::atomic<bool> unsubscribed = false;
             if (!unsubscribed) {
                 unsubscribed = true;
                 return typename GS::Input {
-                    typename GS::Unsubscription {data.id()}
+                    typename GS::Unsubscription {std::move(id)}
                 };
             } else {
                 return std::nullopt;
@@ -213,19 +166,23 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
     );
 
     auto keyedCommand = r.execute("keyify", keyify, r.actionAsSource("createCommand", createCommand));
-    queryConnector(
-        r
-        , keyedCommand.clone()
-        , r.actionAsSink("extractKeyedOutput", extractKeyedOutput)
+    auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
+        R, DI, typename GS::Input
+        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
+        , ApplyDelta
+    >(
+        r 
+        , "outputHandling"
+        , queryConnector
+        , std::move(keyedCommand)
     );
-    auto keyedOutput = r.actionAsSource(extractKeyedOutput);
-    r.exportItem("printAck", printAck, keyedOutput.clone());
-    auto fullOutput = r.execute("getFullOutput", getFullOutput, keyedOutput.clone());
-    r.exportItem("printFullUpdate", printFullUpdate, fullOutput.clone());
+    r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
     //Please note that as soon as keyify is hooked, we don't need to
     //call queryConnector again, since the keyify'ed unsubscription
     //order will flow into the facility. If in doubt, look at the generated graph
-    r.execute(keyify, r.execute("unsubscriber", unsubscriber, fullOutput.clone()));
+    r.execute(keyify
+        , r.execute("unsubscriber", unsubscriber
+            , r.execute("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone())));
 
     return r.actionAsSink(createCommand);
 }
