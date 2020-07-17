@@ -265,9 +265,6 @@ void runSinglePass(std::string const &dbFile) {
         }
     );
 
-    auto dataStoreForSubscriptionFacility =
-        std::make_shared<basic::transaction::v2::TransactionDataStore<DI,std::hash<Key>,M::PossiblyMultiThreaded>>();
-
     using DM = basic::transaction::v2::TransactionDeltaMerger<
         DI, false, M::PossiblyMultiThreaded
         , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
@@ -280,7 +277,6 @@ void runSinglePass(std::string const &dbFile) {
         r
         , "subscription_server_components"
         , r.importItem("dbLoader", dbLoader)
-        , dataStoreForSubscriptionFacility
     );
 
     auto initialImporter = basic::single_pass_iteration_clock::template ClockImporter<TheEnvironment>
