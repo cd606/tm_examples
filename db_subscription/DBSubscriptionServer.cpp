@@ -131,13 +131,13 @@ public:
     }
     virtual ~THComponent() {
     }
-    TI::GlobalVersion acquireLock(std::string const &account, std::string const &name) override final {
+    TI::GlobalVersion acquireLock(std::string const &account, std::string const &, TI::DataDelta const *) override final {
         if (session_) {
             (*session_) << "BEGIN TRANSACTION";
         }
         return globalVersion_;
     }
-    TI::GlobalVersion releaseLock(std::string const &account, std::string const &name) override final {
+    TI::GlobalVersion releaseLock(std::string const &account, std::string const &, TI::DataDelta const *) override final {
         if (session_) {
             (*session_) << "COMMIT";
         }

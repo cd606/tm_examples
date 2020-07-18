@@ -419,7 +419,7 @@ int64_t THComponent::releaseCompoundLock() {
     return ret;
 }
 
-TI::GlobalVersion THComponent::acquireLock(std::string const &account, TI::Key const &name) {
+TI::GlobalVersion THComponent::acquireLock(std::string const &account, TI::Key const &, TI::DataDelta const *) {
     switch (lockChoice_) {
     case LockChoice::None:
         return 0;
@@ -433,7 +433,7 @@ TI::GlobalVersion THComponent::acquireLock(std::string const &account, TI::Key c
     
 }
 
-TI::GlobalVersion THComponent::releaseLock(std::string const &account, TI::Key const &name) {
+TI::GlobalVersion THComponent::releaseLock(std::string const &account, TI::Key const &, TI::DataDelta const *) {
     switch (lockChoice_) {
     case LockChoice::None:
         return 0;

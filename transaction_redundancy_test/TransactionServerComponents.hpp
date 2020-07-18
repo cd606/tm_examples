@@ -151,8 +151,8 @@ public:
     {}
     virtual ~THComponent() {
     }
-    TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &name) override final;
-    TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &name) override final;
+    TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &, TI::DataDelta const *) override final;
+    TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &, TI::DataDelta const *) override final;
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final;
     TI::TransactionResponse handleUpdate(std::string const &account, TI::Key const &key, std::optional<TI::VersionSlice> const &updateVersionSlice, TI::ProcessedUpdate const &dataDelta) override final;
     TI::TransactionResponse handleDelete(std::string const &account, TI::Key const &key, std::optional<TI::Version> const &versionToDelete) override final;
