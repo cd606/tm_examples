@@ -46,8 +46,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ClearCommands>,
-        transport::rabbitmq::RabbitMQComponent,
-        transport::zeromq::ZeroMQComponent
+        transport::AllNetworkTransportComponents
     >;
     using M = infra::RealTimeMonad<TheEnvironment>;
     using R = infra::MonadRunner<M>;
