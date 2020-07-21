@@ -30,11 +30,14 @@ async def printQueueData(qin : asyncio.Queue, printMode : str = "length"):
 async def asyncMain() :
     printQueue = asyncio.Queue()
     TMTransport.MultiTransportListener.input(
-        "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        #"rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        #"multicast://224.0.0.114:12346"
+        #"redis://127.0.0.1:6379"
+        "zeromq://localhost:12345"
         , [printQueue]
-        , topic = "simple_demo.plain_executables.calculator.heartbeat"
+        , topic = "input.data"
     )
-    await printQueueData(printQueue, printMode="cbor")
+    await printQueueData(printQueue, printMode="length")
 
 if __name__ == "__main__":
     asyncio.run(asyncMain())
