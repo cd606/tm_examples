@@ -78,7 +78,6 @@ async def runClear(mode : str, cmdData : List[int]):
     await printData(qout, defs_pb2.ClearCommandsResult)
 
 if __name__ == "__main__":
-    global mode
     mode = sys.argv[1]
     cmd = sys.argv[2]
     if cmd == 'configure':
