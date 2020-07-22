@@ -64,7 +64,7 @@ def run(address : str, topic : str, printmode : str, summaryperiod : int, captur
                     while True:
                         topic, data = await captureQueue.get()
                         now = datetime.now()
-                        t : int = int(now.timestamp()*1000.0)+(now.microsecond//1000)
+                        t : int = int(now.timestamp()*1000000.0)+now.microsecond
                         l : int = len(topic)
                         ld : int = len(data)
                         writeData = b'\x76\x54\x32\x10'\
