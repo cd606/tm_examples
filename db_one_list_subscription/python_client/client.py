@@ -39,12 +39,12 @@ def setup_queue(cmd : Command, qin : asyncio.Queue, qout : asyncio.Queue) -> asy
     transactionLocator = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
     if cmd in [Command.Subscribe, Command.Unsubscribe, Command.List]:
         return TMTransport.MultiTransportFacilityClient.facility(
-            subscriptionLocator, qin, [qout],
+            subscriptionLocator, qin, qout,
             identityAttacher=attachMyIdentity
         )
     else:
         return TMTransport.MultiTransportFacilityClient.facility(
-            transactionLocator, qin, [qout],
+            transactionLocator, qin, qout,
             identityAttacher=attachMyIdentity
         )
 

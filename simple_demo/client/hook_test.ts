@@ -20,8 +20,9 @@ function verifyAndDecrypt(data : Buffer) : Buffer {
     if (!verifier.verify(cborDecoded.data.toString('hex'), cborDecoded.signature.toString('hex'), serverPublicKey.toString('hex'))) {
         return null;
     }
+    let len = Number((cborDecoded.data as Buffer).slice(0, 8).readBigUInt64LE());
     let decryptor = new aes.ModeOfOperation.cbc(decryptKey, cborDecoded.data.slice(8, 24));
-    return Buffer.from(decryptor.decrypt(cborDecoded.data.slice(24)));
+    return Buffer.from(decryptor.decrypt(cborDecoded.data.slice(24))).slice(0, len);
 }
 
 let heartbeatListener = MultiTransportListener.inputStream(
