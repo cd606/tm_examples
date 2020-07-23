@@ -25,6 +25,7 @@
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -52,9 +53,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
-        transport::rabbitmq::RabbitMQComponent,
-        transport::zeromq::ZeroMQComponent,
-        transport::redis::RedisComponent
+        transport::AllNetworkTransportComponents
     >;
     using M = infra::RealTimeMonad<TheEnvironment>;
     using R = infra::MonadRunner<M>;
@@ -114,19 +113,20 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     R r(&env);
 
-    auto importer = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                    ::createTypedImporter<InputData>(
-        transport::ConnectionLocator::parse("localhost:12345")
-        , "input.data"
-    );
-    auto removeTopic = M::liftPure<basic::TypedDataWithTopic<InputData>>(
-        [](basic::TypedDataWithTopic<InputData> &&data) -> InputData {
-            return data.content;
-        }
-    );
-    
-    r.registerImporter("importer", importer);
-    r.registerAction("removeTopic", removeTopic);
+    auto listeners = transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::setupBroadcastListeners<
+            InputData
+        >(
+            r 
+            , {
+                {
+                    "inputListener"
+                    , "zeromq://localhost:12345"
+                    , "input.data"
+                }
+            }
+            , "listeners"
+        );
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
     if (isReal) {
@@ -201,8 +201,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         )
     };
     auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
-    r.connect(r.execute(removeTopic, r.importItem(importer)), mainLogicOutput.dataSink);
-
+    std::get<0>(listeners)(r, mainLogicOutput.dataSink);
+    
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
         r.writeGraphVizDescription(ofs, "simple_demo_main_logic");
