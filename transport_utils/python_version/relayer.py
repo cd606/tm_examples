@@ -16,6 +16,7 @@ count : int = 0
 
 def run(incomingaddress : str, outgoingaddress : str, summaryperiod : int):
     async def asyncMain() :
+        tasks = []
         relayQueue = asyncio.Queue()
         qouts = [relayQueue]
         if summaryperiod > 0:
@@ -25,17 +26,18 @@ def run(incomingaddress : str, outgoingaddress : str, summaryperiod : int):
                 while True:
                     await summaryQueue.get()
                     count = count+1
-            asyncio.create_task(incrCount())
+            tasks.append(asyncio.create_task(incrCount()))
             async def printSummary():
                 global count
                 while True:
                     await asyncio.sleep(summaryperiod)
                     now = datetime.now()
                     print(f"{now.strftime('%Y-%m-%d %H:%M:%S.%f')}: Relayed {count} messages so far")
-            asyncio.create_task(printSummary())
+            tasks.append(asyncio.create_task(printSummary()))
             qouts = [relayQueue, summaryQueue]
-        TMTransport.MultiTransportListener.input(incomingaddress, qouts, topic = None)
-        await TMTransport.MultiTransportPublisher.output(outgoingaddress, relayQueue)
+        tasks.extend(TMTransport.MultiTransportListener.input(incomingaddress, qouts, topic = None))
+        tasks.extend(TMTransport.MultiTransportPublisher.output(outgoingaddress, relayQueue))
+        await asyncio.gather(*tasks)
     asyncio.run(asyncMain())
         
 if __name__ == "__main__":

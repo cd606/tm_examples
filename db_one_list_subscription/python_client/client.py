@@ -5,7 +5,7 @@ import os
 import TMTransport
 import asyncio
 from enum import Enum
-from typing import Callable
+from typing import Callable,List
 import cbor2 #for some reason, "cbor" does not handle certain big chunks correctly, but "cbor2" does
 
 import click
@@ -34,7 +34,7 @@ def parseCommand(s : str) -> Command:
     else:
         return None
 
-def setup_queue(cmd : Command, qin : asyncio.Queue, qout : asyncio.Queue) -> asyncio.Task :
+def setup_queue(cmd : Command, qin : asyncio.Queue, qout : asyncio.Queue) -> List[asyncio.Task] :
     subscriptionLocator = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     transactionLocator = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
     if cmd in [Command.Subscribe, Command.Unsubscribe, Command.List]:
@@ -126,17 +126,18 @@ def run(command : str, name : str, amount : int, stat : float, old_version : int
     async def asyncMain():
         qin = asyncio.Queue()
         qout = asyncio.Queue()
-        setup_queue(cmd, qin, qout)
+        tasks = setup_queue(cmd, qin, qout)
         if cmd == Command.Subscribe:
-            await subscribe(qin, qout)
+            tasks.append(asyncio.create_task(subscribe(qin, qout)))
         elif cmd == Command.Update:
-            await update(qin, qout, name, amount, stat, old_version, old_count)
+            tasks.append(asyncio.create_task(update(qin, qout, name, amount, stat, old_version, old_count)))
         elif cmd == Command.Delete:
-            await delete(qin, qout, name, old_version, old_count)
+            tasks.append(asyncio.create_task(delete(qin, qout, name, old_version, old_count)))
         elif cmd == Command.Unsubscribe:
-            await unsubscribe(qin, qout, id)
+            tasks.append(asyncio.create_task(unsubscribe(qin, qout, id)))
         elif cmd == Command.List:
-            await list(qin, qout)
+            tasks.append(asyncio.create_task(list(qin, qout)))
+        await asyncio.gather(*tasks)
     asyncio.run(asyncMain())
 
 if __name__ == "__main__":

@@ -31,11 +31,15 @@ async def asyncMain() :
         plainText = cipher.decrypt(res[24:])
         return plainText[0:l]
 
+    tasks = []
     q = asyncio.Queue()
-    TMTransport.MultiTransportListener.input(heartbeatLocator, [q], heartbeatTopic, wireToUserHook=verifyAndDecrypt)
-    while True:
-        topic, x = await q.get()
-        print(f"{topic}: {repr(cbor2.loads(x))}")
+    tasks.extend(TMTransport.MultiTransportListener.input(heartbeatLocator, [q], heartbeatTopic, wireToUserHook=verifyAndDecrypt))
+    async def printData():
+        while True:
+            topic, x = await q.get()
+            print(f"{topic}: {repr(cbor2.loads(x))}")
+    tasks.append(asyncio.create_task(printData()))
+    await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     asyncio.run(asyncMain())

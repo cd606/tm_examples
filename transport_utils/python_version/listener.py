@@ -56,6 +56,7 @@ def run(address : str, topic : str, printmode : str, summaryperiod : int, captur
             asyncio.create_task(printSummary())
         printQueue = asyncio.Queue()
         qouts = [printQueue]
+        tasks = []
         if capturefile:
             captureQueue = asyncio.Queue()
             async def writeCaptureFile():
@@ -75,10 +76,11 @@ def run(address : str, topic : str, printmode : str, summaryperiod : int, captur
                                     +data\
                                     +b'\x00'
                         await o.write(writeData)
-            asyncio.create_task(writeCaptureFile())
+            tasks.append(asyncio.create_task(writeCaptureFile()))
             qouts = [printQueue, captureQueue]
-        TMTransport.MultiTransportListener.input(address, qouts, topic = topic)
-        await printQueueData(printQueue, printMode=printmode)
+        tasks.extend(TMTransport.MultiTransportListener.input(address, qouts, topic = topic))
+        tasks.append(asyncio.create_task(printQueueData(printQueue, printMode=printmode)))
+        await asyncio.gather(*tasks)
     asyncio.run(asyncMain())
 
 if __name__ == "__main__":
