@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
@@ -254,7 +255,7 @@ int main(int argc, char **argv) {
                         env.log(infra::LogLevel::Info, oss.str());
                         if (ids.empty()) {
                             env.log(infra::LogLevel::Info, "All unsubscribed, exiting");
-                            exit(0);
+                            env.exit();
                         }
                     } 
                 }
@@ -331,7 +332,7 @@ int main(int argc, char **argv) {
                 }
                 if (ret.empty()) {
                     env.log(infra::LogLevel::Info, "Nothing to unsubscribe, exiting");
-                    exit(0);
+                    env.exit();
                 }
                 return ret;
             } else {
@@ -566,7 +567,7 @@ int main(int argc, char **argv) {
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "Transaction redundancy test client started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 
     return 0;
 }

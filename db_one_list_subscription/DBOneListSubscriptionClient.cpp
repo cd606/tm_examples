@@ -39,6 +39,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
@@ -91,7 +92,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
             }, o.timedData.value.data.value);
             if (o.timedData.finalFlag) {
                 env.log(infra::LogLevel::Info, "Got final update, exiting");
-                exit(0);
+                env.exit();
             }
         }
     );
@@ -192,7 +193,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "DB subscription client started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 }
 
 void tiMain(std::string const &cmd, std::string const &name, int amount, double stat, int64_t oldVersion, size_t oldDataCount) {
@@ -208,6 +209,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
@@ -283,7 +285,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
             env.log(infra::LogLevel::Info, oss.str());
             if (r.timedData.finalFlag) {
                 env.log(infra::LogLevel::Info, "Got final update, exiting");
-                exit(0);
+                env.exit();
             }
         }
     );
@@ -300,7 +302,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "DB subscription client started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 }
 
 int main(int argc, char **argv) {

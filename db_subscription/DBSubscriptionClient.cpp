@@ -40,6 +40,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
     >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
@@ -92,7 +93,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
             }, o.timedData.value.data.value);
             if (o.timedData.finalFlag) {
                 env.log(infra::LogLevel::Info, "Got final update, exiting");
-                exit(0);
+                env.exit();
             }
         }
     );
@@ -178,7 +179,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "DB subscription client started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 }
 
 void tiMain(std::string const &cmd, std::string const &key, int value1, std::string const &value2
@@ -192,6 +193,7 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,
@@ -291,7 +293,7 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
             env.log(infra::LogLevel::Info, oss.str());
             if (r.timedData.finalFlag) {
                 env.log(infra::LogLevel::Info, "Got final update, exiting");
-                exit(0);
+                env.exit();
             }
         }
     );
@@ -308,7 +310,7 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "DB subscription client started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 }
 
 int main(int argc, char **argv) {

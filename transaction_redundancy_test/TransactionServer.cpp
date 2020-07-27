@@ -50,6 +50,7 @@ int main(int argc, char **argv) {
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ServerSideSimpleIdentityCheckerComponent<
@@ -138,7 +139,7 @@ int main(int argc, char **argv) {
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "Transaction redundancy test server started");
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 
     return 0;
 }

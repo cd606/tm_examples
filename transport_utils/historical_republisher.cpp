@@ -142,6 +142,7 @@ int main(int argc, char **argv) {
         std::ifstream ifs(input);
         using TheEnvironment = infra::Environment<
             infra::CheckTimeComponent<true>,
+            infra::FlagExitControlComponent,
             basic::TrivialBoostLoggingComponent,
             basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
             transport::BoostUUIDComponent
@@ -178,6 +179,7 @@ int main(int argc, char **argv) {
         
         using TheEnvironment = infra::Environment<
             infra::CheckTimeComponent<true>,
+            infra::TrivialExitControlComponent,
             basic::TrivialBoostLoggingComponent,
             basic::real_time_clock::ClockComponent,
             transport::BoostUUIDComponent,
@@ -260,12 +262,12 @@ int main(int argc, char **argv) {
             , r.execute("filter", filter, r.importItem("importer", importer)));
 
         auto exiter = Monad::simpleExporter<basic::ByteDataWithTopic>(
-            [](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+            [&env](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
                 if (d.timedData.finalFlag) {
                     d.environment->log(infra::LogLevel::Info, "Got the final update!");
-                    std::thread([]() {
+                    std::thread([&env]() {
                         std::this_thread::sleep_for(std::chrono::seconds(10));
-                        exit(0);
+                        env.exit();
                     }).detach();
                 }
             }

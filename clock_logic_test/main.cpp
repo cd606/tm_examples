@@ -24,6 +24,7 @@ using namespace dev::cd606::tm;
 void real_time_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent
     >;
@@ -69,6 +70,7 @@ void real_time_run(std::ostream &fileOutput) {
 void single_pass_iteration_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<
             basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
             , false

@@ -84,7 +84,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                     ++(*unsubscriptionCount);
                     if (*unsubscriptionCount == 2) {
                         env.log(infra::LogLevel::Info, "All unsubscribed, exiting");
-                        exit(0);
+                        env.exit();
                     }
                 } else if constexpr (std::is_same_v<T,typename GS::SubscriptionInfo>) {
                     std::ostringstream oss;
@@ -198,12 +198,13 @@ void printGraphAndRun(R &r, typename R::EnvironmentType &env) {
 
     r.finalize();
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 }
 
 void runSinglePass(std::string const &dbFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<
             basic::single_pass_iteration_clock::ClockComponent<
                 std::chrono::system_clock::time_point
@@ -308,6 +309,7 @@ void runRealTime() {
     >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::rabbitmq::RabbitMQComponent,

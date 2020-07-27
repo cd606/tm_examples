@@ -26,6 +26,7 @@ using namespace simple_demo;
 
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<false>,
+    infra::TrivialExitControlComponent,
     basic::TrivialBoostLoggingComponent,
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,

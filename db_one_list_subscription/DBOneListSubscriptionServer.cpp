@@ -223,6 +223,7 @@ int main(int argc, char **argv) {
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ServerSideSimpleIdentityCheckerComponent<
@@ -320,7 +321,7 @@ int main(int argc, char **argv) {
     oss << "Total " << dataStore->dataMap_.size() << " items in the data store";
     env.log(infra::LogLevel::Info, oss.str());
 
-    infra::terminationController(infra::RunForever {});
+    infra::terminationController(infra::RunForever {&env});
 
     return 0;
 }

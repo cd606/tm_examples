@@ -42,6 +42,7 @@ using namespace simple_demo;
 void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const &calibrateTime, int calibrateAfter, double speed, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
@@ -168,6 +169,7 @@ void run_virtual(LogicChoice logicChoice, std::string const &calibrateTime, int 
 void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
         infra::IntIDComponent<>
     >;
@@ -238,6 +240,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
 void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateGraphOnlyWithThisFile) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
+        infra::TrivialExitControlComponent,
         basic::TrivialBoostLoggingComponent,
         basic::real_time_clock::ClockComponent,
         infra::IntIDComponent<>

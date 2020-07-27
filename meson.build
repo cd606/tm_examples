@@ -8,7 +8,7 @@ thread_dep = dependency('threads')
 protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
 redis_dep = [dependency('hiredis')]
-boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread'])
+boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread', 'filesystem'])
 common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, boost_log_dep]
 protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
