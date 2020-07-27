@@ -13,6 +13,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
+#include <tm_kit/basic/MonadRunnerUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -202,7 +203,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
 
     auto dataInput = r.execute(removeTopic, r.execute(parser, r.importItem(importer)));
 
-    basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
+    basic::MonadRunnerUtilComponents<R>
         ::setupExitTimer(
         r 
         , std::chrono::hours(24)
