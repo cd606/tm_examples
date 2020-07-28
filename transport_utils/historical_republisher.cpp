@@ -35,6 +35,168 @@
 using namespace dev::cd606::tm;
 using namespace boost::program_options;
 
+struct HMS {int hour; int min; int sec;};
+struct HM {int hour; int min;};
+
+struct ReplayParameter {
+    std::string inputFile;
+    std::string transport;
+    transport::ConnectionLocator address;
+    double speed;
+    HMS calibratePointHistorical;
+    std::variant<int, HM> calibratePointActual;
+};
+
+std::chrono::system_clock::time_point fetchFirstTimePoint(ReplayParameter &&param) {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TrivialBoostLoggingComponent,
+        basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
+        transport::BoostUUIDComponent
+    >;
+    using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
+    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
+
+    TheEnvironment env;
+    infra::MonadRunner<Monad> r(&env);
+
+    std::ifstream ifs(param.inputFile);    
+    auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
+        ifs, 
+        {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
+        {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
+    );
+    
+    std::chrono::system_clock::time_point ret;
+
+    auto finalizer = basic::CommonFlowUtilComponents<Monad>::simpleFinalizer<basic::ByteDataWithTopic>();
+    auto getTime = Monad::simpleExporter<basic::ByteDataWithTopic>([&ret](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+        ret = d.timedData.timePoint;
+        d.environment->exit();
+    });
+
+    r.exportItem("getTime", getTime
+        , r.execute("finalizer", finalizer
+            , r.importItem("importer", importer)));
+
+    r.finalize();
+    
+    ifs.close();
+
+    return ret;
+}
+
+basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::system_clock::time_point &&firstTimePoint) {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TrivialBoostLoggingComponent,
+        basic::real_time_clock::ClockComponent,
+        transport::BoostUUIDComponent,
+        transport::rabbitmq::RabbitMQComponent,
+        transport::multicast::MulticastComponent,
+        transport::zeromq::ZeroMQComponent,
+        transport::redis::RedisComponent
+    >;
+    using Monad = infra::RealTimeMonad<TheEnvironment>;
+    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
+
+    TheEnvironment env;
+        
+    auto dateStr = infra::withtime_utils::localTimeString(firstTimePoint).substr(0, 10);
+    std::ostringstream oss;
+    oss << dateStr << 'T' 
+        << std::setw(2) << std::setfill('0') << param.calibratePointHistorical.hour
+        << ':'
+        << std::setw(2) << std::setfill('0') << param.calibratePointHistorical.min
+        << ':'
+        << std::setw(2) << std::setfill('0') << param.calibratePointHistorical.sec
+        << ".000";
+    TheEnvironment::ClockSettings settings;
+    if (param.calibratePointActual.index() == 0) {
+        settings = TheEnvironment::clockSettingsWithStartPointCorrespondingToNextAlignment(
+            std::get<0>(param.calibratePointActual)
+            , oss.str()
+            , param.speed
+        );
+    } else {
+        settings = TheEnvironment::clockSettingsWithStartPoint(
+            std::get<1>(param.calibratePointActual).hour*100+std::get<1>(param.calibratePointActual).min
+            , oss.str()
+            , param.speed
+        );
+    }
+    
+    env.basic::real_time_clock::ClockComponent::operator=(
+        basic::real_time_clock::ClockComponent(settings)
+    );
+    infra::MonadRunner<Monad> r(&env);
+    
+    std::ifstream ifs(param.inputFile);
+    auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
+        ifs, 
+        {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
+        {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
+    );
+    auto publisher =
+            (param.transport == "rabbitmq")
+        ?
+            transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
+            ::createExporter(param.address)
+        :
+            (
+                (param.transport == "mcast")
+            ?
+                transport::multicast::MulticastImporterExporter<TheEnvironment>
+                ::createExporter(param.address)
+            :
+                (
+                    (param.transport == "zmq")
+                ?
+                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
+                    ::createExporter(param.address)
+                :
+                    transport::redis::RedisImporterExporter<TheEnvironment>
+                    ::createExporter(param.address)                   
+                )
+            )
+        ;
+
+    auto filter = Monad::kleisli<basic::ByteDataWithTopic>(
+        basic::CommonFlowUtilComponents<Monad>
+            ::pureFilter<basic::ByteDataWithTopic>(
+                [](basic::ByteDataWithTopic const &d) {
+                    return (!d.content.empty());
+                }
+            )
+    );
+
+    r.exportItem("publisher", publisher
+        , r.execute("filter", filter, r.importItem("importer", importer)));
+
+    auto exiter = Monad::simpleExporter<basic::ByteDataWithTopic>(
+        [&env](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+            if (d.timedData.finalFlag) {
+                d.environment->log(infra::LogLevel::Info, "Got the final update!");
+                std::thread([&env]() {
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    env.exit();
+                }).detach();
+            }
+        }
+    );
+    r.exportItem("exiter", exiter, r.importItem(importer));
+
+    r.finalize();
+
+    infra::terminationController(infra::RunForever { &env, std::chrono::seconds(1) });
+
+    ifs.close();
+
+    return basic::VoidStruct {};
+}
+
 int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
@@ -50,6 +212,8 @@ int main(int argc, char **argv) {
     store(parse_command_line(argc, argv, desc), vm);
     notify(vm);
 
+    ReplayParameter param;
+
     if (vm.count("help")) {
         std::cout << desc << '\n';
         return 0;
@@ -63,20 +227,24 @@ int main(int argc, char **argv) {
         std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
         return 1;
     }
+    param.transport = transport;
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
         return 1;
     }
     auto address = transport::ConnectionLocator::parse(vm["address"].as<std::string>());
+    param.address = address;
     if (!vm.count("input")) {
         std::cerr << "No output file given!\n";
         return 1;
     }
     auto input = vm["input"].as<std::string>();
+    param.inputFile = input;
     double speed = 1.0;
     if (vm.count("speed")) {
         speed = vm["speed"].as<double>();
     }
+    param.speed = speed;
     if (!vm.count("calibratePointHistorical")) {
         std::cerr << "No historical calibrate point given!\n";
         return 1;
@@ -103,6 +271,7 @@ int main(int argc, char **argv) {
         std::cerr << "Historical calibrate point must be in HH:MM[:SS] format!\n";
         return 1;
     }
+    param.calibratePointHistorical = HMS {hour_hist, min_hist, sec_hist};
     if (!vm.count("calibratePointActual")) {
         std::cerr << "No Actual calibrate point given!\n";
         return 1;
@@ -133,156 +302,43 @@ int main(int argc, char **argv) {
             std::cerr << "Actual calibrate point must be in HH:MM or +N format!\n";
             return 1;
         }
+        param.calibratePointActual = HM {hour_act, min_act};
+    } else {
+        param.calibratePointActual = *calibrateActualMinutes;
     }
 
-    std::chrono::system_clock::time_point firstTimePoint;
+    //Following commented-out code is an experiment of using an outer-graph
+    //to combine inner-graphs. It is completely equivalent to the actual two-liner
+    //below in functionality.
+    /*
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TrivialBoostLoggingComponent,
+        basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
+        transport::BoostUUIDComponent
+    >;
+    using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
+    TheEnvironment env;
+    infra::MonadRunner<Monad> r(&env);
 
-    {
-        //initialization, try to find the date
-        std::ifstream ifs(input);
-        using TheEnvironment = infra::Environment<
-            infra::CheckTimeComponent<true>,
-            infra::FlagExitControlComponent,
-            basic::TrivialBoostLoggingComponent,
-            basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
-            transport::BoostUUIDComponent
-        >;
-        using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
-        using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
+    auto starter = Monad::constFirstPushImporter(std::move(param));
+    auto fetchTP = Monad::liftPure<ReplayParameter>(&fetchFirstTimePoint, infra::LiftParameters<Monad::TimePoint>().FireOnceOnly(true));
+    auto replayRunner = Monad::liftPure2<ReplayParameter, std::chrono::system_clock::time_point>(&runReplay, infra::LiftParameters<Monad::TimePoint>().RequireMask(infra::FanInParamMask("11")).FireOnceOnly(true));
+    auto emptyExporter = Monad::pureExporter<basic::VoidStruct>([&env](basic::VoidStruct &&) {
+        env.exit();
+    });
 
-        TheEnvironment env;
-        infra::MonadRunner<Monad> r(&env);
-        
-        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
-            ifs, 
-            {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
-            {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
-        );
-        auto finalizer = basic::CommonFlowUtilComponents<Monad>::simpleFinalizer<basic::ByteDataWithTopic>();
-        auto getTime = Monad::simpleExporter<basic::ByteDataWithTopic>([&firstTimePoint](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
-            firstTimePoint = d.timedData.timePoint;
-        });
+    auto paramData = r.importItem("starter", starter);
+    auto tpData = r.execute("fetchTP", fetchTP, paramData.clone());
+    r.execute("replayRunner", replayRunner, std::move(tpData));
+    auto finalData = r.execute(replayRunner, paramData.clone());
+    r.exportItem("emptyExporter", emptyExporter, std::move(finalData));
 
-        r.exportItem("getTime", getTime
-            , r.execute("finalizer", finalizer
-                , r.importItem("importer", importer)));
+    r.finalize();
+    */
+    auto tp = fetchFirstTimePoint(std::move(param));
+    runReplay(1, std::move(param), std::move(tp));
 
-        r.finalize();
-
-        infra::terminationController(infra::ImmediatelyTerminate {});
-
-        ifs.close();
-    }
-    {
-        //Now we do the full replay
-        std::ifstream ifs(input);
-        
-        using TheEnvironment = infra::Environment<
-            infra::CheckTimeComponent<true>,
-            infra::TrivialExitControlComponent,
-            basic::TrivialBoostLoggingComponent,
-            basic::real_time_clock::ClockComponent,
-            transport::BoostUUIDComponent,
-            transport::rabbitmq::RabbitMQComponent,
-            transport::multicast::MulticastComponent,
-            transport::zeromq::ZeroMQComponent,
-            transport::redis::RedisComponent
-        >;
-        using Monad = infra::RealTimeMonad<TheEnvironment>;
-        using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
-
-        TheEnvironment env;
-        auto dateStr = infra::withtime_utils::localTimeString(firstTimePoint).substr(0, 10);
-        std::ostringstream oss;
-        oss << dateStr << 'T' 
-            << std::setw(2) << std::setfill('0') << hour_hist
-            << ':'
-            << std::setw(2) << std::setfill('0') << min_hist
-            << ':'
-            << std::setw(2) << std::setfill('0') << sec_hist
-            << ".000";
-        TheEnvironment::ClockSettings settings;
-        if (calibrateActualMinutes) {
-            settings = TheEnvironment::clockSettingsWithStartPointCorrespondingToNextAlignment(
-                *calibrateActualMinutes
-                , oss.str()
-                , speed
-            );
-        } else {
-            settings = TheEnvironment::clockSettingsWithStartPoint(
-                hour_act*100+min_act
-                , oss.str()
-                , speed
-            );
-        }
-        env.basic::real_time_clock::ClockComponent::operator=(
-            basic::real_time_clock::ClockComponent(settings)
-        );
-        infra::MonadRunner<Monad> r(&env);
-        
-        auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
-            ifs, 
-            {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
-            {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
-        );
-        auto publisher =
-                (transport == "rabbitmq")
-            ?
-                transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-                ::createExporter(address)
-            :
-                (
-                    (transport == "mcast")
-                ?
-                    transport::multicast::MulticastImporterExporter<TheEnvironment>
-                    ::createExporter(address)
-                :
-                    (
-                        (transport == "zmq")
-                    ?
-                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                        ::createExporter(address)
-                    :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createExporter(address)                   
-                    )
-                )
-            ;
-
-        auto filter = Monad::kleisli<basic::ByteDataWithTopic>(
-            basic::CommonFlowUtilComponents<Monad>
-                ::pureFilter<basic::ByteDataWithTopic>(
-                    [](basic::ByteDataWithTopic const &d) {
-                        return (!d.content.empty());
-                    }
-                )
-        );
-
-        r.exportItem("publisher", publisher
-            , r.execute("filter", filter, r.importItem("importer", importer)));
-
-        auto exiter = Monad::simpleExporter<basic::ByteDataWithTopic>(
-            [&env](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
-                if (d.timedData.finalFlag) {
-                    d.environment->log(infra::LogLevel::Info, "Got the final update!");
-                    std::thread([&env]() {
-                        std::this_thread::sleep_for(std::chrono::seconds(10));
-                        env.exit();
-                    }).detach();
-                }
-            }
-        );
-        r.exportItem("exiter", exiter, r.importItem(importer));
-
-        r.finalize();
-
-        infra::terminationController(infra::TerminateAtTimePoint {
-            env.actualTime(
-                firstTimePoint+std::chrono::hours(24)
-            )
-        });
-
-        ifs.close();
-    }
     return 0;
 }
