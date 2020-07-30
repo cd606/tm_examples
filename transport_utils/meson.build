@@ -23,3 +23,9 @@ tm_relayer_exe = executable(
     , include_directories: inc
     , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
 )
+tm_delay_measurer_exe = executable(
+    'tm_delay_measurer'
+    , ['delay_measurer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
+)
