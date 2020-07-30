@@ -9,7 +9,9 @@ protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
 redis_dep = [dependency('hiredis')]
 boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread', 'filesystem'])
-common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, boost_log_dep]
+spd_dep = dependency('spdlog')
+crossguid_dep = dependency('crossguid')
+common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, boost_log_dep, spd_dep, crossguid_dep]
 protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
   arguments : ['--proto_path=@CURRENT_SOURCE_DIR@', '--cpp_out=@BUILD_DIR@', '@INPUT@'])

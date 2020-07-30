@@ -4,14 +4,14 @@
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
-#include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
-#include <tm_kit/transport/BoostUUIDComponent.hpp>
+#include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
@@ -35,13 +35,13 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         , DataDelta
     >;
     using GS = basic::transaction::v2::GeneralSubscriberTypes<
-        boost::uuids::uuid, DI
+        transport::CrossGuidComponent::IDType, DI
     >;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-        transport::BoostUUIDComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string
@@ -210,8 +210,8 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-        transport::BoostUUIDComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string

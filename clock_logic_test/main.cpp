@@ -6,7 +6,7 @@
 #include <tm_kit/infra/SinglePassIterationMonad.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
-#include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/real_time_clock/ClockOnOrderFacility.hpp>
@@ -14,7 +14,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 
-#include <tm_kit/transport/BoostUUIDComponent.hpp>
+#include <tm_kit/transport/CrossGuidComponent.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -25,8 +25,8 @@ void real_time_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-        transport::BoostUUIDComponent
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent
     >;
     using Monad = infra::RealTimeMonad<TheEnvironment>;
 
@@ -71,7 +71,7 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<
+        basic::TimeComponentEnhancedWithSpdLogging<
             basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
             , false
         >,
