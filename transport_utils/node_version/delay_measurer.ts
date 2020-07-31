@@ -62,12 +62,12 @@ let interval = Math.trunc(yargs.argv.interval as number);
 let bytes = Math.trunc(yargs.argv.bytes as number);
 let summaryPeriod = Math.trunc(yargs.argv.summaryPeriod as number);
 if (mode == Mode.Sender) {
-    if (interval == 0) {
+    if (interval <= 0) {
         console.error('sender interval cannot be 0');
         process.exit(0);
     }
 } else if (mode == Mode.Receiver) {
-    if (summaryPeriod == 0) {
+    if (summaryPeriod <= 0) {
         console.error('receiver summary period cannot be 0');
         process.exit(0);
     }
@@ -100,7 +100,7 @@ async function runSender(address : string, interval : number, bytes : number, su
 
 async function runReceiver(address : string, summaryPeriod : number) {
     let dateFormatStr = "yyyy-mm-dd HH:MM:ss.l";
-    let incomingStream = MultiTransportListener.inputStream(address);
+    let incomingStream = MultiTransportListener.inputStream(address, 'test.data');
     let stats = {
         count : 0
         , totalDelay : 0.0
