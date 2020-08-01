@@ -32,6 +32,14 @@ using namespace dev::cd606::tm;
 using namespace test;
 
 int main(int argc, char **argv) {
+    std::optional<int> autoRounds = std::nullopt;
+    int autoIntervalMs = 100;
+    if (argc > 1) {
+        autoRounds = std::stoi(argv[1]);
+        if (argc > 2) {
+            autoIntervalMs = std::stoi(argv[2]);
+        }
+    }
     using DI = basic::transaction::current::DataStreamInterface<
         int64_t
         , Key
@@ -199,35 +207,42 @@ int main(int argc, char **argv) {
     using SubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
     using FullSubscriptionData = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,DI::FullUpdate>;
     
-    auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
-        [&env](FullSubscriptionData &&theUpdate) {
-            std::ostringstream oss;
-            oss << "Got full data update {";
-            oss << "globalVersion=" << theUpdate.data.version;
-            oss << ",dataItems=[";
-            int ii = 0;
-            for (auto const &item : theUpdate.data.data) {
-                if (ii > 0) {
-                    oss << ',';
+    if (autoRounds) {
+        auto discardFullData = M::trivialExporter<FullSubscriptionData>();
+        r.exportItem("discardFullData", discardFullData
+            , std::move(subscriptionOutputs)
+        );
+    } else {
+        auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
+            [&env](FullSubscriptionData &&theUpdate) {
+                std::ostringstream oss;
+                oss << "Got full data update {";
+                oss << "globalVersion=" << theUpdate.data.version;
+                oss << ",dataItems=[";
+                int ii = 0;
+                for (auto const &item : theUpdate.data.data) {
+                    if (ii > 0) {
+                        oss << ',';
+                    }
+                    oss << "{version=" << item.version;
+                    oss << ",data=";
+                    if (item.data) {
+                        oss << *(item.data);
+                    } else {
+                        oss << "(deleted)";
+                    }
+                    oss << "}";
+                    ++ii;
                 }
-                oss << "{version=" << item.version;
-                oss << ",data=";
-                if (item.data) {
-                    oss << *(item.data);
-                } else {
-                    oss << "(deleted)";
-                }
-                oss << "}";
-                ++ii;
+                oss << "]}";
+                env.log(infra::LogLevel::Info, oss.str());
             }
-            oss << "]}";
-            env.log(infra::LogLevel::Info, oss.str());
-        }
-    );
+        );
 
-    r.exportItem("fullDataPrinter", fullDataPrinter
-        , std::move(subscriptionOutputs)
-    );
+        r.exportItem("fullDataPrinter", fullDataPrinter
+            , std::move(subscriptionOutputs)
+        );
+    }
 
     //Next, we manage the subscription IDs
 
@@ -286,25 +301,68 @@ int main(int argc, char **argv) {
     //Next, we set up the main command parser, which will, among others
     //, generate an "exit" command
 
-    auto lineImporter = M::simpleImporter<std::vector<std::string>>(
-        [](M::PublisherCall<std::vector<std::string>> &pub) {
-            linenoiseHistorySetMaxLen(100);
-            char *p;
-            while ((p = linenoise(">>")) != nullptr) {
-                if (p[0] != '\0') {
-                    linenoiseHistoryAdd(p);
+    R::Sourceoid<std::vector<std::string>> cmdSource;
+    if (autoRounds) {
+        auto cmdTimer = 
+            basic::real_time_clock::ClockImporter<TheEnvironment>
+                ::createRecurringClockConstImporter<basic::VoidStruct>(
+                    env.now()+std::chrono::seconds(5)
+                    , env.now()+std::chrono::seconds(5)+std::chrono::milliseconds(autoIntervalMs*((*autoRounds)*5))
+                    , std::chrono::milliseconds(autoIntervalMs)
+                    , basic::VoidStruct {}
+                ); 
+        auto cmdCreator = M::liftPure<basic::VoidStruct>(
+            [](basic::VoidStruct &&) -> std::vector<std::string> {
+                static int counter = 0;
+                switch (counter%5) {
+                case 0:
+                    ++counter;
+                    return {"transfer", "A", "B", "100"};
+                case 1:
+                    ++counter;
+                    return {"transfer", "B", "A", "100"};
+                case 2:
+                    ++counter;
+                    return {"process"};
+                case 3:
+                    ++counter;
+                    return {"inject", "C", "100"};
+                case 4:
+                    ++counter;
+                    return {"close", "C"};
+                default:
+                    ++counter;
+                    return {"process"};
                 }
-                std::string s = boost::trim_copy(std::string {p});
-                std::vector<std::string> parts;
-                boost::split(parts, s, boost::is_any_of(" \t"));
-                pub(std::move(parts));
             }
-            pub(std::vector<std::string> {"exit"});
-        }
-        , infra::LiftParameters<std::chrono::system_clock::time_point>()
-            .SuggestThreaded(true)
-    );
-
+        );
+        r.registerImporter("cmdTimer", cmdTimer);
+        r.registerAction("cmdCreator", cmdCreator);
+        r.execute(cmdCreator, r.importItem(cmdTimer));
+        cmdSource = r.sourceAsSourceoid(r.actionAsSource(cmdCreator));
+    } else {
+        auto lineImporter = M::simpleImporter<std::vector<std::string>>(
+            [](M::PublisherCall<std::vector<std::string>> &pub) {
+                linenoiseHistorySetMaxLen(100);
+                char *p;
+                while ((p = linenoise(">>")) != nullptr) {
+                    if (p[0] != '\0') {
+                        linenoiseHistoryAdd(p);
+                    }
+                    std::string s = boost::trim_copy(std::string {p});
+                    std::vector<std::string> parts;
+                    boost::split(parts, s, boost::is_any_of(" \t"));
+                    pub(std::move(parts));
+                }
+                pub(std::vector<std::string> {"exit"});
+            }
+            , infra::LiftParameters<std::chrono::system_clock::time_point>()
+                .SuggestThreaded(true)
+        );
+        r.registerImporter("lineImporter", lineImporter);
+        cmdSource = r.sourceAsSourceoid(r.importItem(lineImporter));
+    }
+    
     //We add the exit handler here to unsubscribe from all servers
 
     auto exitCommandHandler = M::liftMulti<std::vector<std::string>>(
@@ -341,12 +399,12 @@ int main(int argc, char **argv) {
         }
     );
 
+    r.registerAction("exitCommandHandler", exitCommandHandler);
+    cmdSource(r, r.actionAsSink(exitCommandHandler));
+
     subscriptionFacility.orderReceiver(
         r
-        , r.execute(
-            "exitCommandHandler", exitCommandHandler
-            , r.importItem("lineImporter", lineImporter)
-        )
+        , r.actionAsSource(exitCommandHandler)
     );
 
     //Now we can handle the transaction part.
@@ -525,24 +583,35 @@ int main(int argc, char **argv) {
         basic::CommonFlowUtilComponents<M>::extractDataFromKeyedData<TI::Transaction,TI::TransactionResponse>()
     );
     auto transactionResponsePrinter = M::pureExporter<TI::TransactionResponse>(
-        [&env](TI::TransactionResponse &&r) {
-            std::ostringstream oss;
-            oss << "Got transaction response {";
-            oss << "globalVersion=" << r.value.globalVersion;
-            oss << ",requestDecision=" << r.value.requestDecision;
-            oss << "}";
-            env.log(infra::LogLevel::Info, oss.str());
+        [&env,&autoRounds](TI::TransactionResponse &&r) {
+            static int success = 0, fail = 0;
+            if (autoRounds) {
+                if (r.value.requestDecision == basic::transaction::v2::RequestDecision::Success) {
+                    ++success;
+                } else {
+                    ++fail;
+                }
+                std::ostringstream oss;
+                oss << "Success " << success << ", fail " << fail << "\n";
+                env.log(infra::LogLevel::Info, oss.str());
+            } else {
+                std::ostringstream oss;
+                oss << "Got transaction response {";
+                oss << "globalVersion=" << r.value.globalVersion;
+                oss << ",requestDecision=" << r.value.requestDecision;
+                oss << "}";
+                env.log(infra::LogLevel::Info, oss.str());
+            }
         }
     );
 
+    r.registerAction("transactionCommandParser", transactionCommandParser);
+    cmdSource(r, r.actionAsSink(transactionCommandParser));
     transactionFacility(
         r
         , r.execute(
             "keyifyTI", keyifyTI
-            , r.execute(
-                "transactionCommandParser", transactionCommandParser
-                , r.importItem(lineImporter)
-            )
+            , r.actionAsSource(transactionCommandParser)
         )
         , r.actionAsSink("tiReceiver", tiReceiver)
     );

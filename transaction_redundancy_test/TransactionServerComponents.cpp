@@ -251,10 +251,10 @@ int64_t THComponent::acquireSimpleLock() {
 
     std::ostringstream oss;
     oss << "[THComponent::acquireSimpleLock] Acquired lock '"
-        << lockKey_ << "' with lease ID " << leaseID_;
+        << lockKey_ << "' with lease ID " << leaseID_ << ", ret version " << ret;
     logger_(oss.str());
 
-    return ret;
+    return 0;
 }
 
 int64_t THComponent::releaseSimpleLock() {
@@ -283,14 +283,14 @@ int64_t THComponent::releaseSimpleLock() {
     }
 
     std::ostringstream oss;
-    oss << "[THComponent::acquireSimpleLock] Released lock '"
-        << lockKey_ << "' and lease ID " << leaseID_;
+    oss << "[THComponent::releaseSimpleLock] Released lock '"
+        << lockKey_ << "' and lease ID " << leaseID_ << ", ret version " << ret;
     logger_(oss.str());
 
     lockKey_ = "";
     leaseID_ = 0;
 
-    return ret;
+    return 0;
 }
 
 int64_t THComponent::acquireCompundLock() {
