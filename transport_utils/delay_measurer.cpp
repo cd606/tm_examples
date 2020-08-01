@@ -155,6 +155,8 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
         double totalDelaySq = 0.0;
         uint64_t minID = 0;
         uint64_t maxID = 0;
+        int64_t minDelay = std::numeric_limits<int64_t>::min();
+        int64_t maxDelay = 0;
     };
     Stats stats;
     std::mutex statsMutex;
@@ -175,6 +177,12 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
                     }
                     if (id > stats.maxID) {
                         stats.maxID = id;
+                    }
+                    if (stats.minDelay > delay || stats.minDelay == std::numeric_limits<int64_t>::min()) {
+                        stats.minDelay = delay;
+                    }
+                    if (stats.maxDelay < delay) {
+                        stats.maxDelay = delay;
                     }
                 }
             }
@@ -202,7 +210,7 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
                     missed = (stats.count > 0) ? (stats.maxID-stats.minID+1-stats.count) : 0;
                 }
                 std::ostringstream oss;
-                oss << "Got " << stats.count << " messages, mean delay " << mean << " ms, std delay " << sd << " ms, missed " << missed << " messages";
+                oss << "Got " << stats.count << " messages, mean delay " << mean << " ms, std delay " << sd << " ms, missed " << missed << " messages, min delay " << stats.minDelay << " ms, max delay " << stats.maxDelay << " ms";
                 env.log(infra::LogLevel::Info, oss.str());
             }
         );

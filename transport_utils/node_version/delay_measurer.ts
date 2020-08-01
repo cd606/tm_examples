@@ -107,6 +107,8 @@ async function runReceiver(address : string, summaryPeriod : number) {
         , totalDelaySq : 0.0
         , minID : 0
         , maxID : 0
+        , minDelay : -1000000
+        , maxDelay : 0
     }
     let statCalc = new Stream.Writable({
         write : function(chunk : [string, Buffer], _encoding, callback) {
@@ -123,6 +125,12 @@ async function runReceiver(address : string, summaryPeriod : number) {
             }
             if (stats.maxID < id) {
                 stats.maxID = id;
+            }
+            if (stats.minDelay > delay || stats.minDelay < -100000) {
+                stats.minDelay = delay;
+            }
+            if (stats.maxDelay < delay) {
+                stats.maxDelay = delay;
             }
             callback();
         }
@@ -141,7 +149,7 @@ async function runReceiver(address : string, summaryPeriod : number) {
             if (stats.count > 1) {
                 sd = (stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1);
             }
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: Got ${stats.count} messages, mean delay ${mean} ms, std delay ${sd} ms, missed ${missed} messages`);
+            console.log(`${dateFormat(new Date(), dateFormatStr)}: Got ${stats.count} messages, mean delay ${mean} ms, std delay ${sd} ms, missed ${missed} messages, min delay ${stats.minDelay} ms, max delay ${stats.maxDelay} ms`);
         }, summaryPeriod*1000);
     }
 }
