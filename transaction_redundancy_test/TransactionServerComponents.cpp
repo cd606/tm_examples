@@ -140,11 +140,12 @@ void DSComponent::runWatchThread() {
                     }
                     int64_t revision = watchResponse.header().revision();
 
+                    /*
                     std::ostringstream oss;
                     oss << "[DSComponent] Got init query callback, total "
                         << initResponse.kvs_size()
                         << " key-value pairs (revision: " << revision << ")";
-                    logger_(oss.str());
+                    logger_(oss.str());*/
 
                     watchListener_->onUpdate(DI::Update {
                         revision
@@ -172,11 +173,12 @@ void DSComponent::runWatchThread() {
                     }
                     int64_t revision = watchResponse.header().revision();
 
+                    /*
                     std::ostringstream oss;
                     oss << "[DSComponent] Got watch  callback, total "
                         << watchResponse.events_size()
                         << " events (revision: " << revision << ")";
-                    logger_(oss.str());
+                    logger_(oss.str());*/
 
                     watchListener_->onUpdate(DI::Update {
                         revision
@@ -233,7 +235,7 @@ int64_t THComponent::acquireSimpleLock() {
         leaseID_ = leaseResponse.id();
     }
 
-    int64_t ret;
+    //int64_t ret;
 
     {
         auto lockStub = v3lockpb::Lock::NewStub(channel_);
@@ -246,13 +248,13 @@ int64_t THComponent::acquireSimpleLock() {
         lockStub->Lock(&lockCtx, getLock, &lockResponse);
 
         lockKey_ = lockResponse.key();
-        ret = lockResponse.header().revision();
+        //ret = lockResponse.header().revision();
     }
-
+    /*
     std::ostringstream oss;
     oss << "[THComponent::acquireSimpleLock] Acquired lock '"
         << lockKey_ << "' with lease ID " << leaseID_ << ", ret version " << ret;
-    logger_(oss.str());
+    logger_(oss.str());*/
 
     return 0;
 }
@@ -268,7 +270,7 @@ int64_t THComponent::releaseSimpleLock() {
         lockStub->Unlock(&lockCtx, unlock, &unlockResponse);
     }
 
-    int64_t ret;
+    //int64_t ret;
 
     {
         auto leaseStub = etcdserverpb::Lease::NewStub(channel_);
@@ -279,13 +281,13 @@ int64_t THComponent::releaseSimpleLock() {
         etcdserverpb::LeaseRevokeResponse revokeLeaseResponse;
         leaseStub->LeaseRevoke(&leaseCtx, revokeLease, &revokeLeaseResponse);
 
-        ret = revokeLeaseResponse.header().revision();
+        //ret = revokeLeaseResponse.header().revision();
     }
-
+    /*
     std::ostringstream oss;
     oss << "[THComponent::releaseSimpleLock] Released lock '"
         << lockKey_ << "' and lease ID " << leaseID_ << ", ret version " << ret;
-    logger_(oss.str());
+    logger_(oss.str());*/
 
     lockKey_ = "";
     leaseID_ = 0;
@@ -329,9 +331,11 @@ int64_t THComponent::acquireCompundLock() {
         kvStub->Txn(&txnCtx, txn, &putResp);
 
         if (putResp.succeeded()) {
+            /*
             std::ostringstream oss;
             oss << "[THComponent::acquireCompoundLock] Acquiring lock with number " << numVersion;
             logger_(oss.str());
+            */
             break;
         }
     }
@@ -362,9 +366,10 @@ int64_t THComponent::acquireCompundLock() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
+    /*
     std::ostringstream oss;
     oss << "[THComponent::acquireCompoundLock] Lock acquired with number " << numVersion;
-    logger_(oss.str());
+    logger_(oss.str());*/
 
     return ret;
 }
@@ -412,9 +417,10 @@ int64_t THComponent::releaseCompoundLock() {
         }
     }
 
+    /*
     std::ostringstream oss;
     oss << "[THComponent::releaseCompoundLock] Released lock";
-    logger_(oss.str());
+    logger_(oss.str());*/
 
     return ret;
 }

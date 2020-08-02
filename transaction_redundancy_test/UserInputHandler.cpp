@@ -33,12 +33,8 @@ using namespace test;
 
 int main(int argc, char **argv) {
     std::optional<int> autoRounds = std::nullopt;
-    int autoIntervalMs = 100;
     if (argc > 1) {
         autoRounds = std::stoi(argv[1]);
-        if (argc > 2) {
-            autoIntervalMs = std::stoi(argv[2]);
-        }
     }
     using DI = basic::transaction::current::DataStreamInterface<
         int64_t
@@ -189,30 +185,25 @@ int main(int argc, char **argv) {
 
     //Now we manage the subscription data
 
-    std::shared_ptr<basic::transaction::current::TransactionDataStore<DI>> dataStorePtr;
-    auto subscriptionOutputs = basic::transaction::v2::basicDataStreamClientCombination<
-        R, DI, std::tuple<transport::ConnectionLocator, GS::Input>
-        , ApplyVersionSlice
-        , ApplyDataSlice
-    >(
-        r 
-        , "subscripionOutputHandling"
-        , subscriptionFacility.feedOrderResults
-        , &dataStorePtr
-    );
-
-    //getFullData might be as well written as three nodes in the graph
-    //but by operating in KleisliUtils, we can merge them into one node
-    
     using SubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
     using FullSubscriptionData = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,DI::FullUpdate>;
-    
-    if (autoRounds) {
-        auto discardFullData = M::trivialExporter<FullSubscriptionData>();
-        r.exportItem("discardFullData", discardFullData
-            , std::move(subscriptionOutputs)
+
+    std::shared_ptr<basic::transaction::current::TransactionDataStore<DI>> dataStorePtr;
+    if (!autoRounds) {
+        auto subscriptionOutputs = basic::transaction::v2::basicDataStreamClientCombination<
+            R, DI, std::tuple<transport::ConnectionLocator, GS::Input>
+            , ApplyVersionSlice
+            , ApplyDataSlice
+        >(
+            r 
+            , "subscripionOutputHandling"
+            , subscriptionFacility.feedOrderResults
+            , &dataStorePtr
         );
-    } else {
+
+        //getFullData might be as well written as three nodes in the graph
+        //but by operating in KleisliUtils, we can merge them into one node
+
         auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
             [&env](FullSubscriptionData &&theUpdate) {
                 env.log(infra::LogLevel::Info, "Got full data update, will print");
@@ -306,35 +297,21 @@ int main(int argc, char **argv) {
     if (autoRounds) {
         auto cmdTimer = 
             basic::real_time_clock::ClockImporter<TheEnvironment>
-                ::createRecurringClockConstImporter<basic::VoidStruct>(
+                ::createOneShotClockConstImporter<basic::VoidStruct>(
                     env.now()+std::chrono::seconds(5)
-                    , env.now()+std::chrono::seconds(5)+std::chrono::milliseconds(autoIntervalMs*((*autoRounds)*5))
-                    , std::chrono::milliseconds(autoIntervalMs)
                     , basic::VoidStruct {}
                 ); 
-        auto cmdCreator = M::liftPure<basic::VoidStruct>(
-            [](basic::VoidStruct &&) -> std::vector<std::string> {
-                static int counter = 0;
-                switch (counter%5) {
-                case 0:
-                    ++counter;
-                    return {"transfer", "A", "B", "100"};
-                case 1:
-                    ++counter;
-                    return {"transfer", "B", "A", "100"};
-                case 2:
-                    ++counter;
-                    return {"process"};
-                case 3:
-                    ++counter;
-                    return {"inject", "C", "100"};
-                case 4:
-                    ++counter;
-                    return {"close", "C"};
-                default:
-                    ++counter;
-                    return {"process"};
+        auto cmdCreator = M::liftMulti<basic::VoidStruct>(
+            [&autoRounds](basic::VoidStruct &&) -> std::vector<std::vector<std::string>> {
+                std::vector<std::vector<std::string>> ret;
+                for (int counter=0; counter < *autoRounds; ++counter) {
+                    ret.push_back({"transfer", "A", "B", "100"});
+                    ret.push_back({"transfer", "B", "A", "100"});
+                    ret.push_back({"process"});
+                    ret.push_back({"inject", "C", "100"});
+                    ret.push_back({"close", "C"});
                 }
+                return ret;
             }
         );
         r.registerImporter("cmdTimer", cmdTimer);
@@ -411,7 +388,7 @@ int main(int argc, char **argv) {
     //Now we can handle the transaction part.
     
     auto transactionCommandParser = M::liftMaybe<std::vector<std::string>>(
-        [&env,dataStorePtr](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
+        [&env,dataStorePtr,&autoRounds](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
             if (parts.empty()) {
                 return std::nullopt;
             }
@@ -422,6 +399,17 @@ int main(int argc, char **argv) {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[2]);
+                    if (autoRounds) {
+                        return TI::Transaction { TI::UpdateAction {
+                            Key {}
+                            , std::nullopt
+                            , std::nullopt
+                            , InjectData {
+                                parts[1]
+                                , amount
+                            }
+                        } };
+                    }
                     basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                     auto currentData = dataStorePtr->dataMap_[Key {}];
                     if (!currentData.data) {
@@ -466,6 +454,18 @@ int main(int argc, char **argv) {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[3]);
+                    if (autoRounds) {
+                        return TI::Transaction { TI::UpdateAction {
+                            Key {}
+                            , std::nullopt
+                            , std::nullopt
+                            , TransferData {
+                                parts[1]
+                                , parts[2]
+                                , amount
+                            }
+                        } };
+                    }
                     basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                     auto currentData = dataStorePtr->dataMap_[Key {}];
                     if (!currentData.data) {
@@ -537,6 +537,14 @@ int main(int argc, char **argv) {
                     env.log(infra::LogLevel::Info, "Close command usage: close acocunt");
                     return std::nullopt;
                 }
+                if (autoRounds) {
+                    return TI::Transaction { TI::UpdateAction {
+                        Key {}
+                        , std::nullopt
+                        , std::nullopt
+                        , CloseAccount { parts[1] }
+                    } };
+                }
                 basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                 auto currentData = dataStorePtr->dataMap_[Key {}];
                 if (!currentData.data) {
@@ -583,18 +591,33 @@ int main(int argc, char **argv) {
     auto tiReceiver = M::kleisli<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
         basic::CommonFlowUtilComponents<M>::extractDataFromKeyedData<TI::Transaction,TI::TransactionResponse>()
     );
+    std::chrono::steady_clock::time_point t1;
+    bool first = true;
     auto transactionResponsePrinter = M::pureExporter<TI::TransactionResponse>(
-        [&env,&autoRounds](TI::TransactionResponse &&r) {
+        [&env,&autoRounds,&t1,&first](TI::TransactionResponse &&r) {
             static int success = 0, fail = 0;
             if (autoRounds) {
+                if (first) {
+                    t1 = std::chrono::steady_clock::now();
+                    first = false;
+                }
                 if (r.value.requestDecision == basic::transaction::v2::RequestDecision::Success) {
                     ++success;
                 } else {
                     ++fail;
                 }
+                /*
                 std::ostringstream oss;
                 oss << "Success " << success << ", fail " << fail;
                 env.log(infra::LogLevel::Info, oss.str());
+                */
+                if (success+fail == 5*(*autoRounds)) {
+                    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                    auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
+                    std::ostringstream oss;
+                    oss << "Success " << success << ", fail " << fail << ", span " << micros << " micros";
+                    env.log(infra::LogLevel::Info, oss.str());
+                }
             } else {
                 std::ostringstream oss;
                 oss << "Got transaction response {";
