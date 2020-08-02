@@ -2,7 +2,7 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeMonad.hpp>
 
-#include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent, true, true>,
         transport::BoostUUIDComponent,
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string

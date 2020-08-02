@@ -10,14 +10,14 @@
 #include <tm_kit/infra/RealTimeMonad.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
-#include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/TransactionClient.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/MonadRunnerUtils.hpp>
 
-#include <tm_kit/transport/BoostUUIDComponent.hpp>
+#include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
@@ -63,14 +63,14 @@ int main(int argc, char **argv) {
     >;
 
     using GS = basic::transaction::current::GeneralSubscriberTypes<
-        boost::uuids::uuid, DI
+        transport::CrossGuidComponent::IDType, DI
     >;
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-        transport::BoostUUIDComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent, true, true>,
+        transport::CrossGuidComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string
             , TI::Transaction>,
@@ -215,6 +215,7 @@ int main(int argc, char **argv) {
     } else {
         auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
             [&env](FullSubscriptionData &&theUpdate) {
+                env.log(infra::LogLevel::Info, "Got full data update, will print");
                 std::ostringstream oss;
                 oss << "Got full data update {";
                 oss << "globalVersion=" << theUpdate.data.version;
@@ -592,7 +593,7 @@ int main(int argc, char **argv) {
                     ++fail;
                 }
                 std::ostringstream oss;
-                oss << "Success " << success << ", fail " << fail << "\n";
+                oss << "Success " << success << ", fail " << fail;
                 env.log(infra::LogLevel::Info, oss.str());
             } else {
                 std::ostringstream oss;
