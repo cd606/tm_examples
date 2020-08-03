@@ -189,21 +189,17 @@ int main(int argc, char **argv) {
     using FullSubscriptionData = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,DI::FullUpdate>;
 
     std::shared_ptr<basic::transaction::current::TransactionDataStore<DI>> dataStorePtr;
+    auto subscriptionOutputs = basic::transaction::v2::basicDataStreamClientCombination<
+        R, DI, std::tuple<transport::ConnectionLocator, GS::Input>
+        , ApplyVersionSlice
+        , ApplyDataSlice
+    >(
+        r 
+        , "subscripionOutputHandling"
+        , subscriptionFacility.feedOrderResults
+        , &dataStorePtr
+    );
     if (!autoRounds) {
-        auto subscriptionOutputs = basic::transaction::v2::basicDataStreamClientCombination<
-            R, DI, std::tuple<transport::ConnectionLocator, GS::Input>
-            , ApplyVersionSlice
-            , ApplyDataSlice
-        >(
-            r 
-            , "subscripionOutputHandling"
-            , subscriptionFacility.feedOrderResults
-            , &dataStorePtr
-        );
-
-        //getFullData might be as well written as three nodes in the graph
-        //but by operating in KleisliUtils, we can merge them into one node
-
         auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
             [&env](FullSubscriptionData &&theUpdate) {
                 env.log(infra::LogLevel::Info, "Got full data update, will print");
@@ -317,7 +313,16 @@ int main(int argc, char **argv) {
         r.registerImporter("cmdTimer", cmdTimer);
         r.registerAction("cmdCreator", cmdCreator);
         r.execute(cmdCreator, r.importItem(cmdTimer));
-        cmdSource = r.sourceAsSourceoid(r.actionAsSource(cmdCreator));
+        auto sync = basic::CommonFlowUtilComponents<M>::synchronizer2<
+            std::vector<std::string>
+            , FullSubscriptionData
+        >(
+            [](std::vector<std::string> &&v, FullSubscriptionData &&) -> std::vector<std::string> {
+                return std::move(v);
+            }
+        );
+        r.execute("cmdAndDataSync", sync, r.actionAsSource(cmdCreator), std::move(subscriptionOutputs));
+        cmdSource = r.sourceAsSourceoid(r.actionAsSource(sync));
     } else {
         auto lineImporter = M::simpleImporter<std::vector<std::string>>(
             [](M::PublisherCall<std::vector<std::string>> &pub) {
@@ -399,6 +404,7 @@ int main(int argc, char **argv) {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[2]);
+                    /*
                     if (autoRounds) {
                         return TI::Transaction { TI::UpdateAction {
                             Key {}
@@ -409,7 +415,7 @@ int main(int argc, char **argv) {
                                 , amount
                             }
                         } };
-                    }
+                    }*/
                     basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                     auto currentData = dataStorePtr->dataMap_[Key {}];
                     if (!currentData.data) {
@@ -454,6 +460,7 @@ int main(int argc, char **argv) {
                 }
                 try {
                     uint32_t amount = boost::lexical_cast<uint32_t>(parts[3]);
+                    /*
                     if (autoRounds) {
                         return TI::Transaction { TI::UpdateAction {
                             Key {}
@@ -465,7 +472,7 @@ int main(int argc, char **argv) {
                                 , amount
                             }
                         } };
-                    }
+                    }*/
                     basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                     auto currentData = dataStorePtr->dataMap_[Key {}];
                     if (!currentData.data) {
@@ -537,6 +544,7 @@ int main(int argc, char **argv) {
                     env.log(infra::LogLevel::Info, "Close command usage: close acocunt");
                     return std::nullopt;
                 }
+                /*
                 if (autoRounds) {
                     return TI::Transaction { TI::UpdateAction {
                         Key {}
@@ -544,7 +552,7 @@ int main(int argc, char **argv) {
                         , std::nullopt
                         , CloseAccount { parts[1] }
                     } };
-                }
+                }*/
                 basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                 auto currentData = dataStorePtr->dataMap_[Key {}];
                 if (!currentData.data) {
