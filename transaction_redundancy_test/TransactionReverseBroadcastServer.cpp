@@ -1,9 +1,9 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
-#include <tm_kit/basic/MonadRunnerUtils.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
@@ -67,8 +67,8 @@ int main(int argc, char **argv) {
         DSComponent,
         THComponent
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
 
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         }
     );
     r.registerAction("discardTopic", discardTopic);
-    auto transactionInput = basic::MonadRunnerUtilComponents<R>::importWithTrigger(
+    auto transactionInput = basic::AppRunnerUtilComponents<R>::importWithTrigger(
         r
         , r.importItem(broadcastKey)
         , M::onOrderFacilityWithExternalEffects(

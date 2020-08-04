@@ -2,8 +2,8 @@
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
-#include <tm_kit/infra/SinglePassIterationMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
+#include <tm_kit/infra/SinglePassIterationApp.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
@@ -28,7 +28,7 @@ void real_time_run(std::ostream &fileOutput) {
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent
     >;
-    using Monad = infra::RealTimeMonad<TheEnvironment>;
+    using App = infra::RealTimeApp<TheEnvironment>;
 
     TheEnvironment env;
 
@@ -53,7 +53,7 @@ void real_time_run(std::ostream &fileOutput) {
         basic::real_time_clock::ClockComponent(clockSettings)
     );
 
-    infra::MonadRunner<Monad> r(&env);
+    infra::AppRunner<App> r(&env);
     clock_logic_test_app::clockLogicMain<
         basic::real_time_clock::ClockImporter<TheEnvironment>
         , basic::real_time_clock::ClockOnOrderFacility<TheEnvironment>
@@ -77,11 +77,11 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
         >,
         infra::IntIDComponent<uint32_t>
     >;
-    using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
+    using App = infra::SinglePassIterationApp<TheEnvironment>;
 
     TheEnvironment env;
 
-    infra::MonadRunner<Monad> r(&env);
+    infra::AppRunner<App> r(&env);
     clock_logic_test_app::clockLogicMain<
         basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>
         , basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>

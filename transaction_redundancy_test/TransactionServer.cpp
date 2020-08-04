@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 
@@ -64,8 +64,8 @@ int main(int argc, char **argv) {
         DSComponent,
         THComponent
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
 

@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
@@ -92,8 +92,8 @@ int main(int argc, char **argv) {
         transport::redis::RedisComponent
     >;
 
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     R r(&env);

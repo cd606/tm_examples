@@ -1,8 +1,8 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/BasicWithTimeMonad.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
-#include <tm_kit/infra/SinglePassIterationMonad.hpp>
+#include <tm_kit/infra/BasicWithTimeApp.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
+#include <tm_kit/infra/SinglePassIterationApp.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
@@ -14,7 +14,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
-#include <tm_kit/basic/MonadRunnerUtils.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -30,8 +30,8 @@
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
-#include "simple_demo/monad_combination/MainLogicCombination.hpp"
-#include "simple_demo/monad_combination/MockCalculatorCombination.hpp"
+#include "simple_demo/app_combination/MainLogicCombination.hpp"
+#include "simple_demo/app_combination/MockCalculatorCombination.hpp"
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
@@ -57,8 +57,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;   
     if (!isReal) {
@@ -234,8 +234,8 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
         infra::IntIDComponent<>
     >;
-    using M = infra::SinglePassIterationMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::SinglePassIterationApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     std::ifstream ifs(inputFile);
 
@@ -263,7 +263,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
 
     auto dataInput = r.execute(removeTopic, r.execute(parser, r.importItem(importer)));
 
-    basic::MonadRunnerUtilComponents<R>
+    basic::AppRunnerUtilComponents<R>
         ::setupExitTimer(
         r 
         , std::chrono::hours(24)
@@ -306,8 +306,8 @@ void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateG
         basic::real_time_clock::ClockComponent,
         infra::IntIDComponent<>
     >;
-    using M = infra::BasicWithTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::BasicWithTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     R r(&env);

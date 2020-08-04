@@ -1,7 +1,7 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
-#include <tm_kit/infra/SinglePassIterationMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
+#include <tm_kit/infra/SinglePassIterationApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
@@ -55,11 +55,11 @@ std::chrono::system_clock::time_point fetchFirstTimePoint(ReplayParameter &&para
         basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
         transport::BoostUUIDComponent
     >;
-    using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
-    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
+    using App = infra::SinglePassIterationApp<TheEnvironment>;
+    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<App>;
 
     TheEnvironment env;
-    infra::MonadRunner<Monad> r(&env);
+    infra::AppRunner<App> r(&env);
 
     std::ifstream ifs(param.inputFile);    
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
@@ -70,8 +70,8 @@ std::chrono::system_clock::time_point fetchFirstTimePoint(ReplayParameter &&para
     
     std::chrono::system_clock::time_point ret;
 
-    auto finalizer = basic::CommonFlowUtilComponents<Monad>::simpleFinalizer<basic::ByteDataWithTopic>();
-    auto getTime = Monad::simpleExporter<basic::ByteDataWithTopic>([&ret](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+    auto finalizer = basic::CommonFlowUtilComponents<App>::simpleFinalizer<basic::ByteDataWithTopic>();
+    auto getTime = App::simpleExporter<basic::ByteDataWithTopic>([&ret](App::InnerData<basic::ByteDataWithTopic> &&d) {
         ret = d.timedData.timePoint;
         d.environment->exit();
     });
@@ -99,8 +99,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
         transport::zeromq::ZeroMQComponent,
         transport::redis::RedisComponent
     >;
-    using Monad = infra::RealTimeMonad<TheEnvironment>;
-    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<Monad>;
+    using App = infra::RealTimeApp<TheEnvironment>;
+    using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<App>;
 
     TheEnvironment env;
         
@@ -131,7 +131,7 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     env.basic::real_time_clock::ClockComponent::operator=(
         basic::real_time_clock::ClockComponent(settings)
     );
-    infra::MonadRunner<Monad> r(&env);
+    infra::AppRunner<App> r(&env);
     
     std::ifstream ifs(param.inputFile);
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
@@ -163,8 +163,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
             )
         ;
 
-    auto filter = Monad::kleisli<basic::ByteDataWithTopic>(
-        basic::CommonFlowUtilComponents<Monad>
+    auto filter = App::kleisli<basic::ByteDataWithTopic>(
+        basic::CommonFlowUtilComponents<App>
             ::pureFilter<basic::ByteDataWithTopic>(
                 [](basic::ByteDataWithTopic const &d) {
                     return (!d.content.empty());
@@ -175,8 +175,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     r.exportItem("publisher", publisher
         , r.execute("filter", filter, r.importItem("importer", importer)));
 
-    auto exiter = Monad::simpleExporter<basic::ByteDataWithTopic>(
-        [&env](Monad::InnerData<basic::ByteDataWithTopic> &&d) {
+    auto exiter = App::simpleExporter<basic::ByteDataWithTopic>(
+        [&env](App::InnerData<basic::ByteDataWithTopic> &&d) {
             if (d.timedData.finalFlag) {
                 d.environment->log(infra::LogLevel::Info, "Got the final update!");
                 std::thread([&env]() {
@@ -318,14 +318,14 @@ int main(int argc, char **argv) {
         basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,
         transport::BoostUUIDComponent
     >;
-    using Monad = infra::SinglePassIterationMonad<TheEnvironment>;
+    using App = infra::SinglePassIterationApp<TheEnvironment>;
     TheEnvironment env;
-    infra::MonadRunner<Monad> r(&env);
+    infra::AppRunner<App> r(&env);
 
-    auto starter = Monad::constFirstPushImporter(std::move(param));
-    auto fetchTP = Monad::liftPure<ReplayParameter>(&fetchFirstTimePoint, infra::LiftParameters<Monad::TimePoint>().FireOnceOnly(true));
-    auto replayRunner = Monad::liftPure2<ReplayParameter, std::chrono::system_clock::time_point>(&runReplay, infra::LiftParameters<Monad::TimePoint>().RequireMask(infra::FanInParamMask("11")).FireOnceOnly(true));
-    auto emptyExporter = Monad::pureExporter<basic::VoidStruct>([&env](basic::VoidStruct &&) {
+    auto starter = App::constFirstPushImporter(std::move(param));
+    auto fetchTP = App::liftPure<ReplayParameter>(&fetchFirstTimePoint, infra::LiftParameters<App::TimePoint>().FireOnceOnly(true));
+    auto replayRunner = App::liftPure2<ReplayParameter, std::chrono::system_clock::time_point>(&runReplay, infra::LiftParameters<App::TimePoint>().RequireMask(infra::FanInParamMask("11")).FireOnceOnly(true));
+    auto emptyExporter = App::pureExporter<basic::VoidStruct>([&env](basic::VoidStruct &&) {
         env.exit();
     });
 

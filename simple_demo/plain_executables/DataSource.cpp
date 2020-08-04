@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
@@ -34,7 +34,7 @@ using TheEnvironment = infra::Environment<
     transport::rabbitmq::RabbitMQComponent,
     transport::HeartbeatAndAlertComponent
 >;
-using M = infra::RealTimeMonad<TheEnvironment>;
+using M = infra::RealTimeApp<TheEnvironment>;
 
 class DataSourceImporter final : public M::AbstractImporter<InputData>, public DataSourceListener {
 private:
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
         (&env, "simple_demo DataSource", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
-    infra::MonadRunner<M> r(&env);
+    infra::AppRunner<M> r(&env);
 
     auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
 

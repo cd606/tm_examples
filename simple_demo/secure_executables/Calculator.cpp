@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
@@ -46,7 +46,7 @@ using TheEnvironment = infra::Environment<
     transport::redis::RedisComponent,
     transport::HeartbeatAndAlertComponent
 >;
-using M = infra::RealTimeMonad<TheEnvironment>;
+using M = infra::RealTimeApp<TheEnvironment>;
 
 class CalculatorFacility final : public M::IExternalComponent, public M::AbstractOnOrderFacility<std::tuple<std::string, CalculateCommand>,CalculateResult>, public CalculateResultListener {
 private:
@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
         , main_logic_pub_key
     );
 
-    infra::MonadRunner<M> r(&env);
+    infra::AppRunner<M> r(&env);
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("facility", facility);
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
     );
 
     DHServerSideCombination<
-        infra::MonadRunner<M>
+        infra::AppRunner<M>
         , CalculateCommand
         , transport::redis::RedisOnOrderFacility<TheEnvironment>
         , transport::rabbitmq::RabbitMQComponent

@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
@@ -40,8 +40,8 @@ using TheEnvironment = infra::Environment<
     transport::AllNetworkTransportComponents
 >;
 
-using M = infra::RealTimeMonad<TheEnvironment>;
-using R = infra::MonadRunner<M>;
+using M = infra::RealTimeApp<TheEnvironment>;
+using R = infra::AppRunner<M>;
 using SendDataType = basic::CBOR<std::tuple<uint64_t, int64_t, basic::ByteData>>;
 
 void runSender(unsigned interval, unsigned bytes, std::string const &transport, transport::ConnectionLocator const &address, std::optional<unsigned> summaryPeriod) {

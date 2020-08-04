@@ -8,7 +8,7 @@
 
 template <class R>
 struct MainLogicInput {
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
     typename R::template FacilitioidConnector<simple_demo::CalculateCommand, simple_demo::CalculateResult> commandConnector;
     typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ConfigureCommand>, simple_demo::ConfigureResult> configWrapper;
     typename R::template FacilityWrapper<simple_demo::OutstandingCommandsQuery, simple_demo::OutstandingCommandsResult> queryWrapper;
@@ -17,7 +17,7 @@ struct MainLogicInput {
 
 template <class R>
 struct MainLogicOutput {
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
     typename R::template Sink<simple_demo::InputData> dataSink;
 };
 
@@ -27,7 +27,7 @@ enum class LogicChoice {
 
 template <class R>
 inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLogicInput<R> &&input, LogicChoice logicChoice) {
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
     using namespace std::placeholders;
 
     if (logicChoice == LogicChoice::One) {

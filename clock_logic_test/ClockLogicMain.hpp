@@ -11,7 +11,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
 
     template <class ClockImporterExporter, class ClockOnOrderFacility, class R>
     void clockLogicMain(R &r, std::ostream &fileOutput) {
-        using M = typename R::MonadType;
+        using M = typename R::AppType;
         using TheEnvironment = typename R::EnvironmentType;
         using FileComponent = typename basic::template ByteDataWithTopicRecordFileImporterExporter<M>;
 

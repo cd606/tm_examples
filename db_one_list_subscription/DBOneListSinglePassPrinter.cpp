@@ -1,7 +1,7 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/SinglePassIterationMonad.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
@@ -14,7 +14,7 @@
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
-#include <tm_kit/basic/MonadRunnerUtils.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -49,15 +49,15 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
       , typename R::EnvironmentType &env
       , typename R::template FacilitioidConnector<
             typename basic::transaction::v2::GeneralSubscriberTypes<
-                typename R::MonadType::EnvironmentType::IDType, DI
+                typename R::AppType::EnvironmentType::IDType, DI
             >::Input
             , typename basic::transaction::v2::GeneralSubscriberTypes<
-                typename R::MonadType::EnvironmentType::IDType, DI
+                typename R::AppType::EnvironmentType::IDType, DI
             >::Output
         > queryConnector
   ) 
 {
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
     
     using GS = basic::transaction::v2::GeneralSubscriberTypes<
         typename M::EnvironmentType::IDType, DI
@@ -213,8 +213,8 @@ void runSinglePass(std::string const &dbFile) {
         infra::IntIDComponent<>
     >;
 
-    using M = infra::SinglePassIterationMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::SinglePassIterationApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     using GS = basic::transaction::v2::GeneralSubscriberTypes<
         typename M::EnvironmentType::IDType, DI
@@ -289,7 +289,7 @@ void runSinglePass(std::string const &dbFile) {
     auto logicInterfaceSink = dbSinglePassPrinterLogic<R>(
         r
         , env
-        , basic::MonadRunnerUtilComponents<R>::
+        , basic::AppRunnerUtilComponents<R>::
             wrapTuple2FacilitioidBySupplyingDefaultValue<
                 GS::Input, GS::Output, std::string
             >(
@@ -317,8 +317,8 @@ void runRealTime() {
             std::string
             , GS::Input>
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>::operator=(

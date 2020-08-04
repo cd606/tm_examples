@@ -43,7 +43,7 @@ void DHServerSideCombination(
     , std::string const &heartbeatEncryptionKey
 ) {
     using Env = typename R::EnvironmentType;
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
 
     auto dh = std::make_shared<DHServerHelper>(
         boost::hana::curry<3>(

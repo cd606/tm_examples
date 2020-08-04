@@ -1,7 +1,7 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/BasicWithTimeMonad.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/BasicWithTimeApp.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/KleisliUtils.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
@@ -48,8 +48,8 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
             std::string
             , GS::Input>
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>::operator=(
@@ -201,8 +201,8 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
             std::string
             , TI::Transaction>
     >;
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>::operator=(

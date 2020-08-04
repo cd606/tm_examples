@@ -6,7 +6,7 @@
 template <class R, class ClockFacility>
 class MockCalculatorCombination {
 private:
-    using M = typename R::MonadType;
+    using M = typename R::AppType;
     using ID = typename R::EnvironmentType::IDType;
     template <class T>
     using Key = typename M::template Key<T>;

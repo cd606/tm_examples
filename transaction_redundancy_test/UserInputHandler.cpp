@@ -7,7 +7,7 @@
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/RealTimeMonad.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
@@ -15,7 +15,7 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/TransactionClient.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
-#include <tm_kit/basic/MonadRunnerUtils.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -76,8 +76,8 @@ int main(int argc, char **argv) {
         transport::redis::RedisComponent
     >;
 
-    using M = infra::RealTimeMonad<TheEnvironment>;
-    using R = infra::MonadRunner<M>;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>::operator=(
