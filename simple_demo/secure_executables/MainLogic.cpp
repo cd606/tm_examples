@@ -8,6 +8,7 @@
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
@@ -50,6 +51,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         infra::CheckTimeComponent<true>,
         infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
+        //basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         ClientSideSignatureAndAESBasedIdentityAttacherComponent<CalculateCommand>,
         ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
@@ -113,6 +115,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         );
     }
 
+    //env.setLogFilePrefix("simple_demo_secure_main", true);
     R r(&env);
 
     auto listeners = transport::MultiTransportBroadcastListenerManagingUtils<R>
@@ -232,6 +235,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
+        //basic::TimeComponentEnhancedWithSpdLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
         infra::IntIDComponent<>
     >;
     using M = infra::SinglePassIterationApp<TheEnvironment>;
@@ -240,6 +244,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
     std::ifstream ifs(inputFile);
 
     TheEnvironment env;
+    //env.setLogFilePrefix("simple_demo_secure_main", true);
     R r(&env);
 
     using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<M>;

@@ -52,6 +52,7 @@ void real_time_run(std::ostream &fileOutput) {
     env.basic::real_time_clock::ClockComponent::operator=(
         basic::real_time_clock::ClockComponent(clockSettings)
     );
+    env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
     clock_logic_test_app::clockLogicMain<
@@ -75,11 +76,13 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
             basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
             , false
         >,
-        infra::IntIDComponent<uint32_t>
+        infra
+        ::IntIDComponent<uint32_t>
     >;
     using App = infra::SinglePassIterationApp<TheEnvironment>;
 
     TheEnvironment env;
+    env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
     clock_logic_test_app::clockLogicMain<
