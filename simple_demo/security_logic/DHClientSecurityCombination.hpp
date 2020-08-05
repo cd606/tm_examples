@@ -65,7 +65,7 @@ auto DHClientSideCombination(
     r.preservePointer(verifier);
     verifier->addKey("", serverPublicKey);
     transport::WireToUserHook verifyHook = {
-        [verifier,env](basic::ByteData &&d) -> std::optional<basic::ByteData> {
+        [verifier](basic::ByteData &&d) -> std::optional<basic::ByteData> {
             auto x = verifier->verify(std::move(d));
             if (x) {
                 return std::move(std::get<1>(*x));

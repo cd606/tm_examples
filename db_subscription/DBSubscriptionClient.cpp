@@ -169,7 +169,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
         , std::move(keyedCommand)
     );
     r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
-    r.exportItem("printFullUpdate", printFullUpdate, std::move(clientOutputs.fullUpdates.clone()));
+    r.exportItem("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone());
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";

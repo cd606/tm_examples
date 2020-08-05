@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
     //Now we can handle the transaction part.
     
     auto transactionCommandParser = M::liftMaybe<std::vector<std::string>>(
-        [&env,dataStorePtr,&autoRounds](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
+        [&env,dataStorePtr/*,&autoRounds*/](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
             if (parts.empty()) {
                 return std::nullopt;
             }
