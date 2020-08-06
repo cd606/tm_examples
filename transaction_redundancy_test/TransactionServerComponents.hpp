@@ -1,9 +1,6 @@
 #ifndef TRANSACTION_SERVER_COMPONENTS_HPP_
 #define TRANSACTION_SERVER_COMPONENTS_HPP_
 
-#include <tm_kit/basic/transaction/TransactionServer.hpp>
-#include <tm_kit/transport/BoostUUIDComponent.hpp>
-
 #include "TransactionInterface.hpp"
 
 #include <grpcpp/grpcpp.h>
@@ -21,35 +18,6 @@
 #include <thread>
 
 #include <boost/algorithm/string.hpp>
-
-using namespace dev::cd606::tm;
-using namespace test;
-
-using DI = basic::transaction::current::DataStreamInterface<
-    int64_t
-    , Key
-    , Version
-    , Data
-    , VersionSlice
-    , DataSlice
-    , std::less<int64_t>
-    , CompareVersion
->;
-
-using TI = basic::transaction::current::TransactionInterface<
-    int64_t
-    , Key
-    , Version
-    , Data
-    , DataSummary
-    , VersionSlice
-    , Command
-    , DataSlice
->;
-
-using GS = basic::transaction::current::GeneralSubscriberTypes<
-    boost::uuids::uuid, DI
->;
 
 struct StorageConstants {
     inline static const std::string OVERALL_STAT_KEY = "trtest:overall_stat";

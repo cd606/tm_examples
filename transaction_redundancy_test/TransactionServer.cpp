@@ -13,76 +13,14 @@
 #include <boost/program_options.hpp>
 
 #include "TransactionServerComponents.hpp"
+#include "LocalTransactionServerComponents.hpp"
 
-int main(int argc, char **argv) {
-    namespace po = boost::program_options;
-
-    po::options_description desc("allowed options");
-    desc.add_options()
-        ("help", "display help message")
-        ("lock_choice", po::value<std::string>(), "lock choice (none, simple or compound)")
-        ("queue_name_prefix", po::value<std::string>(), "queue name prefix for processing commands")
-    ;
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);
-
-    if (vm.count("help")) {
-        std::cout << desc << "\n";
-        return 0;
-    }
-
-    THComponent::LockChoice lockChoice = THComponent::LockChoice::None;
-    if (vm.count("lock_choice")) {
-        auto choiceStr = vm["lock_choice"].as<std::string>();
-        if (choiceStr == "simple") {
-            lockChoice = THComponent::LockChoice::Simple;
-        } else if (choiceStr == "compound") {
-            lockChoice = THComponent::LockChoice::Compound;
-        }
-    }
-
-    if (!vm.count("queue_name_prefix")) {
-        std::cerr << "Please provide queue name prefix\n";
-        return 1;
-    }
-    std::string queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
-
-    using TheEnvironment = infra::Environment<
-        infra::CheckTimeComponent<false>,
-        infra::TrivialExitControlComponent,
-        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent, true, true>,
-        transport::BoostUUIDComponent,
-        transport::ServerSideSimpleIdentityCheckerComponent<
-            std::string
-            , TI::Transaction>,
-        transport::ServerSideSimpleIdentityCheckerComponent<
-            std::string
-            , GS::Input>,
-        transport::redis::RedisComponent,
-        transport::HeartbeatAndAlertComponent,
-        DSComponent,
-        THComponent
-    >;
-    using M = infra::RealTimeApp<TheEnvironment>;
+template <class Env>
+int run(Env &env, std::string const &queueNamePrefix) {
+    using M = infra::RealTimeApp<Env>;
     using R = infra::AppRunner<M>;
 
-    TheEnvironment env;
-    std::atomic<int64_t> compoundLockQueueVersion=0, compoundLockQueueRevision=0;
-
-    auto channel = grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials());
-    env.DSComponent::operator=(DSComponent {
-        channel, [&env](std::string const &s) {
-            env.log(infra::LogLevel::Info, s);
-        }, &compoundLockQueueVersion, &compoundLockQueueRevision
-    });
-    env.THComponent::operator=(THComponent {
-        lockChoice, channel, [&env](std::string const &s) {
-            env.log(infra::LogLevel::Info, s);
-        }, &compoundLockQueueVersion, &compoundLockQueueRevision
-    });
-    
-    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::redis::RedisComponent>()
+    transport::HeartbeatAndAlertComponentInitializer<Env,transport::redis::RedisComponent>()
         (&env, "transaction redundancy test server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
 
     R r(&env);
@@ -94,7 +32,7 @@ int main(int argc, char **argv) {
         , CheckSummary
         , ProcessCommandOnLocalData
     >;
-    auto dataStore = std::make_shared<TF::DataStore>();
+    auto dataStore = std::make_shared<typename TF::DataStore>();
     using DM = basic::transaction::current::TransactionDeltaMerger<
         DI, false, M::PossiblyMultiThreaded
         , ApplyVersionSlice
@@ -112,7 +50,8 @@ int main(int argc, char **argv) {
         , &tf
     );
 
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacilityWithExternalEffects
+    using RedisWrapper = typename transport::redis::RedisOnOrderFacility<Env>::WithIdentity<std::string>;
+    RedisWrapper::template wrapOnOrderFacilityWithExternalEffects
         <TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
@@ -120,7 +59,7 @@ int main(int argc, char **argv) {
         , "transaction_wrapper_"
         , std::nullopt //no hook
     );
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapLocalOnOrderFacility
+    RedisWrapper::template wrapLocalOnOrderFacility
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
@@ -143,4 +82,109 @@ int main(int argc, char **argv) {
     infra::terminationController(infra::RunForever {&env});
 
     return 0;
+}
+
+int main(int argc, char **argv) {
+    namespace po = boost::program_options;
+
+    po::options_description desc("allowed options");
+    desc.add_options()
+        ("help", "display help message")
+        ("lock_choice", po::value<std::string>(), "lock choice (none, simple or compound)")
+        ("queue_name_prefix", po::value<std::string>(), "queue name prefix for processing commands")
+        ("local_test", "local test only")
+    ;
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
+        return 0;
+    }
+    if (!vm.count("queue_name_prefix")) {
+        std::cerr << "Please provide queue name prefix\n";
+        return 1;
+    }
+    std::string queueNamePrefix = vm["queue_name_prefix"].as<std::string>();
+
+    if (vm.count("local_test")) {
+        using TheEnvironment = infra::Environment<
+            infra::CheckTimeComponent<false>,
+            infra::TrivialExitControlComponent,
+            basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent, true, true>,
+            transport::BoostUUIDComponent,
+            transport::ServerSideSimpleIdentityCheckerComponent<
+                std::string
+                , TI::Transaction>,
+            transport::ServerSideSimpleIdentityCheckerComponent<
+                std::string
+                , GS::Input>,
+            transport::redis::RedisComponent,
+            transport::HeartbeatAndAlertComponent,
+            LocalDSComponent,
+            LocalTHComponent
+        >;
+        
+        TheEnvironment env;
+        
+        env.LocalDSComponent::operator=(LocalDSComponent {
+            [&env](std::string const &s) {
+                env.log(infra::LogLevel::Info, s);
+            }
+        });
+        env.LocalTHComponent::operator=(LocalTHComponent {
+            &env, [&env](std::string const &s) {
+                env.log(infra::LogLevel::Info, s);
+            }
+        });
+
+        return run<TheEnvironment>(env, queueNamePrefix);
+    } else {
+        THComponent::LockChoice lockChoice = THComponent::LockChoice::None;
+        if (vm.count("lock_choice")) {
+            auto choiceStr = vm["lock_choice"].as<std::string>();
+            if (choiceStr == "simple") {
+                lockChoice = THComponent::LockChoice::Simple;
+            } else if (choiceStr == "compound") {
+                lockChoice = THComponent::LockChoice::Compound;
+            }
+        }
+
+        using TheEnvironment = infra::Environment<
+            infra::CheckTimeComponent<false>,
+            infra::TrivialExitControlComponent,
+            basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent, true, true>,
+            transport::BoostUUIDComponent,
+            transport::ServerSideSimpleIdentityCheckerComponent<
+                std::string
+                , TI::Transaction>,
+            transport::ServerSideSimpleIdentityCheckerComponent<
+                std::string
+                , GS::Input>,
+            transport::redis::RedisComponent,
+            transport::HeartbeatAndAlertComponent,
+            DSComponent,
+            THComponent
+        >;
+        
+        TheEnvironment env;
+        std::atomic<int64_t> compoundLockQueueVersion=0, compoundLockQueueRevision=0;
+
+        auto channel = grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials());
+        env.DSComponent::operator=(DSComponent {
+            channel, [&env](std::string const &s) {
+                env.log(infra::LogLevel::Info, s);
+            }, &compoundLockQueueVersion, &compoundLockQueueRevision
+        });
+        env.THComponent::operator=(THComponent {
+            lockChoice, channel, [&env](std::string const &s) {
+                env.log(infra::LogLevel::Info, s);
+            }, &compoundLockQueueVersion, &compoundLockQueueRevision
+        });
+
+        return run<TheEnvironment>(env, queueNamePrefix);
+    }
+
+    
 }

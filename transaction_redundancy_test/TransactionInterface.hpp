@@ -6,6 +6,9 @@
 #include <tm_kit/basic/ConstType.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
 
+#include <tm_kit/basic/transaction/TransactionServer.hpp>
+#include <tm_kit/transport/BoostUUIDComponent.hpp>
+
 namespace test {
     using GlobalVersion = int64_t;
     using Key = dev::cd606::tm::basic::VoidStruct; //we have a fixed combination that we want to update
@@ -92,5 +95,34 @@ namespace test {
     std::ostream &operator<<(std::ostream &os, Version const &v);
     std::ostream &operator<<(std::ostream &os, Data const &d);
 }
+
+using namespace dev::cd606::tm;
+using namespace test;
+
+using DI = basic::transaction::current::DataStreamInterface<
+    int64_t
+    , Key
+    , Version
+    , Data
+    , VersionSlice
+    , DataSlice
+    , std::less<int64_t>
+    , CompareVersion
+>;
+
+using TI = basic::transaction::current::TransactionInterface<
+    int64_t
+    , Key
+    , Version
+    , Data
+    , DataSummary
+    , VersionSlice
+    , Command
+    , DataSlice
+>;
+
+using GS = basic::transaction::current::GeneralSubscriberTypes<
+    boost::uuids::uuid, DI
+>;
 
 #endif

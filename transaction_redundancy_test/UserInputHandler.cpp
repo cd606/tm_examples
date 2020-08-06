@@ -411,7 +411,7 @@ int main(int argc, char **argv) {
     //Now we can handle the transaction part.
     
     auto transactionCommandParser = M::liftMaybe<std::vector<std::string>>(
-        [&env,dataStorePtr/*,&autoRounds*/](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
+        [&env,dataStorePtr,&autoRounds](std::vector<std::string> const &parts) -> std::optional<TI::Transaction> {
             if (parts.empty()) {
                 return std::nullopt;
             }
@@ -562,7 +562,6 @@ int main(int argc, char **argv) {
                     env.log(infra::LogLevel::Info, "Close command usage: close acocunt");
                     return std::nullopt;
                 }
-                /*
                 if (autoRounds) {
                     return TI::Transaction { TI::UpdateAction {
                         Key {}
@@ -570,7 +569,7 @@ int main(int argc, char **argv) {
                         , std::nullopt
                         , CloseAccount { parts[1] }
                     } };
-                }*/
+                }
                 basic::transaction::current::TransactionDataStore<DI>::Lock _(dataStorePtr->mutex_);
                 auto currentData = dataStorePtr->dataMap_[Key {}];
                 if (!currentData.data) {

@@ -18,7 +18,7 @@ executable(
 # headers and sources
 executable(
     'transaction_server'
-    , ['TransactionServer.cpp', 'TransactionServerComponents.cpp', 'TransactionInterface.cpp', 'v3lock.grpc.pb.cc', 'v3lock.pb.cc']
+    , ['TransactionServer.cpp', 'TransactionServerComponents.cpp', 'LocalTransactionServerComponents.cpp','TransactionInterface.cpp', 'v3lock.grpc.pb.cc', 'v3lock.pb.cc']
     , include_directories: inc
     , dependencies: [common_deps, transaction_redundancy_test_dep]
 )
