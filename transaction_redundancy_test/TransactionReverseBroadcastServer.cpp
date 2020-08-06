@@ -71,17 +71,18 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
+    std::atomic<int64_t> compoundLockQueueVersion=0, compoundLockQueueRevision=0;
 
     auto channel = grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials());
     env.DSComponent::operator=(DSComponent {
         channel, [&env](std::string const &s) {
             env.log(infra::LogLevel::Info, s);
-        }
+        }, &compoundLockQueueVersion, &compoundLockQueueRevision
     });
     env.THComponent::operator=(THComponent {
         lockChoice, channel, [&env](std::string const &s) {
             env.log(infra::LogLevel::Info, s);
-        }
+        }, &compoundLockQueueVersion, &compoundLockQueueRevision
     });
     
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::redis::RedisComponent>()

@@ -69,25 +69,33 @@ private:
     inline static const std::string WATCH_RANGE_START = "trtest:";
     inline static const std::string WATCH_RANGE_END = "trtest;"; //semicolon follows colon in ASCII table  
 
-    std::optional<DI::OneDeltaUpdateItem> createDeltaUpdate(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv);
+    inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_queue";
+    std::atomic<int64_t> *lockQueueVersion_, *lockQueueRevision_;
+
+    std::optional<DI::OneDeltaUpdateItem> createDeltaUpdate(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv, int64_t revision);
     void runWatchThread();
 public:
     DSComponent()
         : channel_(), logger_(), watchThread_(), running_(false)
         , watchListener_(nullptr)
+        , lockQueueVersion_(nullptr), lockQueueRevision_(nullptr)
     {}
     DSComponent &operator=(DSComponent &&c) {
         if (this != &c) {
             //only copy these!
             channel_ = std::move(c.channel_);
             logger_ = std::move(c.logger_);
+            lockQueueVersion_ = std::move(c.lockQueueVersion_);
+            lockQueueRevision_ = std::move(c.lockQueueRevision_);
         }
         return *this;
     } 
-    DSComponent(std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
+    DSComponent(std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger, std::atomic<int64_t> *lockQueueVersion, std::atomic<int64_t> *lockQueueRevision) 
         : channel_(channel), logger_(logger)
         , watchThread_(), running_(false)
         , watchListener_(nullptr)
+        , lockQueueVersion_(lockQueueVersion)
+        , lockQueueRevision_(lockQueueRevision)
     {}
     virtual ~DSComponent() {
         if (running_) {
@@ -125,6 +133,10 @@ private:
 
     inline static const std::string LOCK_NUMBER_KEY = "trtest:lock_number";
     inline static const std::string LOCK_QUEUE_KEY = "trtest:lock_queue";
+    std::atomic<int64_t> const *lockQueueVersion_;
+    std::atomic<int64_t> const *lockQueueRevision_;
+
+    std::unique_ptr<etcdserverpb::KV::Stub> stub_;
 
     int64_t leaseID_ = 0;
     std::string lockKey_ = "";
@@ -135,7 +147,7 @@ private:
     int64_t releaseCompoundLock();
 public:
     THComponent()
-        : lockChoice_(LockChoice::None), channel_(), logger_()
+        : lockChoice_(LockChoice::None), channel_(), logger_(), lockQueueVersion_(nullptr), lockQueueRevision_(nullptr), stub_()
     {}
     THComponent &operator=(THComponent &&c) {
         if (this != &c) {
@@ -143,11 +155,14 @@ public:
             lockChoice_ = c.lockChoice_;
             channel_ = std::move(c.channel_);
             logger_ = std::move(c.logger_);
+            lockQueueVersion_ = std::move(c.lockQueueVersion_);
+            lockQueueRevision_ = std::move(c.lockQueueRevision_);
+            stub_ = std::move(c.stub_);
         }
         return *this;
     } 
-    THComponent(LockChoice lockChoice, std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger) 
-        : lockChoice_(lockChoice), channel_(channel), logger_(logger)
+    THComponent(LockChoice lockChoice, std::shared_ptr<grpc::ChannelInterface> const &channel, std::function<void(std::string)> const &logger, std::atomic<int64_t> const *lockQueueVersion, std::atomic<int64_t> const *lockQueueRevision) 
+        : lockChoice_(lockChoice), channel_(channel), logger_(logger), lockQueueVersion_(lockQueueVersion), lockQueueRevision_(lockQueueRevision), stub_(etcdserverpb::KV::NewStub(channel_))
     {}
     virtual ~THComponent() {
     }

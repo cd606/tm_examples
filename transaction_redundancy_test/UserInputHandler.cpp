@@ -200,15 +200,25 @@ int main(int argc, char **argv) {
         , &dataStorePtr
     );
     if (!autoRounds) {
-        auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
-            [&env](FullSubscriptionData &&theUpdate) {
+        //The reason we need this extra step is that
+        //FullSubscriptionData, being a KeyedData, will have
+        //separate versions for different ConnectionLocators,
+        //when we extract only the FullUpdate part, then they will
+        //share a version stream, so we won't print duplicates
+        auto extractDataForPrint = M::liftPure<FullSubscriptionData>(
+            [](FullSubscriptionData &&theUpdate) -> DI::FullUpdate {
+                return std::move(theUpdate.data);
+            }
+        );
+        auto fullDataPrinter = M::pureExporter<DI::FullUpdate>(
+            [&env](DI::FullUpdate &&theUpdate) {
                 env.log(infra::LogLevel::Info, "Got full data update, will print");
                 std::ostringstream oss;
                 oss << "Got full data update {";
-                oss << "globalVersion=" << theUpdate.data.version;
+                oss << "globalVersion=" << theUpdate.version;
                 oss << ",dataItems=[";
                 int ii = 0;
-                for (auto const &item : theUpdate.data.data) {
+                for (auto const &item : theUpdate.data) {
                     if (ii > 0) {
                         oss << ',';
                     }
@@ -228,7 +238,8 @@ int main(int argc, char **argv) {
         );
 
         r.exportItem("fullDataPrinter", fullDataPrinter
-            , std::move(subscriptionOutputs)
+            , r.execute("extractDataForPrint", extractDataForPrint
+                , std::move(subscriptionOutputs))
         );
     }
 
@@ -313,15 +324,22 @@ int main(int argc, char **argv) {
         r.registerImporter("cmdTimer", cmdTimer);
         r.registerAction("cmdCreator", cmdCreator);
         r.execute(cmdCreator, r.importItem(cmdTimer));
+        auto extractDataForSync = M::liftPure<FullSubscriptionData>(
+            [](FullSubscriptionData &&theUpdate) -> DI::FullUpdate {
+                return std::move(theUpdate.data);
+            }
+        );
         auto sync = basic::CommonFlowUtilComponents<M>::synchronizer2<
             std::vector<std::string>
-            , FullSubscriptionData
+            , DI::FullUpdate
         >(
-            [](std::vector<std::string> &&v, FullSubscriptionData &&) -> std::vector<std::string> {
+            [](std::vector<std::string> &&v, DI::FullUpdate &&) -> std::vector<std::string> {
                 return std::move(v);
             }
         );
-        r.execute("cmdAndDataSync", sync, r.actionAsSource(cmdCreator), std::move(subscriptionOutputs));
+        r.execute("cmdAndDataSync", sync
+            , r.actionAsSource(cmdCreator)
+            , r.execute("extractDataForSync", extractDataForSync, std::move(subscriptionOutputs)));
         cmdSource = r.sourceAsSourceoid(r.actionAsSource(sync));
     } else {
         auto lineImporter = M::simpleImporter<std::vector<std::string>>(

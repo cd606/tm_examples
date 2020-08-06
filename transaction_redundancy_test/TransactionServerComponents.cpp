@@ -1,10 +1,14 @@
 #include "TransactionServerComponents.hpp"
 
-std::optional<DI::OneDeltaUpdateItem> DSComponent::createDeltaUpdate(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv) {
+std::optional<DI::OneDeltaUpdateItem> DSComponent::createDeltaUpdate(mvccpb::Event::EventType eventType, mvccpb::KeyValue const &kv, int64_t revision) {
     VersionSlice versionSlice;
     DataSlice dataSlice;
 
-    if (kv.key() == StorageConstants::OVERALL_STAT_KEY) {
+    if (kv.key() == LOCK_QUEUE_KEY) {
+        lockQueueRevision_->store(revision);
+        lockQueueVersion_->store(kv.version());
+        return std::nullopt;
+    } else if (kv.key() == StorageConstants::OVERALL_STAT_KEY) {
         if (eventType == mvccpb::Event::PUT) {
             versionSlice.overallStat = kv.version();
             auto s = basic::bytedata_utils::RunDeserializer<
@@ -132,13 +136,13 @@ void DSComponent::runWatchThread() {
             {
                 if (initResponse.kvs_size() > 0) {
                     std::vector<DI::OneUpdateItem> updates;
+                    int64_t revision = watchResponse.header().revision();
                     for (auto const &kv : initResponse.kvs()) {
-                        auto delta = createDeltaUpdate(mvccpb::Event::PUT, kv);
+                        auto delta = createDeltaUpdate(mvccpb::Event::PUT, kv, revision);
                         if (delta) {
                             updates.push_back(*delta);
                         }
                     }
-                    int64_t revision = watchResponse.header().revision();
 
                     /*
                     std::ostringstream oss;
@@ -165,13 +169,13 @@ void DSComponent::runWatchThread() {
             { 
                 if (watchResponse.events_size() > 0) {
                     std::vector<DI::OneUpdateItem> updates;
+                    int64_t revision = watchResponse.header().revision();
                     for (auto const &ev : watchResponse.events()) {
-                        auto delta = createDeltaUpdate(ev.type(), ev.kv());
+                        auto delta = createDeltaUpdate(ev.type(), ev.kv(), revision);
                         if (delta) {
                             updates.push_back(*delta);
                         }
                     }
-                    int64_t revision = watchResponse.header().revision();
 
                     /*
                     std::ostringstream oss;
@@ -297,132 +301,41 @@ int64_t THComponent::releaseSimpleLock() {
 
 int64_t THComponent::acquireCompundLock() {
     int64_t numVersion = 0;
-
-    auto kvStub = etcdserverpb::KV::NewStub(channel_);
-
-    while (true) {
-        //This is a spinlock, we hope we can obtain the lock number quickly
-        numVersion = 0;
-
-        etcdserverpb::RangeRequest getNum;
-        getNum.set_key(LOCK_NUMBER_KEY);
-
-        etcdserverpb::RangeResponse numResponse;
-        grpc::ClientContext kvCtx;
-        kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        kvStub->Range(&kvCtx, getNum, &numResponse);
-        if (numResponse.kvs_size() > 0) {
-            numVersion = numResponse.kvs(0).version();
-        }
-        
+    int64_t numRevision = 0;
+    do {
         etcdserverpb::TxnRequest txn;
-        auto *cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(LOCK_NUMBER_KEY);
-        cmp->set_version(numVersion);
         auto *action = txn.add_success();
         auto *put = action->mutable_request_put();
         put->set_key(LOCK_NUMBER_KEY);
+        action = txn.add_success();
+        auto *get = action->mutable_request_range();
+        get->set_key(LOCK_NUMBER_KEY);
 
-        etcdserverpb::TxnResponse putResp;
+        etcdserverpb::TxnResponse txnResp;
         grpc::ClientContext txnCtx;
         txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        kvStub->Txn(&txnCtx, txn, &putResp);
+        stub_->Txn(&txnCtx, txn, &txnResp);
 
-        if (putResp.succeeded()) {
-            /*
-            std::ostringstream oss;
-            oss << "[THComponent::acquireCompoundLock] Acquiring lock with number " << numVersion;
-            logger_(oss.str());
-            */
-            break;
+        if (txnResp.succeeded() && txnResp.responses_size() == 2) {
+            numVersion = txnResp.responses(1).response_range().kvs(0).version();
+            numRevision = txnResp.header().revision();
         }
+    } while (numVersion == 0);
+    --numVersion;
+    while (lockQueueVersion_->load() != numVersion) {
     }
-
-    int64_t ret = 0;
-
-    while (true) {
-        int64_t queueVersion = 0;
-
-        etcdserverpb::RangeRequest getQueue;
-        getQueue.set_key(LOCK_QUEUE_KEY);
-
-        etcdserverpb::RangeResponse queueResponse;
-        grpc::ClientContext kvCtx;
-        kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        kvStub->Range(&kvCtx, getQueue, &queueResponse);
-        if (queueResponse.kvs_size() > 0) {
-            queueVersion = queueResponse.kvs(0).version();
-        }
-
-        if (queueVersion == numVersion) {
-            ret = queueResponse.header().revision();
-            break;
-        }
-
-        //here since someone else is holding the lock
-        //, we will sleep somewhat
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    /*
-    std::ostringstream oss;
-    oss << "[THComponent::acquireCompoundLock] Lock acquired with number " << numVersion;
-    logger_(oss.str());*/
-
-    return ret;
+    return std::max(lockQueueRevision_->load(), numRevision);
 }
 
 int64_t THComponent::releaseCompoundLock() {
-    int64_t queueVersion = 0;
+    etcdserverpb::PutRequest p;
+    p.set_key(LOCK_QUEUE_KEY);
+    etcdserverpb::PutResponse putResp;
+    grpc::ClientContext putCtx;
+    putCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+    stub_->Put(&putCtx, p, &putResp);
 
-    auto kvStub = etcdserverpb::KV::NewStub(channel_);
-    
-    int64_t ret = 0;
-
-    while (true) {
-        //This is a spinlock, we hope we can increase the queue number quickly
-        queueVersion = 0;
-
-        etcdserverpb::RangeRequest getQueue;
-        getQueue.set_key(LOCK_QUEUE_KEY);
-
-        etcdserverpb::RangeResponse queueResponse;
-        grpc::ClientContext kvCtx;
-        kvCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        kvStub->Range(&kvCtx, getQueue, &queueResponse);
-        if (queueResponse.kvs_size() > 0) {
-            queueVersion = queueResponse.kvs(0).version();
-        }
-        
-        etcdserverpb::TxnRequest txn;
-        auto *cmp = txn.add_compare();
-        cmp->set_result(etcdserverpb::Compare::EQUAL);
-        cmp->set_target(etcdserverpb::Compare::VERSION);
-        cmp->set_key(LOCK_QUEUE_KEY);
-        cmp->set_version(queueVersion);
-        auto *action = txn.add_success();
-        auto *put = action->mutable_request_put();
-        put->set_key(LOCK_QUEUE_KEY);
-    
-        etcdserverpb::TxnResponse putResp;
-        grpc::ClientContext txnCtx;
-        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-        kvStub->Txn(&txnCtx, txn, &putResp);
-
-        if (putResp.succeeded()) {
-            ret = putResp.header().revision();
-            break;
-        }
-    }
-
-    /*
-    std::ostringstream oss;
-    oss << "[THComponent::releaseCompoundLock] Released lock";
-    logger_(oss.str());*/
-
-    return ret;
+    return putResp.header().revision();
 }
 
 TI::GlobalVersion THComponent::acquireLock(std::string const &account, TI::Key const &, TI::DataDelta const *) {
@@ -459,6 +372,7 @@ TI::TransactionResponse THComponent::handleInsert(std::string const &account, TI
 }
 
 TI::TransactionResponse THComponent::handleUpdate(std::string const &account, TI::Key const &key, std::optional<TI::VersionSlice> const &updateVersionSlice, TI::ProcessedUpdate const &dataDelta) {
+    //auto t1 = std::chrono::steady_clock::now();
     etcdserverpb::TxnRequest txn;
     if (updateVersionSlice) {
         if (updateVersionSlice->overallStat) {
@@ -511,12 +425,16 @@ TI::TransactionResponse THComponent::handleUpdate(std::string const &account, TI
 
     etcdserverpb::TxnResponse resp;
 
-    auto txnStub = etcdserverpb::KV::NewStub(channel_);
     grpc::ClientContext txnCtx;
     txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-    txnStub->Txn(&txnCtx, txn, &resp);
+    stub_->Txn(&txnCtx, txn, &resp);
 
     if (resp.succeeded()) {
+        /*
+        auto t2 = std::chrono::steady_clock::now();
+        auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
+        logger_(std::string("Transaction took ")+std::to_string(micros)+" micros");
+        */
         return {resp.header().revision(), basic::transaction::v2::RequestDecision::Success};
     } else {
         return {resp.header().revision(), basic::transaction::v2::RequestDecision::FailurePrecondition};

@@ -150,14 +150,24 @@ int main(int argc, char **argv) {
     using SubscriptionOutput = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,GS::Output>;
     using FullSubscriptionData = M::KeyedData<std::tuple<transport::ConnectionLocator,GS::Input>,DI::FullUpdate>;
     
-    auto fullDataPrinter = M::pureExporter<FullSubscriptionData>(
-        [&env](FullSubscriptionData &&theUpdate) {
+    //The reason we need this extra step is that
+    //FullSubscriptionData, being a KeyedData, will have
+    //separate versions for different ConnectionLocators,
+    //when we extract only the FullUpdate part, then they will
+    //share a version stream, so we won't print duplicates
+    auto extractDataForPrint = M::liftPure<FullSubscriptionData>(
+        [](FullSubscriptionData &&theUpdate) -> DI::FullUpdate {
+            return std::move(theUpdate.data);
+        }
+    );
+    auto fullDataPrinter = M::pureExporter<DI::FullUpdate>(
+        [&env](DI::FullUpdate &&theUpdate) {
             std::ostringstream oss;
             oss << "Got full data update {";
-            oss << "globalVersion=" << theUpdate.data.version;
+            oss << "globalVersion=" << theUpdate.version;
             oss << ",dataItems=[";
             int ii = 0;
-            for (auto const &item : theUpdate.data.data) {
+            for (auto const &item : theUpdate.data) {
                 if (ii > 0) {
                     oss << ',';
                 }
@@ -177,7 +187,8 @@ int main(int argc, char **argv) {
     );
 
     r.exportItem("fullDataPrinter", fullDataPrinter
-        , std::move(subscriptionOutputs)
+        , r.execute("extractDataForPrint", extractDataForPrint
+            , std::move(subscriptionOutputs))
     );
 
     //Next, we manage the subscription IDs
