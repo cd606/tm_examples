@@ -108,8 +108,8 @@ private:
 
     std::unique_ptr<etcdserverpb::KV::Stub> stub_;
 
-    int64_t leaseID_ = 0;
-    std::string lockKey_ = "";
+    //int64_t leaseID_ = 0;
+    //std::string lockKey_ = "";
 
     //int64_t acquireSimpleLock();
     //int64_t releaseSimpleLock();
