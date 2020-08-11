@@ -145,7 +145,9 @@ int main(int argc, char **argv) {
         if (vm.count("lock_choice")) {
             auto choiceStr = vm["lock_choice"].as<std::string>();
             if (choiceStr == "simple") {
-                lockChoice = THComponent::LockChoice::Simple;
+                std::cerr << "Simple lock support has been removed\n";
+                return 1;
+                //lockChoice = THComponent::LockChoice::Simple;
             } else if (choiceStr == "compound") {
                 lockChoice = THComponent::LockChoice::Compound;
             }

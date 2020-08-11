@@ -9,8 +9,10 @@
 #endif
 #include <libetcd/rpc.grpc.pb.h>
 #include <libetcd/kv.pb.h>
+/*
 #include "v3lock.pb.h"
 #include "v3lock.grpc.pb.h"
+*/
 
 #include <mutex>
 #include <condition_variable>
@@ -109,8 +111,8 @@ private:
     int64_t leaseID_ = 0;
     std::string lockKey_ = "";
 
-    int64_t acquireSimpleLock();
-    int64_t releaseSimpleLock();
+    //int64_t acquireSimpleLock();
+    //int64_t releaseSimpleLock();
     int64_t acquireCompundLock();
     int64_t releaseCompoundLock();
 public:

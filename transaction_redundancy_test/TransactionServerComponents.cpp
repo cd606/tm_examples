@@ -225,6 +225,7 @@ void DSComponent::initialize(Callback *cb) {
     logger_("DS component started");
 }
 
+#if 0
 int64_t THComponent::acquireSimpleLock() {
     {
         auto leaseStub = etcdserverpb::Lease::NewStub(channel_);
@@ -298,6 +299,7 @@ int64_t THComponent::releaseSimpleLock() {
 
     return 0;
 }
+#endif
 
 int64_t THComponent::acquireCompundLock() {
     int64_t numVersion = 0;
@@ -343,7 +345,8 @@ TI::GlobalVersion THComponent::acquireLock(std::string const &account, TI::Key c
     case LockChoice::None:
         return 0;
     case LockChoice::Simple:
-        return acquireSimpleLock();
+        //return acquireSimpleLock();
+        return 0;
     case LockChoice::Compound:
         return acquireCompundLock();
     default:
@@ -357,7 +360,8 @@ TI::GlobalVersion THComponent::releaseLock(std::string const &account, TI::Key c
     case LockChoice::None:
         return 0;
     case LockChoice::Simple:
-        return releaseSimpleLock();
+        //return releaseSimpleLock();
+        return 0;
     case LockChoice::Compound:
         return releaseCompoundLock();
     default:
