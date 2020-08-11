@@ -22,6 +22,8 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/nng/NNGComponent.hpp>
+#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
@@ -97,7 +99,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
         transport::rabbitmq::RabbitMQComponent,
         transport::multicast::MulticastComponent,
         transport::zeromq::ZeroMQComponent,
-        transport::redis::RedisComponent
+        transport::redis::RedisComponent,
+        transport::nng::NNGComponent
     >;
     using App = infra::RealTimeApp<TheEnvironment>;
     using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<App>;
@@ -157,8 +160,15 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
                     transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createExporter(param.address)
                 :
-                    transport::redis::RedisImporterExporter<TheEnvironment>
-                    ::createExporter(param.address)                   
+                    (
+                        (param.transport == "nng")
+                    ?
+                        transport::nng::NNGImporterExporter<TheEnvironment>
+                        ::createExporter(param.address)
+                    :
+                        transport::redis::RedisImporterExporter<TheEnvironment>
+                        ::createExporter(param.address) 
+                    )                
                 )
             )
         ;
@@ -201,7 +211,7 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("transport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
         ("address", value<std::string>(), "the address to republish on")
         ("input", value<std::string>(), "input from this file")
         ("speed", value<double>(), "republish speed factor, default 1.0")
@@ -223,8 +233,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis") {
-        std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis" && transport != "nng") {
+        std::cerr << "Transport must be mcast, zmq, nng, redis or rabbitmq!\n";
         return 1;
     }
     param.transport = transport;

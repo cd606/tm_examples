@@ -19,6 +19,8 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/nng/NNGComponent.hpp>
+#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 
 #include <boost/program_options.hpp>
@@ -34,7 +36,7 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("transport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
         ("topic", value<std::string>(), "the topic to listen for, for rabbitmq, it can use rabbitmq wild card syntax, for mcast and zmq, it can be omitted(all topics), a simple string, or \"r/.../\" containing a regex, for redis, it can be a wildcard")
         ("address", value<std::string>(), "the address to listen on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
@@ -53,8 +55,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis") {
-        std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis" && transport != "nng") {
+        std::cerr << "Transport must be mcast, zmq, nng,redis or rabbitmq!\n";
         return 1;
     }
     
@@ -87,7 +89,8 @@ int main(int argc, char **argv) {
         transport::rabbitmq::RabbitMQComponent,
         transport::multicast::MulticastComponent,
         transport::zeromq::ZeroMQComponent,
-        transport::redis::RedisComponent
+        transport::redis::RedisComponent,
+        transport::nng::NNGComponent
     >;
 
     using M = infra::RealTimeApp<TheEnvironment>;
@@ -115,6 +118,8 @@ int main(int argc, char **argv) {
                     conn = transport::MultiTransportBroadcastListenerConnectionType::ZeroMQ;
                 } else if (transport == "redis") {
                     conn = transport::MultiTransportBroadcastListenerConnectionType::Redis;
+                } else if (transport == "nng") {
+                    conn = transport::MultiTransportBroadcastListenerConnectionType::NNG;
                 } else {
                     return std::nullopt;
                 }

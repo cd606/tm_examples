@@ -19,6 +19,8 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/nng/NNGComponent.hpp>
+#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -87,8 +89,15 @@ void runSender(unsigned interval, unsigned bytes, std::string const &transport, 
                     transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedExporter<SendDataType>(address)
                 :
-                    transport::redis::RedisImporterExporter<TheEnvironment>
-                    ::createTypedExporter<SendDataType>(address)
+                    (
+                        transport == "nng"
+                    ?
+                        transport::nng::NNGImporterExporter<TheEnvironment>
+                        ::createTypedExporter<SendDataType>(address)
+                    :
+                        transport::redis::RedisImporterExporter<TheEnvironment>
+                        ::createTypedExporter<SendDataType>(address)
+                    )
                 )
             )
         ;
@@ -143,8 +152,15 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
                     transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedImporter<SendDataType>(address, "test.data")               
                 :
-                    transport::redis::RedisImporterExporter<TheEnvironment>
-                    ::createTypedImporter<SendDataType>(address, "test.data")
+                    (
+                        (transport == "nng")
+                    ?
+                        transport::nng::NNGImporterExporter<TheEnvironment>
+                        ::createTypedImporter<SendDataType>(address, "test.data") 
+                    :
+                        transport::redis::RedisImporterExporter<TheEnvironment>
+                        ::createTypedImporter<SendDataType>(address, "test.data")
+                    )
                 )
             )
         ;
@@ -228,7 +244,7 @@ int main(int argc, char **argv) {
         ("mode", value<std::string>(), "sender or receiver")
         ("interval", value<unsigned>(), "interval time in milliseconds")
         ("bytes", value<unsigned>(), "bytes per message sent")
-        ("transport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("transport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
         ("address", value<std::string>(), "the address for measuring data")
         ("summaryPeriod", value<unsigned>(), "print summary every this number of seconds")
     ;
@@ -275,8 +291,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis") {
-        std::cerr << "Transport must be mcast, zmq, redis or rabbitmq!\n";
+    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis" && transport != "nng") {
+        std::cerr << "Transport must be mcast, zmq, nng, redis or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("address")) {

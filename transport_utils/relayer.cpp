@@ -18,6 +18,8 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisComponent.hpp>
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
+#include <tm_kit/transport/nng/NNGComponent.hpp>
+#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -32,9 +34,9 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("incomingTransport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("incomingTransport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
         ("incomingAddress", value<std::string>(), "the address to listen on")
-        ("outgoingTransport", value<std::string>(), "mcast, zmq, redis or rabbitmq")
+        ("outgoingTransport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
         ("outgoingAddress", value<std::string>(), "the address to publish on")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
     ;
@@ -51,8 +53,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string incomingTransport = vm["incomingTransport"].as<std::string>();
-    if (incomingTransport != "mcast" && incomingTransport != "rabbitmq" && incomingTransport != "zmq" && incomingTransport != "redis") {
-        std::cerr << "Incoming transport must be mcast, zmq, redis or rabbitmq!\n";
+    if (incomingTransport != "mcast" && incomingTransport != "rabbitmq" && incomingTransport != "zmq" && incomingTransport != "redis" && incomingTransport != "nng") {
+        std::cerr << "Incoming transport must be mcast, zmq, nng, redis or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("incomingAddress")) {
@@ -65,8 +67,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     std::string outgoingTransport = vm["outgoingTransport"].as<std::string>();
-    if (outgoingTransport != "mcast" && outgoingTransport != "rabbitmq" && outgoingTransport != "zmq" && outgoingTransport != "redis") {
-        std::cerr << "Outgoing transport must be mcast, zmq, redis or rabbitmq!\n";
+    if (outgoingTransport != "mcast" && outgoingTransport != "rabbitmq" && outgoingTransport != "zmq" && outgoingTransport != "redis" && outgoingTransport != "nng") {
+        std::cerr << "Outgoing transport must be mcast, zmq, nng, redis or rabbitmq!\n";
         return 1;
     }
     if (!vm.count("outgoingAddress")) {
@@ -89,7 +91,8 @@ int main(int argc, char **argv) {
         transport::rabbitmq::RabbitMQComponent,
         transport::multicast::MulticastComponent,
         transport::zeromq::ZeroMQComponent,  
-        transport::redis::RedisComponent
+        transport::redis::RedisComponent,
+        transport::nng::NNGComponent
     >;
 
     using M = infra::RealTimeApp<TheEnvironment>;
@@ -117,8 +120,15 @@ int main(int argc, char **argv) {
                         transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                         ::createImporter(incomingAddress, transport::zeromq::ZeroMQComponent::NoTopicSelection {})               
                     :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createImporter(incomingAddress, "*")
+                        (
+                            (incomingTransport == "nng")
+                        ?
+                            transport::nng::NNGImporterExporter<TheEnvironment>
+                            ::createImporter(incomingAddress, transport::nng::NNGComponent::NoTopicSelection {})
+                        :
+                            transport::redis::RedisImporterExporter<TheEnvironment>
+                            ::createImporter(incomingAddress, "*")
+                        )   
                     )
                 )
             ;
@@ -136,13 +146,20 @@ int main(int argc, char **argv) {
                     ::createExporter(outgoingAddress)
                 :
                     (
-                        outgoingTransport == "zmq"
+                        (outgoingTransport == "zmq")
                     ?
                         transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                         ::createExporter(outgoingAddress)
                     :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createExporter(outgoingAddress)
+                        (
+                            (outgoingTransport == "nng")
+                        ?
+                            transport::nng::NNGImporterExporter<TheEnvironment>
+                            ::createExporter(outgoingAddress)
+                        :
+                            transport::redis::RedisImporterExporter<TheEnvironment>
+                            ::createExporter(outgoingAddress)
+                        )
                     )
                 )
             ;
