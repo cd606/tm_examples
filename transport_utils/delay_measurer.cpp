@@ -67,7 +67,7 @@ void runSender(unsigned interval, unsigned bytes, std::string const &transport, 
             [&env,&testData,&counter](basic::VoidStruct &&) -> basic::TypedDataWithTopic<SendDataType> {
                 return {
                     "test.data"
-                    , { {++counter, infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env.now()), testData} }
+                    , { {++counter, infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now()), testData} }
                 };
             }
         );
@@ -180,7 +180,7 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
     auto calcStats =
         M::pureExporter<basic::TypedDataWithTopic<SendDataType>>(
             [&env,&stats,&statsMutex](basic::TypedDataWithTopic<SendDataType> &&data) {
-                auto now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env.now());
+                auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now());
                 auto delay = now-std::get<1>(data.content.value);
                 auto id = std::get<0>(data.content.value);
                 {
@@ -222,11 +222,11 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
                 {
                     std::lock_guard<std::mutex> _(statsMutex);
                     mean = (stats.count > 0) ? (stats.totalDelay/stats.count) : 0.0;
-                    sd = (stats.count > 1) ? (stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1) : 0.0;
+                    sd = (stats.count > 1) ? std::sqrt((stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1)) : 0.0;
                     missed = (stats.count > 0) ? (stats.maxID-stats.minID+1-stats.count) : 0;
                 }
                 std::ostringstream oss;
-                oss << "Got " << stats.count << " messages, mean delay " << mean << " ms, std delay " << sd << " ms, missed " << missed << " messages, min delay " << stats.minDelay << " ms, max delay " << stats.maxDelay << " ms";
+                oss << "Got " << stats.count << " messages, mean delay " << mean << " micros, std delay " << sd << " micros, missed " << missed << " messages, min delay " << stats.minDelay << " micros, max delay " << stats.maxDelay << " micros";
                 env.log(infra::LogLevel::Info, oss.str());
             }
         );
@@ -236,7 +236,6 @@ void runReceiver(std::string const &transport, transport::ConnectionLocator cons
 
     infra::terminationController(infra::RunForever {&env});
 }
-
 int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()

@@ -3,6 +3,7 @@ import * as yargs from 'yargs'
 import * as dateFormat from 'dateformat'
 import * as Stream from 'stream'
 import * as cbor from 'cbor'
+import * as microtime from 'microtime'
 
 yargs
     .scriptName("delay_measurer")
@@ -86,7 +87,7 @@ async function runSender(address : string, interval : number, bytes : number, su
     setInterval(function() {
         let data = [
             ++counter
-            , new Date().getTime()
+            , microtime.now()
             , dataToSend
         ];
         sourceStream.push(['test.data', cbor.encode(data)]);
@@ -114,8 +115,9 @@ async function runReceiver(address : string, summaryPeriod : number) {
         write : function(chunk : [string, Buffer], _encoding, callback) {
             let [_topic, data] = chunk;
             let parsed = cbor.decodeFirstSync(data);
-            let now = new Date().getTime();
+            let now = microtime.now();
             let delay = now-parsed[1];
+            //console.log(`parsed=${parsed},now=${now}`);
             let id = parsed[0];
             ++stats.count;
             stats.totalDelay += 1.0*delay;
@@ -147,9 +149,9 @@ async function runReceiver(address : string, summaryPeriod : number) {
                 missed = stats.maxID-stats.minID+1-stats.count;
             }
             if (stats.count > 1) {
-                sd = (stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1);
+                sd = Math.sqrt((stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1));
             }
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: Got ${stats.count} messages, mean delay ${mean} ms, std delay ${sd} ms, missed ${missed} messages, min delay ${stats.minDelay} ms, max delay ${stats.maxDelay} ms`);
+            console.log(`${dateFormat(new Date(), dateFormatStr)}: Got ${stats.count} messages, mean delay ${mean} micros, std delay ${sd} micros, missed ${missed} messages, min delay ${stats.minDelay} micros, max delay ${stats.maxDelay} micros`);
         }, summaryPeriod*1000);
     }
 }

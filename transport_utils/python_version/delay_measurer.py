@@ -1,4 +1,5 @@
 import sys
+import math
 sys.path.append("../../../tm_transport/python_lib")
 
 import TMTransport
@@ -19,7 +20,7 @@ def runSender(interval : int, bytes : int, address : str, summaryPeriod : int):
             global counter
             while True:
                 await asyncio.sleep(interval*0.001)
-                now = int(time.time()*1000.0)
+                now = int(time.time()*1000000.0)
                 counter = counter+1
                 publishQueue.put_nowait(('test.data', cbor2.dumps((counter, now, data))))
         tasks.append(asyncio.create_task(createData()))
@@ -62,7 +63,7 @@ def runReceiver(address : str, summaryPeriod : int):
             while True:
                 topic, data = await receiveQueue.get()
                 parsed = cbor2.loads(data)
-                now = int(time.time()*1000.0)
+                now = int(time.time()*1000000.0)
                 delay = now-parsed[1]
                 id = parsed[0]
                 stats.count = stats.count+1
@@ -89,8 +90,8 @@ def runReceiver(address : str, summaryPeriod : int):
                     mean = stats.totalDelay/stats.count
                     missed = stats.maxID-stats.minID+1-stats.count
                 if stats.count > 1:
-                    sd = (stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1)
-                print(f"{now.strftime('%Y-%m-%d %H:%M:%S.%f')}: : Got {stats.count} messages, mean delay {mean} ms, std delay {sd} ms, missed {missed} messages, min delay {stats.minDelay} ms, max delay {stats.maxDelay} ms")
+                    sd = math.sqrt((stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1))
+                print(f"{now.strftime('%Y-%m-%d %H:%M:%S.%f')}: : Got {stats.count} messages, mean delay {mean} micros, std delay {sd} micros, missed {missed} messages, min delay {stats.minDelay} micros, max delay {stats.maxDelay} micros")
         tasks.append(asyncio.create_task(printSummary()))
         await asyncio.gather(*tasks)
     asyncio.run(asyncMain())
