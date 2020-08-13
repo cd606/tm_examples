@@ -19,6 +19,10 @@ protobuf_gen = generator(protoc, \
 
 add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
+if build_machine.system() == 'windows'
+    add_global_arguments('/bigobj', language: 'cpp')
+endif
+
 subdir('clock_logic_test')
 subdir('transport_utils')
 subdir('simple_demo')
