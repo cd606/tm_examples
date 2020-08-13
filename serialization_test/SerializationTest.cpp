@@ -26,6 +26,9 @@ int main(int argc, char **argv) {
             , std::unordered_map<int32_t, double>
             , ConstType<5>
             , std::list<int16_t>
+            , std::tuple<std::tuple<bool>>
+            , std::tuple<>
+            , std::tuple<float, double>
         >
     ;
     char buf[5] = {0x1, 0x2, 0x3, 0x4, 0x5};
@@ -67,19 +70,22 @@ int main(int argc, char **argv) {
         }
         , ConstType<5> {}
         , std::list<int16_t> {321, 654, 987}
+        , std::tuple<std::tuple<bool>> {{true}}
+        , std::tuple<> {}
+        , std::tuple<float, double> {1.2f, 3.4}
     };
-    auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 12>::apply(
+    auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
         t
-        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"}
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
     );
-    auto encoded = std::string {reinterpret_cast<const char *>(encodedV.data()), reinterpret_cast<const char *>(encodedV.data())+encodedV.size()};
+    auto encoded = std::string(bytedata_utils::extractCBORSerializerResult(encodedV));
     //auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
     bytedata_utils::printByteDataDetails(std::cout, ByteData {encoded});
     std::cout << "\n";
-    auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 12>::apply(
+    auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 15>::apply(
         encoded, 0
-        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"}
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
     );
     //auto decoded = bytedata_utils::RunDeserializer<CBOR<TestType>>::apply(encoded);
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
@@ -146,6 +152,9 @@ int main(int argc, char **argv) {
             std::cout << item << ' ';
         }
         std::cout << "]\n";
+        std::cout << "\t, {{" << std::get<0>(std::get<0>(std::get<12>(data))) << "}}\n";
+        std::cout << "\t, {}\n";
+        std::cout << "\t, {" << std::get<0>(std::get<14>(data)) << "," << std::get<1>(std::get<14>(data)) << "}\n";
         std::cout << "}\n";
     } else {
         std::cout << "Decode failure\n";
