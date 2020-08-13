@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
             , double
             , std::string
             , std::unique_ptr<ByteDataWithTopic>
-            , VoidStruct //ConstType<5>
+            , VoidStruct 
             , std::variant<
                 std::vector<uint16_t>
                 , std::optional<SingleLayerWrapper<
@@ -23,6 +23,9 @@ int main(int argc, char **argv) {
             , GroupedVersionedData<std::string, int64_t, double>
             , bool
             , std::map<std::string, int32_t>
+            , std::unordered_map<int32_t, double>
+            , ConstType<5>
+            , std::list<int16_t>
         >
     ;
     char buf[5] = {0x1, 0x2, 0x3, 0x4, 0x5};
@@ -36,7 +39,7 @@ int main(int argc, char **argv) {
                 , std::string {buf, buf+5}
             }
         )
-        , VoidStruct {}//ConstType<5> {}
+        , VoidStruct {}
         /*
         , std::vector<uint16_t> {
             10000, 11000, 12000
@@ -58,16 +61,32 @@ int main(int argc, char **argv) {
             {"a", 5}
             , {"b", 6}
         }
+        , std::unordered_map<int32_t, double> {
+            {10, 123.456}
+            , {20, 234.567}
+        }
+        , ConstType<5> {}
+        , std::list<int16_t> {321, 654, 987}
     };
-    auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
+    auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 12>::apply(
+        t
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"}
+    );
+    auto encoded = std::string {reinterpret_cast<const char *>(encodedV.data()), reinterpret_cast<const char *>(encodedV.data())+encodedV.size()};
+    //auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
     bytedata_utils::printByteDataDetails(std::cout, ByteData {encoded});
     std::cout << "\n";
-    auto decoded = bytedata_utils::RunDeserializer<CBOR<TestType>>::apply(encoded);
+    auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 12>::apply(
+        encoded, 0
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"}
+    );
+    //auto decoded = bytedata_utils::RunDeserializer<CBOR<TestType>>::apply(encoded);
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
     if (decoded) {
         std::cout << "Decode success\n";
-        TestType const &data = decoded->value;
+        TestType const &data = std::get<0>(*decoded);
+        //TestType const &data = decoded->value;
         //TestType const &data = *decoded;
         std::cout << "TestType {\n";
         std::cout << "\t" << std::get<0>(data) << "\n"
@@ -116,6 +135,17 @@ int main(int argc, char **argv) {
             std::cout << "{'" << item.first << "'," << item.second << "} ";
         }
         std::cout << "}\n";
+        std::cout << "\t, {";
+        for (auto const &item : std::get<9>(data)) {
+            std::cout << "{'" << item.first << "'," << item.second << "} ";
+        }
+        std::cout << "}\n";
+        std::cout << "\t, {}\n";
+        std::cout << "\t, [";
+        for (auto const &item : std::get<11>(data)) {
+            std::cout << item << ' ';
+        }
+        std::cout << "]\n";
         std::cout << "}\n";
     } else {
         std::cout << "Decode failure\n";
