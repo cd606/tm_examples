@@ -162,7 +162,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
     auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
     auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
     
-    auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<R, DI, typename GS::Input>(
+    auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<R, DI>(
         r 
         , "outputHandling"
         , R::facilityConnector(facility)

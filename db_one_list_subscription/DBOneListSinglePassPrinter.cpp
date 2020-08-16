@@ -167,14 +167,14 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
 
     auto keyedCommand = r.execute("keyify", keyify, r.actionAsSource("createCommand", createCommand));
     auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
-        R, DI, typename GS::Input
+        R, DI
         , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
         , ApplyDelta
     >(
         r 
         , "outputHandling"
         , queryConnector
-        , std::move(keyedCommand)
+        , std::move(keyedCommand)     
     );
     r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
     //Please note that as soon as keyify is hooked, we don't need to

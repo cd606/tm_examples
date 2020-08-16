@@ -173,7 +173,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
     auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
     auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
-        R, DI, typename GS::Input
+        R, DI
         , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
         , ApplyDelta
     >(
