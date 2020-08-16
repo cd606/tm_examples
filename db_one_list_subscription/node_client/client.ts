@@ -10,6 +10,7 @@ enum Command {
     , Delete 
     , Unsubscribe
     , List
+    , Snapshot
     , Unknown
 };
 
@@ -124,6 +125,13 @@ async function run(args : Args) {
                 , 0
             ]);
             break;
+        case Command.Snapshot:
+            keyify.pipe(subscriptionStream[0]);
+            subscriptionStream[1].pipe(resultHandlingStream);
+            sendCommand(keyify, [
+                4, {keys: [0]}
+            ]);
+            break;
         default:
             break;
     }
@@ -149,6 +157,9 @@ async function run(args : Args) {
             break;
         case 'list':
             cmd = Command.List;
+            break;
+        case 'snapshot':
+            cmd = Command.Snapshot;
             break;
         default:
             break;

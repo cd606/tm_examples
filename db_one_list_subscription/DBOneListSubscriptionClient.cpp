@@ -156,6 +156,10 @@ void diMain(std::string const &cmd, std::string const &idStr) {
                 return GS::Input {
                     GS::ListSubscriptions {}
                 };
+            } else if (cmd == "snapshot") {
+                return GS::Input {
+                    GS::SnapshotRequest { std::vector<Key> {Key {}} }
+                };
             } else {
                 return std::nullopt;
             }
@@ -311,7 +315,7 @@ int main(int argc, char **argv) {
     po::options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("command", po::value<std::string>(), "the command (subscribe, update, delete, unsubscribe, list)")
+        ("command", po::value<std::string>(), "the command (subscribe, update, delete, unsubscribe, list, snapshot)")
         ("name", po::value<std::string>(), "name for the command")
         ("amount", po::value<int>(), "amount for the command")
         ("stat", po::value<double>(), "stat for the command")
@@ -334,8 +338,8 @@ int main(int argc, char **argv) {
     }
 
     auto cmd = vm["command"].as<std::string>();
-    if (cmd != "subscribe" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe" && cmd != "list") {
-        std::cerr << "Command must be subscribe, update, delete or unsubsribe\n";
+    if (cmd != "subscribe" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe" && cmd != "list" && cmd != "snapshot") {
+        std::cerr << "Command must be subscribe, update, delete, unsubsribe, list or snapshot\n";
         return 1;
     }
 
@@ -356,6 +360,8 @@ int main(int argc, char **argv) {
         idStr = vm["id"].as<std::string>();
         diMain(cmd, idStr);
     } else if (cmd == "list") {
+        diMain(cmd, idStr);
+    } else if (cmd == "snapshot") {
         diMain(cmd, idStr);
     } else if (cmd == "update") {
         if (!vm.count("name")) {

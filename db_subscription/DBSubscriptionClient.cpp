@@ -145,6 +145,10 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
                 return GS::Input {
                     GS::ListSubscriptions {}
                 };
+            } else if (cmd == "snapshot") {
+                return GS::Input {
+                    GS::SnapshotRequest { std::vector<DI::Key> {key} }
+                };
             } else {
                 return std::nullopt;
             }
@@ -319,7 +323,7 @@ int main(int argc, char **argv) {
     po::options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("command", po::value<std::string>(), "the command (subscribe, insert, update, delete, unsubscribe, list)")
+        ("command", po::value<std::string>(), "the command (subscribe, insert, update, delete, unsubscribe, list, snapshot)")
         ("key", po::value<std::string>(), "key for the command")
         ("value1", po::value<int>(), "value1 for the command")
         ("value2", po::value<std::string>(), "value2 for the command")
@@ -344,8 +348,8 @@ int main(int argc, char **argv) {
     }
 
     auto cmd = vm["command"].as<std::string>();
-    if (cmd != "subscribe" && cmd != "insert" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe" && cmd != "list") {
-        std::cerr << "Command must be subscribe, insert, update, delete or unsubsribe\n";
+    if (cmd != "subscribe" && cmd != "insert" && cmd != "update" && cmd != "delete" && cmd != "unsubscribe" && cmd != "list" && cmd != "snapshot") {
+        std::cerr << "Command must be subscribe, insert, update, delete, unsubsribe, list or snapshot\n";
         return 1;
     }
 
@@ -446,5 +450,12 @@ int main(int argc, char **argv) {
         old_version = vm["old_version"].as<int64_t>();
         force = vm.count("force");
         tiMain(cmd, key, value1, value2, old_value1, old_value2, old_version, force);    
+    } else if (cmd == "snapshot") {
+        if (!vm.count("key")) {
+            std::cerr << "Please provide key for command\n";
+            return 1;
+        }
+        key = vm["key"].as<std::string>();
+        diMain(cmd, key, idStr);
     }
 }

@@ -14,6 +14,7 @@ namespace dotnet_client
             , Delete
             , Unsubscribe
             , List
+            , Snapshot
             , Unknown
         };
         struct Data {
@@ -175,6 +176,14 @@ namespace dotnet_client
                     .Add(0) //0 means empty object (the ListSubscriptions object)
             );
         }
+        void Snapshot() {
+            SendCommand(
+                "test_db_one_list_cmd_subscription_queue"
+                , CBORObject.NewArray()
+                    .Add(4) //snapshot
+                    .Add(CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(0))) //subscription object, 0 is the key (VoidStruct)
+            );
+        }
         void Run(Command cmd, Data data) {
             Start();
             switch (cmd) {
@@ -192,6 +201,9 @@ namespace dotnet_client
                 break;
             case Command.List:
                 List(data);
+                break;
+            case Command.Snapshot:
+                Snapshot();
                 break;
             default:
                 break;
@@ -277,6 +289,9 @@ namespace dotnet_client
                     break;
                 case "list":
                     new Program().Run(Command.List, data);
+                    break;
+                case "snapshot":
+                    new Program().Run(Command.Snapshot, data);
                     break;
                 default:
                     break;

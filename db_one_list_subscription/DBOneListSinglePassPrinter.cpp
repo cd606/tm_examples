@@ -99,8 +99,8 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
         }
     );
 
-    auto printFullUpdate = M::template liftPure<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
-        [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) -> typename M::EnvironmentType::IDType {
+    auto printFullUpdate = M::template pureExporter<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
+        [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) {
             std::ostringstream oss;
             oss << "Got full update {";
             oss << "globalVersion=" << update.data.version;
@@ -135,25 +135,9 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
             oss << "]";
             oss << "} (from " << env.id_to_string(update.key.id()) << ")";
             env.log(infra::LogLevel::Info, oss.str());
-
-            return update.key.id();
         }
     );
-    
-    auto unsubscriber = M::template liftMaybe<typename M::EnvironmentType::IDType>(
-        [](typename M::EnvironmentType::IDType &&id) -> std::optional<typename GS::Input> {
-            static std::atomic<bool> unsubscribed = false;
-            if (!unsubscribed) {
-                unsubscribed = true;
-                return typename GS::Input {
-                    typename GS::Unsubscription {std::move(id)}
-                };
-            } else {
-                return std::nullopt;
-            }
-        }
-    );
-   
+      
     auto createCommand = M::template liftPure<basic::VoidStruct>(
         [](basic::VoidStruct &&) -> typename GS::Input {
             return typename GS::Input {
@@ -174,15 +158,11 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
         r 
         , "outputHandling"
         , queryConnector
-        , std::move(keyedCommand)     
+        , std::move(keyedCommand)   
+        , std::chrono::milliseconds(100)   //delay this amount of time before unsubscription
     );
     r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
-    //Please note that as soon as keyify is hooked, we don't need to
-    //call queryConnector again, since the keyify'ed unsubscription
-    //order will flow into the facility. If in doubt, look at the generated graph
-    r.execute(keyify
-        , r.execute("unsubscriber", unsubscriber
-            , r.execute("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone())));
+    r.exportItem("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone());
 
     return r.actionAsSink(createCommand);
 }

@@ -16,6 +16,7 @@ class Command(Enum):
     Delete = 2
     Unsubscribe = 3
     List = 4
+    Snapshot = 5
 
 def attachMyIdentity(x : bytes) -> bytes:
     return cbor2.dumps(["python_client", x])
@@ -31,13 +32,15 @@ def parseCommand(s : str) -> Command:
         return Command.Unsubscribe
     elif s == 'list':
         return Command.List
+    elif s == 'snapshot':
+        return Command.Snapshot
     else:
         return None
 
 def setup_queue(cmd : Command, qin : asyncio.Queue, qout : asyncio.Queue) -> List[asyncio.Task] :
     subscriptionLocator = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     transactionLocator = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
-    if cmd in [Command.Subscribe, Command.Unsubscribe, Command.List]:
+    if cmd in [Command.Subscribe, Command.Unsubscribe, Command.List, Command.Snapshot]:
         return TMTransport.MultiTransportFacilityClient.facility(
             subscriptionLocator, qin, qout,
             identityAttacher=attachMyIdentity
@@ -109,6 +112,11 @@ async def delete(qin : asyncio.Queue, qout : asyncio.Queue, name : str, old_vers
         }
     ]))
 
+async def snapshot(qin : asyncio.Queue, qout : asyncio.Queue):
+    await send(qin, qout, cbor2.dumps([
+        4, {'keys': [0]}
+    ]))
+
 @click.command()
 @click.option('--command', help='subscribe|update|delete|unsubscribe|list')
 @click.option('--name', help='name field for db row', default='')
@@ -134,9 +142,12 @@ def run(command : str, name : str, amount : int, stat : float, old_version : int
         elif cmd == Command.Delete:
             tasks.append(asyncio.create_task(delete(qin, qout, name, old_version, old_count)))
         elif cmd == Command.Unsubscribe:
-            tasks.append(asyncio.create_task(unsubscribe(qin, qout, id)))
+            tasks.append(asyncio.create_task(unsubscribe(qin, qout, id)))      
         elif cmd == Command.List:
             tasks.append(asyncio.create_task(list(qin, qout)))
+        elif cmd == Command.Snapshot:
+            tasks.append(asyncio.create_task(snapshot(qin, qout)))  
+
         await asyncio.gather(*tasks)
     asyncio.run(asyncMain())
 
