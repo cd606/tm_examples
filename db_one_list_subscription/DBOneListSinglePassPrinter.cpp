@@ -63,42 +63,6 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
         typename M::EnvironmentType::IDType, DI
     >;
 
-    std::shared_ptr<int> unsubscriptionCount = std::make_shared<int>(0);
-    r.preservePointer(unsubscriptionCount);
-
-    auto printAck = M::template simpleExporter<typename M::template KeyedData<typename GS::Input, typename GS::Output>>(
-        [&env,unsubscriptionCount](typename M::template InnerData<typename M::template KeyedData<typename GS::Input, typename GS::Output>> &&o) {
-            auto id = o.timedData.value.key.id();
-            std::visit([&id,&env,&unsubscriptionCount](auto const &x) {
-                using T = std::decay_t<decltype(x)>;
-                if constexpr (std::is_same_v<T,typename GS::Subscription>) {
-                    std::ostringstream oss;
-                    oss << "Got subscription ack for " << env.id_to_string(id)
-                        << " on " << x.keys.size() << " keys";
-                    env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T,typename GS::Unsubscription>) {
-                    std::ostringstream oss;
-                    oss << "Got unsubscription ack for " << env.id_to_string(x.originalSubscriptionID)
-                        << " from " << env.id_to_string(id);
-                    env.log(infra::LogLevel::Info, oss.str());
-                    ++(*unsubscriptionCount);
-                    if (*unsubscriptionCount == 2) {
-                        env.log(infra::LogLevel::Info, "All unsubscribed, exiting");
-                        env.exit();
-                    }
-                } else if constexpr (std::is_same_v<T,typename GS::SubscriptionInfo>) {
-                    std::ostringstream oss;
-                    oss << "Got subscription info " << x;
-                    env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T,typename GS::UnsubscribeAll>) {
-                    std::ostringstream oss;
-                    oss << "Got unsubscribe-all ack from " << env.id_to_string(id);
-                    env.log(infra::LogLevel::Info, oss.str());
-                }
-            }, o.timedData.value.data.value);
-        }
-    );
-
     auto printFullUpdate = M::template pureExporter<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
         [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) {
             std::ostringstream oss;
@@ -135,13 +99,14 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
             oss << "]";
             oss << "} (from " << env.id_to_string(update.key.id()) << ")";
             env.log(infra::LogLevel::Info, oss.str());
+            env.exit();
         }
     );
       
     auto createCommand = M::template liftPure<basic::VoidStruct>(
         [](basic::VoidStruct &&) -> typename GS::Input {
             return typename GS::Input {
-                typename GS::Subscription { std::vector<Key> {Key {}} }
+                typename GS::SnapshotRequest { std::vector<Key> {Key {}} }
             };
         }
     );
@@ -159,9 +124,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
         , "outputHandling"
         , queryConnector
         , std::move(keyedCommand)   
-        , std::chrono::milliseconds(100)   //delay this amount of time before unsubscription
     );
-    r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
     r.exportItem("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone());
 
     return r.actionAsSink(createCommand);
