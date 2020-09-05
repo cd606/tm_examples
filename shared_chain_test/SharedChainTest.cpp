@@ -235,38 +235,57 @@ void histRun() {
     r.registerExporter("printState", printState);
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
 
-    auto reqClockImporter = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createRecurringClockImporter<RequestData>(
+    auto transferImporter1 = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockImporter<RequestData>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
-        , std::chrono::seconds(5)
+        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+            return std::chrono::seconds(std::rand()%5+1);
+        }
         , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
-            int x = std::rand()%5;
-            if (x <= 1) {
-                TransferRequest req;
-                req.from = "a";
-                req.to = "b";
-                req.amount = (std::rand()%9+1)*100;
-                return {{req}};
-            } else if (x <= 3) {
-                TransferRequest req;
-                req.from = "b";
-                req.to = "a";
-                req.amount = (std::rand()%9+1)*100;
-                return {{req}};
-            } else {
-                return {{Process {}}};
-            }
+            TransferRequest req;
+            req.from = "a";
+            req.to = "b";
+            req.amount = (std::rand()%9+1)*100;
+            return {{req}};
         }
     );
-    r.registerImporter("reqClockImporter", reqClockImporter);
+    auto transferImporter2 = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockImporter<RequestData>(
+        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
+        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+            return std::chrono::seconds(std::rand()%5+1);
+        }
+        , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
+            TransferRequest req;
+            req.from = "b";
+            req.to = "a";
+            req.amount = (std::rand()%9+1)*100;
+            return {{req}};
+        }
+    );
+    auto processImporter = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockConstImporter<RequestData>(
+        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
+        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+            return std::chrono::seconds(std::rand()%20+1);
+        }
+        , RequestData {{Process {}}}
+    );
+    r.registerImporter("transferImporter1", transferImporter1);
+    r.registerImporter("transferImporter2", transferImporter2);
+    r.registerImporter("processImporter", processImporter);
 
     auto keyify = A::kleisli<RequestData>(basic::CommonFlowUtilComponents<A>::keyify<RequestData>());
     r.registerAction("keyify", keyify);
 
+    r.execute(keyify, r.importItem(transferImporter1));
+    r.execute(keyify, r.importItem(transferImporter2));
+    r.execute(keyify, r.importItem(processImporter));
+
     auto reqHandler = A::fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, InMemoryChain, StateFolder, RequestHandler<A>>(&chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
-    r.placeOrderWithFacilityAndForget(r.execute(keyify, r.importItem(reqClockImporter)), reqHandler);
+    r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
 
     r.finalize();
 }
