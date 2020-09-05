@@ -16,6 +16,13 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 
+#include <grpcpp/grpcpp.h>
+#ifdef _MSC_VER
+#undef DELETE
+#endif
+#include <libetcd/rpc.grpc.pb.h>
+#include <libetcd/kv.pb.h>
+
 using namespace dev::cd606::tm;
 
 #define TransferRequestFields \
@@ -32,6 +39,7 @@ using RequestData = basic::CBOR<std::variant<TransferRequest, Process>>;
 using RequestID = std::string;
 
 #define RequestChainItemFields \
+    ((int64_t, revision)) \
     ((RequestID, requestID)) \
     ((RequestData, requestData)) 
 
@@ -59,15 +67,15 @@ inline std::ostream &operator<<(std::ostream &os, State const &s) {
     return os;
 }
 
+#define MapDataFields \
+    ((RequestData, data)) \
+    ((RequestID, nextID)) 
+
+TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(MapData, MapDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(MapData, MapDataFields);
+
 class InMemoryChain {
 public:
-    struct MapData {
-        RequestChainItem data;
-        RequestID nextID;
-
-        MapData() : data(), nextID() {}
-        MapData(RequestChainItem &&d) : data(std::move(d)), nextID() {}
-    };
     using TheMap = std::unordered_map<RequestID, MapData>;
     using ItemType = RequestChainItem;
 private:
@@ -78,7 +86,7 @@ public:
     }
     ItemType head(void *) {
         std::lock_guard<std::mutex> _(mutex_);
-        return theMap_[""].data;
+        return ItemType {0, "", theMap_[""].data};
     }
     std::optional<ItemType> fetchNext(ItemType const &current) {
         std::lock_guard<std::mutex> _(mutex_);
@@ -93,7 +101,7 @@ public:
         if (iter == theMap_.end()) {
             return std::nullopt;
         }
-        return {iter->second.data};
+        return ItemType {0, iter->first, iter->second.data};
     }
     bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
         std::lock_guard<std::mutex> _(mutex_);
@@ -108,8 +116,135 @@ public:
             return false;
         }
         iter->second.nextID = toBeWritten.requestID;
-        theMap_.insert({iter->second.nextID, MapData {std::move(toBeWritten)}}).first;
+        theMap_.insert({iter->second.nextID, MapData {std::move(toBeWritten.requestData), ""}}).first;
         return true;
+    }
+};
+
+class EtcdChain {
+private:
+    std::shared_ptr<grpc::ChannelInterface> channel_;
+    std::unique_ptr<etcdserverpb::KV::Stub> stub_;
+    inline static const std::string CHAIN_PREFIX="shared_chain_test:";
+    std::string headKey_;
+public:
+    using ItemType = RequestChainItem;
+    EtcdChain(std::string const &headKey) : 
+        channel_(grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials()))
+        , stub_(etcdserverpb::KV::NewStub(channel_))
+        , headKey_(headKey)
+    {
+    }
+    ~EtcdChain() {}
+    ItemType head(void *) {
+        static const std::string emptyHeadDataStr = basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply({MapData {}}); 
+
+        etcdserverpb::TxnRequest txn;
+        auto *cmp = txn.add_compare();
+        cmp->set_result(etcdserverpb::Compare::GREATER);
+        cmp->set_target(etcdserverpb::Compare::VERSION);
+        cmp->set_key(CHAIN_PREFIX+headKey_);
+        cmp->set_version(0);
+        auto *action = txn.add_success();
+        auto *get = action->mutable_request_range();
+        get->set_key(CHAIN_PREFIX+headKey_);
+        action = txn.add_failure();
+        auto *put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+headKey_);
+        put->set_value(emptyHeadDataStr);
+        action = txn.add_failure();
+        get = action->mutable_request_range();
+        get->set_key(CHAIN_PREFIX+headKey_);
+
+        etcdserverpb::TxnResponse txnResp;
+        grpc::ClientContext txnCtx;
+        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Txn(&txnCtx, txn, &txnResp);
+
+        if (txnResp.succeeded()) {
+            auto &kv = txnResp.responses(0).response_range().kvs(0);
+            auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+                kv.value()
+            );
+            if (mapData) {
+                return ItemType {kv.mod_revision(), headKey_, mapData->value.data};
+            } else {
+                return ItemType {};
+            }
+        } else {
+            auto &kv = txnResp.responses(1).response_range().kvs(0);
+            auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+                kv.value()
+            );
+            if (mapData) {
+                return ItemType {kv.mod_revision(), headKey_, mapData->value.data};
+            } else {
+                return ItemType {};
+            }
+        }
+    }
+    std::optional<ItemType> fetchNext(ItemType const &current) {
+        etcdserverpb::RangeRequest range;
+        range.set_key(CHAIN_PREFIX+current.requestID);
+
+        etcdserverpb::RangeResponse rangeResp;
+        grpc::ClientContext rangeCtx;
+        rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Range(&rangeCtx, range, &rangeResp);
+
+        auto &kv = rangeResp.kvs(0);
+        auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+            kv.value()
+        );
+        if (mapData) {
+            if (mapData->value.nextID != "") {
+                auto nextID = mapData->value.nextID;
+                etcdserverpb::RangeRequest range2;
+                range2.set_key(CHAIN_PREFIX+nextID);
+
+                etcdserverpb::RangeResponse rangeResp2;
+                grpc::ClientContext rangeCtx2;
+                rangeCtx2.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+                stub_->Range(&rangeCtx2, range2, &rangeResp2);
+
+                auto &kv2 = rangeResp2.kvs(0);
+                mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+                    kv2.value()
+                );
+                if (mapData) {
+                    return ItemType {kv2.mod_revision(), nextID, mapData->value.data};
+                } else {
+                    return std::nullopt;
+                }
+            } else {
+                return std::nullopt;
+            }
+        } else {
+            return std::nullopt;
+        }
+    }
+    bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
+        etcdserverpb::TxnRequest txn;
+        auto *cmp = txn.add_compare();
+        cmp->set_result(etcdserverpb::Compare::EQUAL);
+        cmp->set_target(etcdserverpb::Compare::MOD);
+        cmp->set_key(CHAIN_PREFIX+current.requestID);
+        cmp->set_mod_revision(current.revision);
+        auto *action = txn.add_success();
+        auto *put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+current.requestID);
+        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {current.requestData, toBeWritten.requestID}})); 
+        action = txn.add_success();
+        put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+toBeWritten.requestID);
+        put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {std::move(toBeWritten.requestData), ""}})); 
+        
+        etcdserverpb::TxnResponse txnResp;
+        grpc::ClientContext txnCtx;
+        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Txn(&txnCtx, txn, &txnResp);
+
+        return txnResp.succeeded();
     }
 };
 
@@ -183,12 +318,12 @@ public:
                 std::ostringstream oss;
                 oss << "Appending request " << x;
                 env->log(infra::LogLevel::Info, oss.str());
-                return {true, {RequestChainItem {idStr, {std::move(x)}}}};
+                return {true, {RequestChainItem {0, idStr, {std::move(x)}}}};
             } else if constexpr (std::is_same_v<T, Process>) {
                 std::ostringstream oss;
                 oss << "Appending request " << x;
                 env->log(infra::LogLevel::Info, oss.str());
-                return {true, {RequestChainItem {idStr, {std::move(x)}}}};
+                return {true, {RequestChainItem {0, idStr, {std::move(x)}}}};
             } else {
                 return {false, std::nullopt};
             }
@@ -196,14 +331,11 @@ public:
     }
 };
 
-template <class A, class ClockImp>
-void run() {
+template <class A, class ClockImp, class Chain>
+void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part, std::function<void()> tc) {
     using TheEnvironment = typename A::EnvironmentType;
 
-    TheEnvironment env;
-    infra::AppRunner<A> r(&env);
-
-    InMemoryChain chain;
+    infra::AppRunner<A> r(env);
 
     std::srand(std::time(nullptr));
     
@@ -217,75 +349,84 @@ void run() {
     );
     r.registerImporter("readerClockImporter", readerClockImporter);
 
-    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, InMemoryChain, StateFolder>(&env, &chain));
+    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, Chain, StateFolder>(env, chain));
     r.registerAction("readerAction", readerAction);
 
     auto printState = A::template pureExporter<State>(
-        [&env](State &&s) {
+        [env](State &&s) {
             std::ostringstream oss;
             oss << "Current state: " << s;
-            env.log(infra::LogLevel::Info, oss.str());
+            env->log(infra::LogLevel::Info, oss.str());
         }
     );
     r.registerExporter("printState", printState);
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
 
-    auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
-        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
-        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
-            return std::chrono::seconds(std::rand()%5+1);
-        }
-        , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
-            TransferRequest req;
-            req.from = "a";
-            req.to = "b";
-            req.amount = (std::rand()%9+1)*100;
-            return {{req}};
-        }
-    );
-    auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
-        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
-        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
-            return std::chrono::seconds(std::rand()%5+1);
-        }
-        , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
-            TransferRequest req;
-            req.from = "b";
-            req.to = "a";
-            req.amount = (std::rand()%9+1)*100;
-            return {{req}};
-        }
-    );
-    auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<RequestData>(
-        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
-        , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
-            return std::chrono::seconds(std::rand()%20+1);
-        }
-        , RequestData {{Process {}}}
-    );
-    r.registerImporter("transferImporter1", transferImporter1);
-    r.registerImporter("transferImporter2", transferImporter2);
-    r.registerImporter("processImporter", processImporter);
-
+    
     auto keyify = A::template kleisli<RequestData>(basic::CommonFlowUtilComponents<A>::template keyify<RequestData>());
     r.registerAction("keyify", keyify);
 
-    r.execute(keyify, r.importItem(transferImporter1));
-    r.execute(keyify, r.importItem(transferImporter2));
-    r.execute(keyify, r.importItem(processImporter));
+    if (part == "" || part == "a-to-b") {
+        auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
+            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+                return std::chrono::seconds(std::rand()%5+1);
+            }
+            , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
+                TransferRequest req;
+                req.from = "a";
+                req.to = "b";
+                req.amount = (std::rand()%9+1)*100;
+                return {{req}};
+            }
+        );
+        r.registerImporter("transferImporter1", transferImporter1);
+        r.execute(keyify, r.importItem(transferImporter1));
+    }
+    if (part == "" || part == "b-to-a") {
+        auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
+            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+                return std::chrono::seconds(std::rand()%5+1);
+            }
+            , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
+                TransferRequest req;
+                req.from = "b";
+                req.to = "a";
+                req.amount = (std::rand()%9+1)*100;
+                return {{req}};
+            }
+        );
+        r.registerImporter("transferImporter2", transferImporter2);
+        r.execute(keyify, r.importItem(transferImporter2));
+    }
+    if (part == "" || part == "process") {
+        auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<RequestData>(
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
+            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
+                return std::chrono::seconds(std::rand()%20+1);
+            }
+            , RequestData {{Process {}}}
+        );
+        r.registerImporter("processImporter", processImporter);
+        r.execute(keyify, r.importItem(processImporter));
+    }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, InMemoryChain, StateFolder, RequestHandler<A>>(&chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder, RequestHandler<A>>(chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
 
     r.finalize();
+
+    tc();
 }
 
-void histRun() {
+template <class Chain>
+void histRun(Chain *chain, std::string const &part) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
@@ -294,11 +435,60 @@ void histRun() {
     >;
     using ClockImp = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>;
     using A = infra::SinglePassIterationApp<TheEnvironment>;
-    run<A,ClockImp>();
-    infra::terminationController(infra::ImmediatelyTerminate {});
+    TheEnvironment env;
+    run<A,ClockImp,Chain>(&env, chain, part, []() {
+        infra::terminationController(infra::ImmediatelyTerminate {});
+    });
+}
+
+template <class Chain>
+void rtRun(Chain *chain, std::string const &part) {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent
+    >;
+    using ClockImp = basic::real_time_clock::ClockImporter<TheEnvironment>;
+    using A = infra::RealTimeApp<TheEnvironment>;
+    TheEnvironment env;
+    auto clockSettings = TheEnvironment::clockSettingsWithStartPointCorrespondingToNextAlignment(
+        1
+        , "2020-01-01T10:00"
+        , 10.0
+    );
+    env.basic::real_time_clock::ClockComponent::operator=(
+        basic::real_time_clock::ClockComponent(clockSettings)
+    );
+    run<A,ClockImp,Chain>(&env, chain, part, [&env]() {
+        infra::terminationController(infra::TerminateAtTimePoint {
+            env.actualTime(
+                infra::withtime_utils::parseLocalTime("2020-01-01T11:00:01")
+            )
+        });
+    });
 }
 
 int main(int argc, char **argv) {
-    histRun();
+    bool rt = (argc == 1 || std::string(argv[1]) != "hist");
+    bool useEtcd = (argc <= 2 || std::string(argv[2]) != "in-mem");
+    std::string part = ((argc <= 3)?"":argv[3]);
+    if (rt) {
+        if (useEtcd) {
+            EtcdChain etcdChain("2020-01-01-head");
+            rtRun(&etcdChain, part);
+        } else {
+            InMemoryChain chain;
+            rtRun(&chain, part);
+        }
+    } else {
+        if (useEtcd) {
+            EtcdChain etcdChain("2020-01-01-head");
+            histRun(&etcdChain, part);
+        } else {
+            InMemoryChain chain;
+            histRun(&chain, part);
+        }
+    }
     return 0;
 }
