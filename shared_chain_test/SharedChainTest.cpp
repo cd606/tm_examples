@@ -196,14 +196,9 @@ public:
     }
 };
 
-void histRun() {
-    using TheEnvironment = infra::Environment<
-        infra::CheckTimeComponent<true>,
-        infra::FlagExitControlComponent,
-        basic::TimeComponentEnhancedWithSpdLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>, false>,
-        transport::CrossGuidComponent
-    >;
-    using A = infra::SinglePassIterationApp<TheEnvironment>;
+template <class A, class ClockImp>
+void run() {
+    using TheEnvironment = typename A::EnvironmentType;
 
     TheEnvironment env;
     infra::AppRunner<A> r(&env);
@@ -212,7 +207,7 @@ void histRun() {
 
     std::srand(std::time(nullptr));
     
-    auto readerClockImporter = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createRecurringClockImporter<basic::VoidStruct>(
+    auto readerClockImporter = ClockImp::template createRecurringClockImporter<basic::VoidStruct>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
         , std::chrono::minutes(1)
@@ -222,10 +217,10 @@ void histRun() {
     );
     r.registerImporter("readerClockImporter", readerClockImporter);
 
-    auto readerAction = A::liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, InMemoryChain, StateFolder>(&env, &chain));
+    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, InMemoryChain, StateFolder>(&env, &chain));
     r.registerAction("readerAction", readerAction);
 
-    auto printState = A::pureExporter<State>(
+    auto printState = A::template pureExporter<State>(
         [&env](State &&s) {
             std::ostringstream oss;
             oss << "Current state: " << s;
@@ -235,7 +230,7 @@ void histRun() {
     r.registerExporter("printState", printState);
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
 
-    auto transferImporter1 = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockImporter<RequestData>(
+    auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
         , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
@@ -249,7 +244,7 @@ void histRun() {
             return {{req}};
         }
     );
-    auto transferImporter2 = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockImporter<RequestData>(
+    auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
         , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
@@ -263,7 +258,7 @@ void histRun() {
             return {{req}};
         }
     );
-    auto processImporter = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>::createVariableDurationRecurringClockConstImporter<RequestData>(
+    auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<RequestData>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
         , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
@@ -275,19 +270,32 @@ void histRun() {
     r.registerImporter("transferImporter2", transferImporter2);
     r.registerImporter("processImporter", processImporter);
 
-    auto keyify = A::kleisli<RequestData>(basic::CommonFlowUtilComponents<A>::keyify<RequestData>());
+    auto keyify = A::template kleisli<RequestData>(basic::CommonFlowUtilComponents<A>::template keyify<RequestData>());
     r.registerAction("keyify", keyify);
 
     r.execute(keyify, r.importItem(transferImporter1));
     r.execute(keyify, r.importItem(transferImporter2));
     r.execute(keyify, r.importItem(processImporter));
 
-    auto reqHandler = A::fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, InMemoryChain, StateFolder, RequestHandler<A>>(&chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, InMemoryChain, StateFolder, RequestHandler<A>>(&chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
 
     r.finalize();
+}
+
+void histRun() {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>, false>,
+        transport::CrossGuidComponent
+    >;
+    using ClockImp = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>;
+    using A = infra::SinglePassIterationApp<TheEnvironment>;
+    run<A,ClockImp>();
+    infra::terminationController(infra::ImmediatelyTerminate {});
 }
 
 int main(int argc, char **argv) {
