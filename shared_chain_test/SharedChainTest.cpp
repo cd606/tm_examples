@@ -294,7 +294,7 @@ public:
     using Env = typename App::EnvironmentType;
     void initialize(Env *) {
     }
-    std::tuple<ResponseType, std::optional<RequestChainItem>> handleInput(Env *env, typename App::Key<InputType> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<RequestChainItem>> handleInput(Env *env, typename App::template Key<InputType> &&input, State const &currentState) {
         auto idStr = Env::id_to_string(input.id());
         return std::visit([env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<RequestChainItem>> {
             using T = std::decay_t<decltype(x)>;
