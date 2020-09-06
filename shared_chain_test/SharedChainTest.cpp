@@ -43,7 +43,7 @@ using RequestID = std::string;
     ((RequestID, requestID)) \
     ((RequestData, requestData)) 
 
-TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(RequestChainItem, RequestChainItemFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(RequestChainItem, RequestChainItemFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(RequestChainItem, RequestChainItemFields);
 
 struct State {
@@ -71,7 +71,7 @@ inline std::ostream &operator<<(std::ostream &os, State const &s) {
     ((RequestData, data)) \
     ((RequestID, nextID)) 
 
-TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(MapData, MapDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(MapData, MapDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(MapData, MapDataFields);
 
 class InMemoryChain {

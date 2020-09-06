@@ -1,5 +1,6 @@
 #include <tm_kit/infra/WithTimeData.hpp>
 #include <tm_kit/basic/ByteData.hpp>
+#include <tm_kit/basic/PrintHelper.hpp>
 #include <iostream>
 #include <iomanip>
 
@@ -92,6 +93,8 @@ int main(int argc, char **argv) {
     if (decoded) {
         std::cout << "Decode success\n";
         TestType const &data = std::get<0>(*decoded);
+	PrintHelper<TestType>::print(std::cout, data);
+	std::cout << '\n';
         //TestType const &data = decoded->value;
         //TestType const &data = *decoded;
         std::cout << "TestType {\n";
