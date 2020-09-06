@@ -41,7 +41,8 @@ using RequestID = std::string;
 #define RequestChainItemFields \
     ((int64_t, revision)) \
     ((RequestID, requestID)) \
-    ((RequestData, requestData)) 
+    ((RequestData, requestData)) \
+    ((RequestID, nextID)) 
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(RequestChainItem, RequestChainItemFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(RequestChainItem, RequestChainItemFields);
@@ -86,7 +87,8 @@ public:
     }
     ItemType head(void *) {
         std::lock_guard<std::mutex> _(mutex_);
-        return ItemType {0, "", theMap_[""].data};
+        auto &x = theMap_[""];
+        return ItemType {0, "", x.data, x.nextID};
     }
     std::optional<ItemType> fetchNext(ItemType const &current) {
         std::lock_guard<std::mutex> _(mutex_);
@@ -101,7 +103,7 @@ public:
         if (iter == theMap_.end()) {
             return std::nullopt;
         }
-        return ItemType {0, iter->first, iter->second.data};
+        return ItemType {0, iter->first, iter->second.data, iter->second.nextID};
     }
     bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
         std::lock_guard<std::mutex> _(mutex_);
@@ -126,16 +128,86 @@ private:
     std::shared_ptr<grpc::ChannelInterface> channel_;
     std::unique_ptr<etcdserverpb::KV::Stub> stub_;
     inline static const std::string CHAIN_PREFIX="shared_chain_test:";
+    inline static const std::string CHAIN_RANGE_END="shared_chain_test;";
     std::string headKey_;
+    std::atomic<int64_t> latestModRevision_;
+    std::atomic<bool> watchThreadRunning_;
+    std::thread watchThread_;
+
+    void runWatchThread() {
+        etcdserverpb::WatchRequest req;
+        auto *r = req.mutable_create_request();
+        r->set_key(CHAIN_PREFIX);
+        r->set_range_end(CHAIN_RANGE_END);
+
+        etcdserverpb::WatchResponse watchResponse;
+        grpc::CompletionQueue queue;
+        void *tag;
+        bool ok; 
+
+        auto watchStub = etcdserverpb::Watch::NewStub(channel_);
+        grpc::ClientContext watchCtx;
+        watchCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+    
+        std::shared_ptr<
+            grpc::ClientAsyncReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>
+        > watchStream { watchStub->AsyncWatch(&watchCtx, &queue, (void *)1) };
+
+        while (watchThreadRunning_) {
+            auto status = queue.AsyncNext(&tag, &ok, std::chrono::system_clock::now()+std::chrono::milliseconds(1));
+            if (!watchThreadRunning_) {
+                break;
+            }
+            if (status == grpc::CompletionQueue::SHUTDOWN) {
+                watchThreadRunning_ = false;
+                break;
+            }
+            if (status == grpc::CompletionQueue::TIMEOUT) {
+                continue;
+            }
+            if (!ok) {
+                watchThreadRunning_ = false;
+                break;
+            }
+            auto tagNum = reinterpret_cast<intptr_t>(tag);
+            switch (tagNum) {
+            case 1:
+                watchStream->Write(req, (void *)2);
+                watchStream->Read(&watchResponse, (void *)3);
+                break;
+            case 2:
+                watchStream->WritesDone((void *)4);
+                break;
+            case 3:
+                if (watchResponse.events_size() > 0) {
+                    //std::cerr << "Incoming " << watchResponse.header().revision() << "\n";
+                    latestModRevision_.store(watchResponse.header().revision(), std::memory_order_release);
+                }
+                watchStream->Read(&watchResponse, (void *)3);  
+                break;
+            default:
+                break;
+            }
+        }
+    }
 public:
     using ItemType = RequestChainItem;
     EtcdChain(std::string const &headKey) : 
         channel_(grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials()))
         , stub_(etcdserverpb::KV::NewStub(channel_))
-        , headKey_(headKey)
+        , headKey_(headKey), latestModRevision_(0), watchThreadRunning_(true), watchThread_()
     {
+        watchThread_ = std::thread(&EtcdChain::runWatchThread, this);
+        watchThread_.detach();
     }
-    ~EtcdChain() {}
+    ~EtcdChain() {
+        if (watchThreadRunning_) {
+            watchThreadRunning_ = false;
+            if (watchThread_.joinable()) {
+                watchThread_.join();
+            }
+        }   
+    }
     ItemType head(void *) {
         static const std::string emptyHeadDataStr = basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply({MapData {}}); 
 
@@ -167,7 +239,7 @@ public:
                 kv.value()
             );
             if (mapData) {
-                return ItemType {kv.mod_revision(), headKey_, mapData->value.data};
+                return ItemType {kv.mod_revision(), headKey_, mapData->value.data, mapData->value.nextID};
             } else {
                 return ItemType {};
             }
@@ -177,13 +249,21 @@ public:
                 kv.value()
             );
             if (mapData) {
-                return ItemType {kv.mod_revision(), headKey_, mapData->value.data};
+                return ItemType {kv.mod_revision(), headKey_, mapData->value.data, mapData->value.nextID};
             } else {
                 return ItemType {};
             }
         }
     }
     std::optional<ItemType> fetchNext(ItemType const &current) {
+        if (current.nextID == "") {
+            auto latestRev = latestModRevision_.load(std::memory_order_acquire);
+            if (latestRev > 0 && current.revision >= latestRev) {
+                //std::cerr << "Current=" << current.revision << ",latest=" << latestRev << "\n";
+                return std::nullopt;
+            }
+        }
+
         etcdserverpb::RangeRequest range;
         range.set_key(CHAIN_PREFIX+current.requestID);
 
@@ -212,7 +292,7 @@ public:
                     kv2.value()
                 );
                 if (mapData) {
-                    return ItemType {kv2.mod_revision(), nextID, mapData->value.data};
+                    return ItemType {kv2.mod_revision(), nextID, mapData->value.data, mapData->value.nextID};
                 } else {
                     return std::nullopt;
                 }
@@ -335,6 +415,7 @@ template <class A, class ClockImp, class Chain>
 void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part, std::function<void()> tc) {
     using TheEnvironment = typename A::EnvironmentType;
 
+    env->setLogFilePrefix("shared_chain_test_"+part, true);
     infra::AppRunner<A> r(env);
 
     std::srand(std::time(nullptr));
@@ -435,7 +516,7 @@ void histRun(Chain *chain, std::string const &part) {
     >;
     using ClockImp = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>;
     using A = infra::SinglePassIterationApp<TheEnvironment>;
-    TheEnvironment env;
+    TheEnvironment env;    
     run<A,ClockImp,Chain>(&env, chain, part, []() {
         infra::terminationController(infra::ImmediatelyTerminate {});
     });
