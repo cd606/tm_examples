@@ -123,7 +123,11 @@ public:
     }
 };
 
-class EtcdChain {
+template <bool DataOnSeparateStorage>
+class EtcdChain {};
+
+template <>
+class EtcdChain<false> {
 private:
     std::shared_ptr<grpc::ChannelInterface> channel_;
     std::unique_ptr<etcdserverpb::KV::Stub> stub_;
@@ -304,6 +308,10 @@ public:
         }
     }
     bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
+        if (current.nextID != "") {
+            return false;
+        } 
+
         etcdserverpb::TxnRequest txn;
         auto *cmp = txn.add_compare();
         cmp->set_result(etcdserverpb::Compare::EQUAL);
@@ -324,7 +332,11 @@ public:
         txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
         stub_->Txn(&txnCtx, txn, &txnResp);
 
-        return txnResp.succeeded();
+        bool ret = txnResp.succeeded();
+        if (ret) {
+            latestModRevision_.store(txnResp.responses(1).response_put().header().revision(), std::memory_order_release);
+        }
+        return ret;
     }
 };
 
@@ -363,6 +375,213 @@ public:
                 return lastState;
             }
         }, newInfo.requestData.value);
+    }
+};
+
+template <>
+class EtcdChain<true> {
+private:
+    std::shared_ptr<grpc::ChannelInterface> channel_;
+    std::unique_ptr<etcdserverpb::KV::Stub> stub_;
+    inline static const std::string CHAIN_PREFIX="shared_chain_test:";
+    inline static const std::string CHAIN_RANGE_END="shared_chain_test;";
+    inline static const std::string DATA_PREFIX="shared_chain_test_data:";
+    std::string headKey_;
+    std::atomic<int64_t> latestModRevision_;
+    std::atomic<bool> watchThreadRunning_;
+    std::thread watchThread_;
+
+    void runWatchThread() {
+        etcdserverpb::WatchRequest req;
+        auto *r = req.mutable_create_request();
+        r->set_key(CHAIN_PREFIX);
+        r->set_range_end(CHAIN_RANGE_END);
+
+        etcdserverpb::WatchResponse watchResponse;
+        grpc::CompletionQueue queue;
+        void *tag;
+        bool ok; 
+
+        auto watchStub = etcdserverpb::Watch::NewStub(channel_);
+        grpc::ClientContext watchCtx;
+        watchCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+    
+        std::shared_ptr<
+            grpc::ClientAsyncReaderWriter<etcdserverpb::WatchRequest, etcdserverpb::WatchResponse>
+        > watchStream { watchStub->AsyncWatch(&watchCtx, &queue, (void *)1) };
+
+        while (watchThreadRunning_) {
+            auto status = queue.AsyncNext(&tag, &ok, std::chrono::system_clock::now()+std::chrono::milliseconds(1));
+            if (!watchThreadRunning_) {
+                break;
+            }
+            if (status == grpc::CompletionQueue::SHUTDOWN) {
+                watchThreadRunning_ = false;
+                break;
+            }
+            if (status == grpc::CompletionQueue::TIMEOUT) {
+                continue;
+            }
+            if (!ok) {
+                watchThreadRunning_ = false;
+                break;
+            }
+            auto tagNum = reinterpret_cast<intptr_t>(tag);
+            switch (tagNum) {
+            case 1:
+                watchStream->Write(req, (void *)2);
+                watchStream->Read(&watchResponse, (void *)3);
+                break;
+            case 2:
+                watchStream->WritesDone((void *)4);
+                break;
+            case 3:
+                if (watchResponse.events_size() > 0) {
+                    //std::cerr << "Incoming " << watchResponse.header().revision() << "\n";
+                    latestModRevision_.store(watchResponse.header().revision(), std::memory_order_release);
+                }
+                watchStream->Read(&watchResponse, (void *)3);  
+                break;
+            default:
+                break;
+            }
+        }
+    }
+public:
+    using ItemType = RequestChainItem;
+    EtcdChain(std::string const &headKey) : 
+        channel_(grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials()))
+        , stub_(etcdserverpb::KV::NewStub(channel_))
+        , headKey_(headKey), latestModRevision_(0), watchThreadRunning_(true), watchThread_()
+    {
+        watchThread_ = std::thread(&EtcdChain::runWatchThread, this);
+        watchThread_.detach();
+    }
+    ~EtcdChain() {
+        if (watchThreadRunning_) {
+            watchThreadRunning_ = false;
+            if (watchThread_.joinable()) {
+                watchThread_.join();
+            }
+        }   
+    }
+    ItemType head(void *) {
+        etcdserverpb::TxnRequest txn;
+        auto *cmp = txn.add_compare();
+        cmp->set_result(etcdserverpb::Compare::GREATER);
+        cmp->set_target(etcdserverpb::Compare::VERSION);
+        cmp->set_key(CHAIN_PREFIX+headKey_);
+        cmp->set_version(0);
+        auto *action = txn.add_success();
+        auto *get = action->mutable_request_range();
+        get->set_key(CHAIN_PREFIX+headKey_);
+        action = txn.add_failure();
+        auto *put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+headKey_);
+        put->set_value("");
+        action = txn.add_failure();
+        get = action->mutable_request_range();
+        get->set_key(CHAIN_PREFIX+headKey_);
+
+        etcdserverpb::TxnResponse txnResp;
+        grpc::ClientContext txnCtx;
+        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Txn(&txnCtx, txn, &txnResp);
+
+        auto const &kv = txnResp.responses(txnResp.succeeded()?0:1).response_range().kvs(0);
+        
+        return ItemType {kv.mod_revision(), headKey_, RequestData{}, kv.value()};
+    }
+    std::optional<ItemType> fetchNext(ItemType const &current) {
+        if (current.nextID == "") {
+            auto latestRev = latestModRevision_.load(std::memory_order_acquire);
+            if (latestRev > 0 && current.revision >= latestRev) {
+                //std::cerr << "Current=" << current.revision << ",latest=" << latestRev << "\n";
+                return std::nullopt;
+            }
+        }
+
+        etcdserverpb::RangeRequest range;
+        range.set_key(CHAIN_PREFIX+current.requestID);
+
+        etcdserverpb::RangeResponse rangeResp;
+        grpc::ClientContext rangeCtx;
+        rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Range(&rangeCtx, range, &rangeResp);
+
+        auto const &kv = rangeResp.kvs(0);
+        std::string const &nextID = kv.value();
+
+        if (nextID != "") {
+            etcdserverpb::TxnRequest txn;
+            auto *action = txn.add_success();
+            auto *get = action->mutable_request_range();
+            get->set_key(CHAIN_PREFIX+nextID);
+            action = txn.add_success();
+            get = action->mutable_request_range();
+            get->set_key(DATA_PREFIX+nextID);
+
+            etcdserverpb::TxnResponse txnResp;
+            grpc::ClientContext txnCtx;
+            txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+            stub_->Txn(&txnCtx, txn, &txnResp);
+
+            if (txnResp.succeeded()) {
+                auto const &dataKV = txnResp.responses(1).response_range().kvs(0);
+                auto data = basic::bytedata_utils::RunDeserializer<RequestData>::apply(
+                    dataKV.value()
+                );
+                if (data) {
+                    return ItemType {
+                        dataKV.mod_revision()
+                        , nextID
+                        , std::move(*data)
+                        , txnResp.responses(0).response_range().kvs(0).value()
+                    };
+                } else {
+                    return std::nullopt;
+                }
+            } else {
+                return std::nullopt;
+            }
+        } else {
+            return std::nullopt;
+        }
+    }
+    bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
+        if (current.nextID != "") {
+            return false;
+        }
+        
+        etcdserverpb::TxnRequest txn;
+        auto *cmp = txn.add_compare();
+        cmp->set_result(etcdserverpb::Compare::EQUAL);
+        cmp->set_target(etcdserverpb::Compare::VALUE);
+        cmp->set_key(CHAIN_PREFIX+current.requestID);
+        cmp->set_value("");
+        auto *action = txn.add_success();
+        auto *put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+current.requestID);
+        put->set_value(toBeWritten.requestID); 
+        action = txn.add_success();
+        put = action->mutable_request_put();
+        put->set_key(DATA_PREFIX+toBeWritten.requestID);
+        put->set_value(basic::bytedata_utils::RunSerializer<RequestData>::apply(std::move(toBeWritten.requestData))); 
+        action = txn.add_success();
+        put = action->mutable_request_put();
+        put->set_key(CHAIN_PREFIX+toBeWritten.requestID);
+        put->set_value(""); 
+
+        etcdserverpb::TxnResponse txnResp;
+        grpc::ClientContext txnCtx;
+        txnCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+        stub_->Txn(&txnCtx, txn, &txnResp);
+
+        bool ret = txnResp.succeeded();
+        if (ret) {
+            latestModRevision_.store(txnResp.responses(2).response_put().header().revision(), std::memory_order_release);
+        }
+        return ret;
     }
 };
 
@@ -552,23 +771,29 @@ void rtRun(Chain *chain, std::string const &part) {
 
 int main(int argc, char **argv) {
     bool rt = (argc == 1 || std::string(argv[1]) != "hist");
-    bool useEtcd = (argc <= 2 || std::string(argv[2]) != "in-mem");
+    std::string chainChoice = (argc<=2)?"etcd1":std::string(argv[2]);
     std::string part = ((argc <= 3)?"":argv[3]);
     if (rt) {
-        if (useEtcd) {
-            EtcdChain etcdChain("2020-01-01-head");
-            rtRun(&etcdChain, part);
-        } else {
+        if (chainChoice == "in-mem") {
             InMemoryChain chain;
             rtRun(&chain, part);
+        } else if (chainChoice == "etcd1") {
+            EtcdChain<false> etcdChain("2020-01-01-head");
+            rtRun(&etcdChain, part);
+        } else {
+            EtcdChain<true> etcdChain("2020-01-01-head");
+            rtRun(&etcdChain, part);
         }
     } else {
-        if (useEtcd) {
-            EtcdChain etcdChain("2020-01-01-head");
-            histRun(&etcdChain, part);
-        } else {
+        if (chainChoice == "in-mem") {
             InMemoryChain chain;
             histRun(&chain, part);
+        } else if (chainChoice == "etcd1") {
+            EtcdChain<false> etcdChain("2020-01-01-head");
+            histRun(&etcdChain, part);
+        } else {
+            EtcdChain<true> etcdChain("2020-01-01-head");
+            histRun(&etcdChain, part);
         }
     }
     return 0;
