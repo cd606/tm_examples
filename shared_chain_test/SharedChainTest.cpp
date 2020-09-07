@@ -340,44 +340,6 @@ public:
     }
 };
 
-class StateFolder {
-public:
-    using ResultType = State;
-    State initialize(void *) {
-        return State::initState();
-    } 
-    State fold(State const &lastState, RequestChainItem const &newInfo) {
-        return std::visit([&lastState](auto const &x) -> State {
-            using T = std::decay_t<decltype(x)>;
-            if constexpr (std::is_same_v<T, TransferRequest>) {
-                State newState = lastState;
-                if (x.from == "a") {
-                    newState.a_pending -= x.amount;
-                } else if (x.from == "b") {
-                    newState.b_pending -= x.amount;
-                }
-                if (x.to == "a") {
-                    newState.a_pending += x.amount;
-                } else if (x.to == "b") {
-                    newState.b_pending += x.amount;
-                }
-                ++(newState.pendingRequestCount);
-                return newState;
-            } else if constexpr (std::is_same_v<T, Process>) {
-                State newState = lastState;
-                newState.a += newState.a_pending;
-                newState.a_pending = 0;
-                newState.b += newState.b_pending;
-                newState.b_pending = 0;
-                newState.pendingRequestCount = 0;
-                return newState;
-            } else {
-                return lastState;
-            }
-        }, newInfo.requestData.value);
-    }
-};
-
 template <>
 class EtcdChain<true> {
 private:
@@ -582,6 +544,44 @@ public:
             latestModRevision_.store(txnResp.responses(2).response_put().header().revision(), std::memory_order_release);
         }
         return ret;
+    }
+};
+
+class StateFolder {
+public:
+    using ResultType = State;
+    State initialize(void *) {
+        return State::initState();
+    } 
+    State fold(State const &lastState, RequestChainItem const &newInfo) {
+        return std::visit([&lastState](auto const &x) -> State {
+            using T = std::decay_t<decltype(x)>;
+            if constexpr (std::is_same_v<T, TransferRequest>) {
+                State newState = lastState;
+                if (x.from == "a") {
+                    newState.a_pending -= x.amount;
+                } else if (x.from == "b") {
+                    newState.b_pending -= x.amount;
+                }
+                if (x.to == "a") {
+                    newState.a_pending += x.amount;
+                } else if (x.to == "b") {
+                    newState.b_pending += x.amount;
+                }
+                ++(newState.pendingRequestCount);
+                return newState;
+            } else if constexpr (std::is_same_v<T, Process>) {
+                State newState = lastState;
+                newState.a += newState.a_pending;
+                newState.a_pending = 0;
+                newState.b += newState.b_pending;
+                newState.b_pending = 0;
+                newState.pendingRequestCount = 0;
+                return newState;
+            } else {
+                return lastState;
+            }
+        }, newInfo.requestData.value);
     }
 };
 
