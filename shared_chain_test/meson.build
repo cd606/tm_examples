@@ -1,5 +1,6 @@
 shared_chain_test_dep = [
     dependency('libetcdcpp')
+    , dependency('hiredis')
 ]
 executable(
     'shared_chain_test'

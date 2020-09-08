@@ -16,6 +16,11 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 
+#ifdef _MSC_VER
+#include <winsock2.h>
+#endif
+#include <hiredis/hiredis.h>
+
 #include <grpcpp/grpcpp.h>
 #ifdef _MSC_VER
 #undef DELETE
@@ -34,6 +39,23 @@ TM_BASIC_CBOR_CAPABLE_STRUCT(TransferRequest, TransferRequestFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(TransferRequest, TransferRequestFields);
 
 using Process = basic::ConstType<1>;
+
+#if 0
+//The reason we want to wrap it is because if we keep std::variant as the data type
+//then there will be some issue using it as data flow object type in our applicatives
+using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Process>>;
+
+#define ChainItemFields \
+    ((int64_t, revision)) \
+    ((std::string, id)) \
+    ((std::string, nextID)) \
+    ((T, data))
+
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT(T, ChainItem, ChainItemFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT_SERIALIZE_NO_FIELD_NAMES(T, ChainItem, ChainItemFields);
+
+ChainItem<DataOnChain> testItem;
+#endif
 
 using RequestData = basic::CBOR<std::variant<TransferRequest, Process>>;
 using RequestID = std::string;
