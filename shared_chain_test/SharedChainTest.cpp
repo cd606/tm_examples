@@ -40,7 +40,6 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(TransferRequest, TransferRequestFields);
 
 using Process = basic::ConstType<1>;
 
-#if 0
 //The reason we want to wrap it is because if we keep std::variant as the data type
 //then there will be some issue using it as data flow object type in our applicatives
 using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Process>>;
@@ -48,26 +47,18 @@ using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Proc
 #define ChainItemFields \
     ((int64_t, revision)) \
     ((std::string, id)) \
-    ((std::string, nextID)) \
-    ((T, data))
+    ((T, data)) \
+    ((std::string, nextID)) 
 
 TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT(T, ChainItem, ChainItemFields);
 TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT_SERIALIZE_NO_FIELD_NAMES(T, ChainItem, ChainItemFields);
 
-ChainItem<DataOnChain> testItem;
-#endif
+#define ChainStorageFields \
+    ((T, data)) \
+    ((std::string, nextID)) 
 
-using RequestData = basic::CBOR<std::variant<TransferRequest, Process>>;
-using RequestID = std::string;
-
-#define RequestChainItemFields \
-    ((int64_t, revision)) \
-    ((RequestID, requestID)) \
-    ((RequestData, requestData)) \
-    ((RequestID, nextID)) 
-
-TM_BASIC_CBOR_CAPABLE_STRUCT(RequestChainItem, RequestChainItemFields);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(RequestChainItem, RequestChainItemFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT(T, ChainStorage, ChainStorageFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT_SERIALIZE_NO_FIELD_NAMES(T, ChainStorage, ChainStorageFields);
 
 struct State {
     uint32_t a, b;
@@ -90,17 +81,12 @@ inline std::ostream &operator<<(std::ostream &os, State const &s) {
     return os;
 }
 
-#define MapDataFields \
-    ((RequestData, data)) \
-    ((RequestID, nextID)) 
-
-TM_BASIC_CBOR_CAPABLE_STRUCT(MapData, MapDataFields);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(MapData, MapDataFields);
-
+template <class T>
 class InMemoryChain {
 public:
-    using TheMap = std::unordered_map<RequestID, MapData>;
-    using ItemType = RequestChainItem;
+    using MapData = ChainStorage<T>;
+    using TheMap = std::unordered_map<std::string, MapData>;
+    using ItemType = ChainItem<T>;
 private:
     TheMap theMap_;
     std::mutex mutex_;
@@ -114,7 +100,7 @@ public:
     }
     std::optional<ItemType> fetchNext(ItemType const &current) {
         std::lock_guard<std::mutex> _(mutex_);
-        auto iter = theMap_.find(current.requestID);
+        auto iter = theMap_.find(current.id);
         if (iter == theMap_.end()) {
             return std::nullopt;
         }
@@ -129,60 +115,61 @@ public:
     }
     bool appendAfter(ItemType const &current, ItemType &&toBeWritten) {
         std::lock_guard<std::mutex> _(mutex_);
-        if (theMap_.find(toBeWritten.requestID) != theMap_.end()) {
+        if (theMap_.find(toBeWritten.id) != theMap_.end()) {
             return false;
         }
-        auto iter = theMap_.find(current.requestID);
+        auto iter = theMap_.find(current.id);
         if (iter == theMap_.end()) {
             return false;
         }
         if (iter->second.nextID != "") {
             return false;
         }
-        iter->second.nextID = toBeWritten.requestID;
-        theMap_.insert({iter->second.nextID, MapData {std::move(toBeWritten.requestData), ""}}).first;
+        iter->second.nextID = toBeWritten.id;
+        theMap_.insert({iter->second.nextID, MapData {std::move(toBeWritten.data), ""}}).first;
         return true;
     }
 };
 
+struct EtcdChainConfiguration {
+    std::string etcdServerAddr="127.0.0.1:2379";
+    std::string headKey="";
+    bool saveDataOnSeparateStorage=false;
+
+    std::string chainPrefix="shared_chain_test";
+    std::string dataPrefix="shared_chain_test_data";
+
+    EtcdChainConfiguration() = default;
+    EtcdChainConfiguration(EtcdChainConfiguration const &) = default;
+    EtcdChainConfiguration &operator=(EtcdChainConfiguration const &) = default;
+    EtcdChainConfiguration(EtcdChainConfiguration &&) = default;
+    EtcdChainConfiguration &operator=(EtcdChainConfiguration &&) = default;
+    EtcdChainConfiguration &EtcdServerAddr(std::string const &addr) {
+        etcdServerAddr = addr;
+        return *this;
+    }
+    EtcdChainConfiguration &HeadKey(std::string const &key) {
+        headKey = key;
+        return *this;
+    }
+    EtcdChainConfiguration &SaveDataOnSeparateStorage(bool b) {
+        saveDataOnSeparateStorage = b;
+        return *this;
+    }
+    EtcdChainConfiguration &ChainPrefix(std::string const &p) {
+        chainPrefix = p;
+        return *this;
+    }
+    EtcdChainConfiguration &DataPrefix(std::string const &p) {
+        dataPrefix = p;
+        return *this;
+    }
+};
+
+template <class T>
 class EtcdChain {
-public:
-    struct Configuration {
-        std::string etcdServerAddr="127.0.0.1:2379";
-        std::string headKey="";
-        bool saveDataOnSeparateStorage=false;
-
-        std::string chainPrefix="shared_chain_test";
-        std::string dataPrefix="shared_chain_test_data";
-
-        Configuration() = default;
-        Configuration(Configuration const &) = default;
-        Configuration &operator=(Configuration const &) = default;
-        Configuration(Configuration &&) = default;
-        Configuration &operator=(Configuration &&) = default;
-        Configuration &EtcdServerAddr(std::string const &addr) {
-            etcdServerAddr = addr;
-            return *this;
-        }
-        Configuration &HeadKey(std::string const &key) {
-            headKey = key;
-            return *this;
-        }
-        Configuration &SaveDataOnSeparateStorage(bool b) {
-            saveDataOnSeparateStorage = b;
-            return *this;
-        }
-        Configuration &ChainPrefix(std::string const &p) {
-            chainPrefix = p;
-            return *this;
-        }
-        Configuration &DataPrefix(std::string const &p) {
-            dataPrefix = p;
-            return *this;
-        }
-    };
 private:
-    const Configuration configuration_;
+    const EtcdChainConfiguration configuration_;
     
     std::shared_ptr<grpc::ChannelInterface> channel_;
     std::unique_ptr<etcdserverpb::KV::Stub> stub_;
@@ -247,8 +234,9 @@ private:
         }
     }
 public:
-    using ItemType = RequestChainItem;
-    EtcdChain(Configuration const &config) :
+    using ItemType = ChainItem<T>;
+    using MapData = ChainStorage<T>;
+    EtcdChain(EtcdChainConfiguration const &config) :
         configuration_(config) 
         , channel_(grpc::CreateChannel(config.etcdServerAddr, grpc::InsecureChannelCredentials()))
         , stub_(etcdserverpb::KV::NewStub(channel_))
@@ -291,7 +279,7 @@ public:
             stub_->Txn(&txnCtx, txn, &txnResp);
 
             auto const &kv = txnResp.responses(txnResp.succeeded()?0:1).response_range().kvs(0);
-            return ItemType {kv.mod_revision(), configuration_.headKey, RequestData{}, kv.value()};
+            return ItemType {kv.mod_revision(), configuration_.headKey, T{}, kv.value()};
         } else {
             static const std::string emptyHeadDataStr = basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply({MapData {}}); 
 
@@ -352,7 +340,7 @@ public:
             }
 
             etcdserverpb::RangeRequest range;
-            range.set_key(configuration_.chainPrefix+":"+current.requestID);
+            range.set_key(configuration_.chainPrefix+":"+current.id);
 
             etcdserverpb::RangeResponse rangeResp;
             grpc::ClientContext rangeCtx;
@@ -378,14 +366,14 @@ public:
 
                 if (txnResp.succeeded()) {
                     auto const &dataKV = txnResp.responses(1).response_range().kvs(0);
-                    auto data = basic::bytedata_utils::RunDeserializer<RequestData>::apply(
+                    auto data = basic::bytedata_utils::RunDeserializer<basic::CBOR<T>>::apply(
                         dataKV.value()
                     );
                     if (data) {
                         return ItemType {
                             dataKV.mod_revision()
                             , nextID
-                            , std::move(*data)
+                            , std::move(data->value)
                             , txnResp.responses(0).response_range().kvs(0).value()
                         };
                     } else {
@@ -407,7 +395,7 @@ public:
             }
 
             etcdserverpb::RangeRequest range;
-            range.set_key(configuration_.chainPrefix+":"+current.requestID);
+            range.set_key(configuration_.chainPrefix+":"+current.id);
 
             etcdserverpb::RangeResponse rangeResp;
             grpc::ClientContext rangeCtx;
@@ -456,19 +444,19 @@ public:
             auto *cmp = txn.add_compare();
             cmp->set_result(etcdserverpb::Compare::EQUAL);
             cmp->set_target(etcdserverpb::Compare::VALUE);
-            cmp->set_key(configuration_.chainPrefix+":"+current.requestID);
+            cmp->set_key(configuration_.chainPrefix+":"+current.id);
             cmp->set_value("");
             auto *action = txn.add_success();
             auto *put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+current.requestID);
-            put->set_value(toBeWritten.requestID); 
+            put->set_key(configuration_.chainPrefix+":"+current.id);
+            put->set_value(toBeWritten.id); 
             action = txn.add_success();
             put = action->mutable_request_put();
-            put->set_key(configuration_.dataPrefix+":"+toBeWritten.requestID);
-            put->set_value(basic::bytedata_utils::RunSerializer<RequestData>::apply(std::move(toBeWritten.requestData))); 
+            put->set_key(configuration_.dataPrefix+":"+toBeWritten.id);
+            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<T>>::apply(basic::CBOR<T> {std::move(toBeWritten.data)})); 
             action = txn.add_success();
             put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+toBeWritten.requestID);
+            put->set_key(configuration_.chainPrefix+":"+toBeWritten.id);
             put->set_value(""); 
 
             etcdserverpb::TxnResponse txnResp;
@@ -486,16 +474,16 @@ public:
             auto *cmp = txn.add_compare();
             cmp->set_result(etcdserverpb::Compare::EQUAL);
             cmp->set_target(etcdserverpb::Compare::MOD);
-            cmp->set_key(configuration_.chainPrefix+":"+current.requestID);
+            cmp->set_key(configuration_.chainPrefix+":"+current.id);
             cmp->set_mod_revision(current.revision);
             auto *action = txn.add_success();
             auto *put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+current.requestID);
-            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {current.requestData, toBeWritten.requestID}})); 
+            put->set_key(configuration_.chainPrefix+":"+current.id);
+            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {current.data, toBeWritten.id}})); 
             action = txn.add_success();
             put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+toBeWritten.requestID);
-            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {std::move(toBeWritten.requestData), ""}})); 
+            put->set_key(configuration_.chainPrefix+":"+toBeWritten.id);
+            put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {std::move(toBeWritten.data), ""}})); 
             
             etcdserverpb::TxnResponse txnResp;
             grpc::ClientContext txnCtx;
@@ -517,7 +505,7 @@ public:
     State initialize(void *) {
         return State::initState();
     } 
-    State fold(State const &lastState, RequestChainItem const &newInfo) {
+    State fold(State const &lastState, ChainItem<DataOnChain> const &newInfo) {
         return std::visit([&lastState](auto const &x) -> State {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
@@ -545,7 +533,7 @@ public:
             } else {
                 return lastState;
             }
-        }, newInfo.requestData.value);
+        }, newInfo.data.value);
     }
 };
 
@@ -553,13 +541,13 @@ template <class App>
 class RequestHandler {
 public:
     using ResponseType = bool;
-    using InputType = RequestData;
+    using InputType = DataOnChain;
     using Env = typename App::EnvironmentType;
     void initialize(Env *) {
     }
-    std::tuple<ResponseType, std::optional<RequestChainItem>> handleInput(Env *env, typename App::template Key<InputType> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<ChainItem<DataOnChain>>> handleInput(Env *env, typename App::template Key<InputType> &&input, State const &currentState) {
         auto idStr = Env::id_to_string(input.id());
-        return std::visit([env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<RequestChainItem>> {
+        return std::visit([env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<ChainItem<DataOnChain>>> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 if (currentState.pendingRequestCount >= 10) {
@@ -581,12 +569,12 @@ public:
                 std::ostringstream oss;
                 oss << "Appending request " << x;
                 env->log(infra::LogLevel::Info, oss.str());
-                return {true, {RequestChainItem {0, idStr, {std::move(x)}}}};
+                return {true, {ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else if constexpr (std::is_same_v<T, Process>) {
                 std::ostringstream oss;
                 oss << "Appending request " << x;
                 env->log(infra::LogLevel::Info, oss.str());
-                return {true, {RequestChainItem {0, idStr, {std::move(x)}}}};
+                return {true, {ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else {
                 return {false, std::nullopt};
             }
@@ -627,17 +615,17 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
 
     
-    auto keyify = A::template kleisli<RequestData>(basic::CommonFlowUtilComponents<A>::template keyify<RequestData>());
+    auto keyify = A::template kleisli<DataOnChain>(basic::CommonFlowUtilComponents<A>::template keyify<DataOnChain>());
     r.registerAction("keyify", keyify);
 
     if (part == "" || part == "a-to-b") {
-        auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
+        auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<DataOnChain>(
             infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
             , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%5+1);
             }
-            , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
+            , [](typename TheEnvironment::TimePointType const &tp) -> DataOnChain {
                 TransferRequest req;
                 req.from = "a";
                 req.to = "b";
@@ -649,13 +637,13 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(transferImporter1));
     }
     if (part == "" || part == "b-to-a") {
-        auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<RequestData>(
+        auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<DataOnChain>(
             infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
             , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%5+1);
             }
-            , [](typename TheEnvironment::TimePointType const &tp) -> RequestData {
+            , [](typename TheEnvironment::TimePointType const &tp) -> DataOnChain {
                 TransferRequest req;
                 req.from = "b";
                 req.to = "a";
@@ -667,19 +655,19 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(transferImporter2));
     }
     if (part == "" || part == "process") {
-        auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<RequestData>(
+        auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<DataOnChain>(
             infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
             , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%20+1);
             }
-            , RequestData {{Process {}}}
+            , DataOnChain {{Process {}}}
         );
         r.registerImporter("processImporter", processImporter);
         r.execute(keyify, r.importItem(processImporter));
     }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<RequestData, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder, RequestHandler<A>>(chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder, RequestHandler<A>>(chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
@@ -739,18 +727,18 @@ int main(int argc, char **argv) {
     std::string part = ((argc <= 3)?"":argv[3]);
     if (rt) {
         if (chainChoice == "in-mem") {
-            InMemoryChain chain;
+            InMemoryChain<DataOnChain> chain;
             rtRun(&chain, part);
         } else if (chainChoice == "etcd1") {
-            EtcdChain etcdChain {
-                EtcdChain::Configuration()
+            EtcdChain<DataOnChain> etcdChain {
+                EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
             };
             rtRun(&etcdChain, part);
         } else {
-            EtcdChain etcdChain {
-                EtcdChain::Configuration()
+            EtcdChain<DataOnChain> etcdChain {
+                EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
             };
@@ -758,18 +746,18 @@ int main(int argc, char **argv) {
         }
     } else {
         if (chainChoice == "in-mem") {
-            InMemoryChain chain;
+            InMemoryChain<DataOnChain> chain;
             histRun(&chain, part);
         } else if (chainChoice == "etcd1") {
-            EtcdChain etcdChain {
-                EtcdChain::Configuration()
+            EtcdChain<DataOnChain> etcdChain {
+                EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
             };
             histRun(&etcdChain, part);
         } else {
-            EtcdChain etcdChain {
-                EtcdChain::Configuration()
+            EtcdChain<DataOnChain> etcdChain {
+                EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
             };
