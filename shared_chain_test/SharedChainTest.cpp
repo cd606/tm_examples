@@ -1,3 +1,15 @@
+#ifdef _MSC_VER
+#include <winsock2.h>
+#endif
+#include <hiredis/hiredis.h>
+
+#include <grpcpp/grpcpp.h>
+#ifdef _MSC_VER
+#undef DELETE
+#endif
+#include <libetcd/rpc.grpc.pb.h>
+#include <libetcd/kv.pb.h>
+
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
@@ -15,18 +27,6 @@
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-
-#ifdef _MSC_VER
-#include <winsock2.h>
-#endif
-#include <hiredis/hiredis.h>
-
-#include <grpcpp/grpcpp.h>
-#ifdef _MSC_VER
-#undef DELETE
-#endif
-#include <libetcd/rpc.grpc.pb.h>
-#include <libetcd/kv.pb.h>
 
 using namespace dev::cd606::tm;
 
@@ -59,6 +59,14 @@ TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, T)), 
 
 TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, T)), ChainStorage, ChainStorageFields);
 TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, T)), ChainStorage, ChainStorageFields);
+
+#define ChainRedisStorageFields \
+    ((int64_t, revision)) \
+    ((T, data)) \
+    ((std::string, nextID)) 
+
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, T)), ChainRedisStorage, ChainRedisStorageFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, T)), ChainRedisStorage, ChainRedisStorageFields);
 
 struct State {
     uint32_t a, b;
@@ -139,6 +147,10 @@ struct EtcdChainConfiguration {
     std::string chainPrefix="shared_chain_test";
     std::string dataPrefix="shared_chain_test_data";
 
+    std::string redisServerAddr="127.0.0.1:6379";
+    bool duplicateOnRedis=false;
+    uint16_t redisTTLSeconds = 0;
+
     EtcdChainConfiguration() = default;
     EtcdChainConfiguration(EtcdChainConfiguration const &) = default;
     EtcdChainConfiguration &operator=(EtcdChainConfiguration const &) = default;
@@ -164,6 +176,23 @@ struct EtcdChainConfiguration {
         dataPrefix = p;
         return *this;
     }
+    EtcdChainConfiguration &RedisServerAddr(std::string const &addr) {
+        redisServerAddr = addr;
+        return *this;
+    }
+    EtcdChainConfiguration &DuplicateOnRedis(bool b) {
+        duplicateOnRedis = b;
+        return *this;
+    }
+    EtcdChainConfiguration &RedisTTLSeconds(uint16_t s) {
+        redisTTLSeconds = s;
+        return *this;
+    }
+};
+
+class EtcdChainException : public std::runtime_error {
+public:
+    EtcdChainException(std::string const &s) : std::runtime_error(s) {}
 };
 
 template <class T>
@@ -176,6 +205,9 @@ private:
     std::atomic<int64_t> latestModRevision_;
     std::atomic<bool> watchThreadRunning_;
     std::thread watchThread_;
+
+    redisContext *redisCtx_;
+    std::mutex redisMutex_;
 
     void runWatchThread() {
         etcdserverpb::WatchRequest req;
@@ -223,7 +255,6 @@ private:
                 break;
             case 3:
                 if (watchResponse.events_size() > 0) {
-                    //std::cerr << "Incoming " << watchResponse.header().revision() << "\n";
                     latestModRevision_.store(watchResponse.header().revision(), std::memory_order_release);
                 }
                 watchStream->Read(&watchResponse, (void *)3);  
@@ -241,9 +272,28 @@ public:
         , channel_(grpc::CreateChannel(config.etcdServerAddr, grpc::InsecureChannelCredentials()))
         , stub_(etcdserverpb::KV::NewStub(channel_))
         , latestModRevision_(0), watchThreadRunning_(true), watchThread_()
+        , redisCtx_(nullptr), redisMutex_()
     {
         watchThread_ = std::thread(&EtcdChain::runWatchThread, this);
         watchThread_.detach();
+        if (configuration_.duplicateOnRedis) {
+            auto idx = configuration_.redisServerAddr.find(':');
+            std::lock_guard<std::mutex> _(redisMutex_);
+            redisCtx_ = redisConnect(
+                configuration_.redisServerAddr.substr(
+                    0, idx
+                ).c_str()
+                , (
+                    idx == std::string::npos
+                    ?
+                    6379
+                    :
+                    std::stoi(
+                        configuration_.redisServerAddr.substr(idx+1)
+                    )
+                )
+            );
+        }
     }
     ~EtcdChain() {
         if (watchThreadRunning_) {
@@ -251,10 +301,38 @@ public:
             if (watchThread_.joinable()) {
                 watchThread_.join();
             }
+        }
+        if (configuration_.duplicateOnRedis) {
+            std::lock_guard<std::mutex> _(redisMutex_);
+            if (redisCtx_) {
+                redisFree(redisCtx_);
+            }
         }   
     }
     ItemType head(void *) {
         static const std::string headKeyStr = configuration_.chainPrefix+":"+configuration_.headKey;
+        if (configuration_.duplicateOnRedis) {
+            redisReply *r = nullptr;
+            {
+                std::lock_guard<std::mutex> _(redisMutex_);
+                r = (redisReply *) redisCommand(
+                    redisCtx_, "GET %s", headKeyStr.c_str()
+                );
+            }
+            if (r != nullptr) {
+                if (r->type == REDIS_REPLY_STRING) {
+                    auto data = basic::bytedata_utils::RunCBORDeserializer<ChainRedisStorage<T>>::apply(
+                        std::string_view(r->str, r->len), 0
+                    );
+                    if (data && std::get<1>(*data) == r->len) {
+                        freeReplyObject((void *) r);
+                        auto const &s = std::get<0>(*data);
+                        return ItemType {s.revision, configuration_.headKey, std::move(s.data), s.nextID};
+                    }
+                }
+                freeReplyObject((void *) r);
+            }
+        }
         if (configuration_.saveDataOnSeparateStorage) {
             etcdserverpb::TxnRequest txn;
             auto *cmp = txn.add_compare();
@@ -327,28 +405,101 @@ public:
                 }
             }
         }
-        
     }
     std::optional<ItemType> fetchNext(ItemType const &current) {
-        if (configuration_.saveDataOnSeparateStorage) {
-                if (current.nextID == "") {
-                auto latestRev = latestModRevision_.load(std::memory_order_acquire);
-                if (latestRev > 0 && current.revision >= latestRev) {
-                    //std::cerr << "Current=" << current.revision << ",latest=" << latestRev << "\n";
-                    return std::nullopt;
+        if (current.nextID == "") {
+            auto latestRev = latestModRevision_.load(std::memory_order_acquire);
+            if (latestRev > 0 && current.revision >= latestRev) {
+                return std::nullopt;
+            }
+        }
+        if (configuration_.duplicateOnRedis) {
+            if (current.nextID != "") {
+                std::string key = configuration_.chainPrefix+":"+current.nextID;
+                redisReply *r = nullptr;
+                {
+                    std::lock_guard<std::mutex> _(redisMutex_);
+                    r = (redisReply *) redisCommand(
+                        redisCtx_, "GET %s", key.c_str()
+                    );
+                }
+                if (r != nullptr) {
+                    if (r->type == REDIS_REPLY_STRING) {
+                        auto nextData = basic::bytedata_utils::RunCBORDeserializer<ChainRedisStorage<T>>::apply(
+                            std::string_view(r->str, r->len), 0
+                        );
+                        if (nextData && std::get<1>(*nextData) == r->len) {
+                            freeReplyObject((void *) r);
+                            auto &nextS = std::get<0>(*nextData);
+                            return ItemType {nextS.revision, current.nextID, std::move(nextS.data), nextS.nextID};
+                        }
+                    }
+                    freeReplyObject((void *) r);
+                }
+            } else {
+                std::string key = configuration_.chainPrefix+":"+current.id;
+                redisReply *r = nullptr;
+                {
+                    std::lock_guard<std::mutex> _(redisMutex_);
+                    r = (redisReply *) redisCommand(
+                        redisCtx_, "GET %s", key.c_str()
+                    );
+                }
+                if (r != nullptr) {
+                    if (r->type == REDIS_REPLY_STRING) {
+                        auto data = basic::bytedata_utils::RunCBORDeserializer<ChainRedisStorage<T>>::apply(
+                            std::string_view(r->str, r->len), 0
+                        );
+                        if (data && std::get<1>(*data) == r->len) {
+                            freeReplyObject((void *) r);
+                            r = nullptr;
+                            auto const &s = std::get<0>(*data);
+                            if (s.nextID != "") {
+                                key = configuration_.chainPrefix+":"+s.nextID;
+                                {
+                                    std::lock_guard<std::mutex> _(redisMutex_);
+                                    r = (redisReply *) redisCommand(
+                                        redisCtx_, "GET %s", key.c_str()
+                                    );
+                                }
+                                if (r != nullptr) {
+                                    if (r->type == REDIS_REPLY_STRING) {
+                                        auto nextData = basic::bytedata_utils::RunCBORDeserializer<ChainRedisStorage<T>>::apply(
+                                            std::string_view(r->str, r->len), 0
+                                        );
+                                        if (nextData && std::get<1>(*nextData) == r->len) {
+                                            freeReplyObject((void *) r);
+                                            auto &nextS = std::get<0>(*nextData);
+                                            return ItemType {nextS.revision, s.nextID, std::move(nextS.data), nextS.nextID};
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (r != nullptr) {
+                        freeReplyObject((void *) r);
+                    }
                 }
             }
+        }
+        if (configuration_.saveDataOnSeparateStorage) {  
+            std::string nextID = current.nextID;
+            if (nextID == "") {         
+                etcdserverpb::RangeRequest range;
+                range.set_key(configuration_.chainPrefix+":"+current.id);
 
-            etcdserverpb::RangeRequest range;
-            range.set_key(configuration_.chainPrefix+":"+current.id);
+                etcdserverpb::RangeResponse rangeResp;
+                grpc::ClientContext rangeCtx;
+                rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+                stub_->Range(&rangeCtx, range, &rangeResp);
 
-            etcdserverpb::RangeResponse rangeResp;
-            grpc::ClientContext rangeCtx;
-            rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-            stub_->Range(&rangeCtx, range, &rangeResp);
-
-            auto const &kv = rangeResp.kvs(0);
-            std::string const &nextID = kv.value();
+                if (rangeResp.kvs_size() == 0) {
+                    throw EtcdChainException("FetchNext Error! No record for "+configuration_.chainPrefix+":"+current.id);
+                }
+                auto const &kv = rangeResp.kvs(0);
+                nextID = kv.value();
+            }
 
             if (nextID != "") {
                 etcdserverpb::TxnRequest txn;
@@ -377,55 +528,55 @@ public:
                             , txnResp.responses(0).response_range().kvs(0).value()
                         };
                     } else {
-                        return std::nullopt;
+                        throw EtcdChainException("FetchNext Error! Bad record for "+configuration_.chainPrefix+":"+nextID);
                     }
                 } else {
-                    return std::nullopt;
+                    throw EtcdChainException("Fetch Error! No record for "+configuration_.chainPrefix+":"+nextID);
                 }
             } else {
                 return std::nullopt;
             }
         } else {
-            if (current.nextID == "") {
-                auto latestRev = latestModRevision_.load(std::memory_order_acquire);
-                if (latestRev > 0 && current.revision >= latestRev) {
-                    //std::cerr << "Current=" << current.revision << ",latest=" << latestRev << "\n";
-                    return std::nullopt;
+            std::string nextID = current.nextID;
+            if (nextID == "") {
+                etcdserverpb::RangeRequest range;
+                range.set_key(configuration_.chainPrefix+":"+current.id);
+
+                etcdserverpb::RangeResponse rangeResp;
+                grpc::ClientContext rangeCtx;
+                rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+                stub_->Range(&rangeCtx, range, &rangeResp);
+
+                if (rangeResp.kvs_size() == 0) {
+                    throw EtcdChainException("FetchNext Error! No record for "+configuration_.chainPrefix+":"+current.id);
+                }
+                auto &kv = rangeResp.kvs(0);
+                auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+                    kv.value()
+                );
+                if (mapData) {
+                    nextID = mapData->value.nextID;
                 }
             }
+            if (nextID != "") {
+                etcdserverpb::RangeRequest range2;
+                range2.set_key(configuration_.chainPrefix+":"+nextID);
 
-            etcdserverpb::RangeRequest range;
-            range.set_key(configuration_.chainPrefix+":"+current.id);
+                etcdserverpb::RangeResponse rangeResp2;
+                grpc::ClientContext rangeCtx2;
+                rangeCtx2.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
+                stub_->Range(&rangeCtx2, range2, &rangeResp2);
 
-            etcdserverpb::RangeResponse rangeResp;
-            grpc::ClientContext rangeCtx;
-            rangeCtx.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-            stub_->Range(&rangeCtx, range, &rangeResp);
+                if (rangeResp2.kvs_size() == 0) {
+                    throw EtcdChainException("FetchNext Error! No record for "+configuration_.chainPrefix+":"+nextID);
+                }
 
-            auto &kv = rangeResp.kvs(0);
-            auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
-                kv.value()
-            );
-            if (mapData) {
-                if (mapData->value.nextID != "") {
-                    auto nextID = mapData->value.nextID;
-                    etcdserverpb::RangeRequest range2;
-                    range2.set_key(configuration_.chainPrefix+":"+nextID);
-
-                    etcdserverpb::RangeResponse rangeResp2;
-                    grpc::ClientContext rangeCtx2;
-                    rangeCtx2.set_deadline(std::chrono::system_clock::now()+std::chrono::hours(24));
-                    stub_->Range(&rangeCtx2, range2, &rangeResp2);
-
-                    auto &kv2 = rangeResp2.kvs(0);
-                    mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
-                        kv2.value()
-                    );
-                    if (mapData) {
-                        return ItemType {kv2.mod_revision(), nextID, mapData->value.data, mapData->value.nextID};
-                    } else {
-                        return std::nullopt;
-                    }
+                auto &kv2 = rangeResp2.kvs(0);
+                auto mapData = basic::bytedata_utils::RunDeserializer<basic::CBOR<MapData>>::apply(
+                    kv2.value()
+                );
+                if (mapData) {
+                    return ItemType {kv2.mod_revision(), nextID, mapData->value.data, mapData->value.nextID};
                 } else {
                     return std::nullopt;
                 }
@@ -438,17 +589,18 @@ public:
         if (current.nextID != "") {
             return false;
         } 
-
+        std::string currentChainKey = configuration_.chainPrefix+":"+current.id;
+        
         if (configuration_.saveDataOnSeparateStorage) {
             etcdserverpb::TxnRequest txn;
             auto *cmp = txn.add_compare();
             cmp->set_result(etcdserverpb::Compare::EQUAL);
             cmp->set_target(etcdserverpb::Compare::VALUE);
-            cmp->set_key(configuration_.chainPrefix+":"+current.id);
+            cmp->set_key(currentChainKey);
             cmp->set_value("");
             auto *action = txn.add_success();
             auto *put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+current.id);
+            put->set_key(currentChainKey);
             put->set_value(toBeWritten.id); 
             action = txn.add_success();
             put = action->mutable_request_put();
@@ -466,7 +618,27 @@ public:
 
             bool ret = txnResp.succeeded();
             if (ret) {
-                latestModRevision_.store(txnResp.responses(2).response_put().header().revision(), std::memory_order_release);
+                auto rev = txnResp.responses(2).response_put().header().revision();
+                latestModRevision_.store(rev, std::memory_order_release);
+                if (configuration_.duplicateOnRedis) {
+                    std::string redisS = basic::bytedata_utils::RunSerializer<basic::CBOR<ChainRedisStorage<T>>>::apply(
+                        basic::CBOR<ChainRedisStorage<T>> {
+                            ChainRedisStorage<T> {
+                                rev, current.data, toBeWritten.id
+                            }
+                        }
+                    );
+                    redisReply *r = nullptr;
+                    {
+                        std::lock_guard<std::mutex> _(redisMutex_);
+                        r = (redisReply *) redisCommand(
+                            redisCtx_, "SET %s %b", currentChainKey.c_str(), redisS.c_str(), redisS.length()
+                        );
+                    }
+                    if (r != nullptr) {
+                        freeReplyObject((void *) r);
+                    }
+                }
             }
             return ret;
         } else {
@@ -474,11 +646,11 @@ public:
             auto *cmp = txn.add_compare();
             cmp->set_result(etcdserverpb::Compare::EQUAL);
             cmp->set_target(etcdserverpb::Compare::MOD);
-            cmp->set_key(configuration_.chainPrefix+":"+current.id);
+            cmp->set_key(currentChainKey);
             cmp->set_mod_revision(current.revision);
             auto *action = txn.add_success();
             auto *put = action->mutable_request_put();
-            put->set_key(configuration_.chainPrefix+":"+current.id);
+            put->set_key(currentChainKey);
             put->set_value(basic::bytedata_utils::RunSerializer<basic::CBOR<MapData>>::apply(basic::CBOR<MapData> {MapData {current.data, toBeWritten.id}})); 
             action = txn.add_success();
             put = action->mutable_request_put();
@@ -492,7 +664,33 @@ public:
 
             bool ret = txnResp.succeeded();
             if (ret) {
-                latestModRevision_.store(txnResp.responses(1).response_put().header().revision(), std::memory_order_release);
+                auto rev = txnResp.responses(1).response_put().header().revision();
+                latestModRevision_.store(rev, std::memory_order_release);
+                if (configuration_.duplicateOnRedis) {
+                    std::string redisS = basic::bytedata_utils::RunSerializer<basic::CBOR<ChainRedisStorage<T>>>::apply(
+                        basic::CBOR<ChainRedisStorage<T>> {
+                            ChainRedisStorage<T> {
+                                rev, current.data, toBeWritten.id
+                            }
+                        }
+                    );
+                    redisReply *r = nullptr;
+                    if (configuration_.redisTTLSeconds > 0) {
+                        std::lock_guard<std::mutex> _(redisMutex_);
+                        r = (redisReply *) redisCommand(
+                            redisCtx_, "SET %s %b EX %i", currentChainKey.c_str(), redisS.c_str(), redisS.length(), configuration_.redisTTLSeconds
+                        );
+                    } else {
+                        std::lock_guard<std::mutex> _(redisMutex_);
+                        r = (redisReply *) redisCommand(
+                            redisCtx_, "SET %s %b", currentChainKey.c_str(), redisS.c_str(), redisS.length()
+                        );
+                    }
+                    
+                    if (r != nullptr) {
+                        freeReplyObject((void *) r);
+                    }
+                }
             }
             return ret;
         }
@@ -734,6 +932,9 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
+                    .DuplicateOnRedis(true)
+                    .RedisTTLSeconds(20)
+                    //.DuplicateOnRedis(false)
             };
             rtRun(&etcdChain, part);
         } else {
@@ -741,6 +942,9 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
+                    .DuplicateOnRedis(true)
+                    .RedisTTLSeconds(20)
+                    //.DuplicateOnRedis(false)
             };
             rtRun(&etcdChain, part);
         }
@@ -753,6 +957,7 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
+                    .DuplicateOnRedis(false)
             };
             histRun(&etcdChain, part);
         } else {
@@ -760,6 +965,7 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
+                    .DuplicateOnRedis(false)
             };
             histRun(&etcdChain, part);
         }
