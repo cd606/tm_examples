@@ -150,8 +150,9 @@ struct EtcdChainConfiguration {
     std::string dataPrefix="shared_chain_test_data";
 
     std::string redisServerAddr="127.0.0.1:6379";
-    bool duplicateOnRedis=false;
+    bool duplicateFromRedis=false;
     uint16_t redisTTLSeconds = 0;
+    bool automaticallyDuplicateToRedis=false;
 
     EtcdChainConfiguration() = default;
     EtcdChainConfiguration(EtcdChainConfiguration const &) = default;
@@ -182,12 +183,16 @@ struct EtcdChainConfiguration {
         redisServerAddr = addr;
         return *this;
     }
-    EtcdChainConfiguration &DuplicateOnRedis(bool b) {
-        duplicateOnRedis = b;
+    EtcdChainConfiguration &DuplicateFromRedis(bool b) {
+        duplicateFromRedis = b;
         return *this;
     }
     EtcdChainConfiguration &RedisTTLSeconds(uint16_t s) {
         redisTTLSeconds = s;
+        return *this;
+    }
+    EtcdChainConfiguration &AutomaticallyDuplicateToRedis(bool b) {
+        automaticallyDuplicateToRedis = b;
         return *this;
     }
 };
@@ -278,7 +283,7 @@ public:
     {
         watchThread_ = std::thread(&EtcdChain::runWatchThread, this);
         watchThread_.detach();
-        if (configuration_.duplicateOnRedis) {
+        if (configuration_.duplicateFromRedis) {
             auto idx = configuration_.redisServerAddr.find(':');
             std::lock_guard<std::mutex> _(redisMutex_);
             redisCtx_ = redisConnect(
@@ -304,7 +309,7 @@ public:
                 watchThread_.join();
             }
         }
-        if (configuration_.duplicateOnRedis) {
+        if (configuration_.duplicateFromRedis) {
             std::lock_guard<std::mutex> _(redisMutex_);
             if (redisCtx_) {
                 redisFree(redisCtx_);
@@ -313,7 +318,7 @@ public:
     }
     ItemType head(void *) {
         static const std::string headKeyStr = configuration_.chainPrefix+":"+configuration_.headKey;
-        if (configuration_.duplicateOnRedis) {
+        if (configuration_.duplicateFromRedis) {
             redisReply *r = nullptr;
             {
                 std::lock_guard<std::mutex> _(redisMutex_);
@@ -415,7 +420,7 @@ public:
                 return std::nullopt;
             }
         }
-        if (configuration_.duplicateOnRedis) {
+        if (configuration_.duplicateFromRedis) {
             if (current.nextID != "") {
                 std::string key = configuration_.chainPrefix+":"+current.nextID;
                 redisReply *r = nullptr;
@@ -622,7 +627,7 @@ public:
             if (ret) {
                 auto rev = txnResp.responses(2).response_put().header().revision();
                 latestModRevision_.store(rev, std::memory_order_release);
-                if (configuration_.duplicateOnRedis) {
+                if (configuration_.duplicateFromRedis) {
                     std::string redisS = basic::bytedata_utils::RunSerializer<basic::CBOR<ChainRedisStorage<T>>>::apply(
                         basic::CBOR<ChainRedisStorage<T>> {
                             ChainRedisStorage<T> {
@@ -668,33 +673,51 @@ public:
             if (ret) {
                 auto rev = txnResp.responses(1).response_put().header().revision();
                 latestModRevision_.store(rev, std::memory_order_release);
-                if (configuration_.duplicateOnRedis) {
-                    std::string redisS = basic::bytedata_utils::RunSerializer<basic::CBOR<ChainRedisStorage<T>>>::apply(
-                        basic::CBOR<ChainRedisStorage<T>> {
-                            ChainRedisStorage<T> {
-                                rev, current.data, toBeWritten.id
-                            }
-                        }
-                    );
-                    redisReply *r = nullptr;
-                    if (configuration_.redisTTLSeconds > 0) {
-                        std::lock_guard<std::mutex> _(redisMutex_);
-                        r = (redisReply *) redisCommand(
-                            redisCtx_, "SET %s %b EX %i", currentChainKey.c_str(), redisS.c_str(), redisS.length(), configuration_.redisTTLSeconds
-                        );
-                    } else {
-                        std::lock_guard<std::mutex> _(redisMutex_);
-                        r = (redisReply *) redisCommand(
-                            redisCtx_, "SET %s %b", currentChainKey.c_str(), redisS.c_str(), redisS.length()
-                        );
-                    }
-                    
-                    if (r != nullptr) {
-                        freeReplyObject((void *) r);
-                    }
+                if (configuration_.automaticallyDuplicateToRedis) {
+                    duplicateToRedis(rev, current.id, current.data, toBeWritten.id);     
                 }
             }
             return ret;
+        }
+    }
+    void duplicateToRedis(int64_t rev, std::string const &id, T const &data, std::string const &nextID) {
+        duplicateToRedis(nullptr, rev, id, data, nextID, configuration_.redisTTLSeconds);
+    }
+    void duplicateToRedis(redisContext *ctx, int64_t rev, std::string const &id, T const &data, std::string const &nextID, uint16_t ttlSeconds) {
+        std::string redisS = basic::bytedata_utils::RunSerializer<basic::CBOR<ChainRedisStorage<T>>>::apply(
+            basic::CBOR<ChainRedisStorage<T>> {
+                ChainRedisStorage<T> {
+                    rev, data, nextID
+                }
+            }
+        );
+        std::string currentChainKey = configuration_.chainPrefix+":"+id;
+        redisReply *r = nullptr;
+        if (ttlSeconds > 0) {
+            if (ctx == nullptr) {
+                std::lock_guard<std::mutex> _(redisMutex_);
+                r = (redisReply *) redisCommand(
+                    redisCtx_, "SET %s %b EX %i", currentChainKey.c_str(), redisS.c_str(), redisS.length(), ttlSeconds
+                );
+            } else {
+                r = (redisReply *) redisCommand(
+                    ctx, "SET %s %b EX %i", currentChainKey.c_str(), redisS.c_str(), redisS.length(), ttlSeconds
+                );
+            }
+        } else {
+            if (ctx == nullptr) {
+                std::lock_guard<std::mutex> _(redisMutex_);
+                r = (redisReply *) redisCommand(
+                    redisCtx_, "SET %s %b", currentChainKey.c_str(), redisS.c_str(), redisS.length()
+                );
+            } else {
+                r = (redisReply *) redisCommand(
+                    ctx, "SET %s %b", currentChainKey.c_str(), redisS.c_str(), redisS.length()
+                );
+            }
+        }
+        if (r != nullptr) {
+            freeReplyObject((void *) r);
         }
     }
 };
@@ -934,9 +957,9 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
-                    .DuplicateOnRedis(true)
+                    .DuplicateFromRedis(true)
                     .RedisTTLSeconds(20)
-                    //.DuplicateOnRedis(false)
+                    .AutomaticallyDuplicateToRedis(true)
             };
             rtRun(&etcdChain, part);
         } else {
@@ -944,9 +967,9 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
-                    .DuplicateOnRedis(true)
+                    .DuplicateFromRedis(true)
                     .RedisTTLSeconds(20)
-                    //.DuplicateOnRedis(false)
+                    .AutomaticallyDuplicateToRedis(true)
             };
             rtRun(&etcdChain, part);
         }
@@ -959,7 +982,7 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(false)
-                    .DuplicateOnRedis(false)
+                    .DuplicateFromRedis(false)
             };
             histRun(&etcdChain, part);
         } else {
@@ -967,7 +990,7 @@ int main(int argc, char **argv) {
                 EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
                     .SaveDataOnSeparateStorage(true)
-                    .DuplicateOnRedis(false)
+                    .DuplicateFromRedis(false)
             };
             histRun(&etcdChain, part);
         }
