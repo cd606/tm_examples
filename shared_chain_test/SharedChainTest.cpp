@@ -50,15 +50,15 @@ using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Proc
     ((T, data)) \
     ((std::string, nextID)) 
 
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT(T, ChainItem, ChainItemFields);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT_SERIALIZE_NO_FIELD_NAMES(T, ChainItem, ChainItemFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, T)), ChainItem, ChainItemFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, T)), ChainItem, ChainItemFields);
 
 #define ChainStorageFields \
     ((T, data)) \
     ((std::string, nextID)) 
 
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT(T, ChainStorage, ChainStorageFields);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_1_STRUCT_SERIALIZE_NO_FIELD_NAMES(T, ChainStorage, ChainStorageFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, T)), ChainStorage, ChainStorageFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, T)), ChainStorage, ChainStorageFields);
 
 struct State {
     uint32_t a, b;
