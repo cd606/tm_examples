@@ -1,3 +1,17 @@
+#ifdef _MSC_VER
+#include <winsock2.h>
+#undef min
+#undef max
+#endif
+#include <hiredis/hiredis.h>
+
+#include <grpcpp/grpcpp.h>
+#ifdef _MSC_VER
+#undef DELETE
+#endif
+#include <libetcd/rpc.grpc.pb.h>
+#include <libetcd/kv.pb.h>
+
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
@@ -15,18 +29,6 @@
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-
-#ifdef _MSC_VER
-#include <winsock2.h>
-#endif
-#include <hiredis/hiredis.h>
-
-#include <grpcpp/grpcpp.h>
-#ifdef _MSC_VER
-#undef DELETE
-#endif
-#include <libetcd/rpc.grpc.pb.h>
-#include <libetcd/kv.pb.h>
 
 using namespace dev::cd606::tm;
 
