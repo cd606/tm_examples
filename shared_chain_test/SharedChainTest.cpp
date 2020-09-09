@@ -23,7 +23,8 @@ using namespace dev::cd606::tm;
 TM_BASIC_CBOR_CAPABLE_STRUCT(TransferRequest, TransferRequestFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(TransferRequest, TransferRequestFields);
 
-using Process = basic::ConstType<1>;
+TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT(Process);
+TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(Process);
 
 //The reason we want to wrap it is because if we keep std::variant as the data type
 //then there will be some issue using it as data flow object type in our applicatives
