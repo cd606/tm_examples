@@ -30,35 +30,47 @@ TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(Process);
 //then there will be some issue using it as data flow object type in our applicatives
 using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Process>>;
 
-struct State {
-    uint32_t a, b;
-    int32_t a_pending, b_pending;
-    uint16_t pendingRequestCount;
+#define StateFields \
+    ((uint32_t, a)) \
+    ((uint32_t, b)) \
+    ((int32_t, a_pending)) \
+    ((int32_t, b_pending)) \
+    ((uint16_t, pendingRequestCount)) \
+    ((std::string, lastSeenID))
 
-    State() : a(0), b(0), a_pending(0), b_pending(0), pendingRequestCount(0) {}
-    static State initState() {
-        State s;
-        s.a = 1000;
-        s.b = 1000;
-        return s;
-    }
+TM_BASIC_CBOR_CAPABLE_STRUCT(State, StateFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(State, StateFields);
+
+template <class Chain>
+struct EnvValues {
+    Chain *chain;
+    std::string todayStr;
+    EnvValues() : chain(nullptr), todayStr() {}
+    EnvValues(Chain *p, std::string const &s) : chain(p), todayStr(s) {}
 };
-
-inline std::ostream &operator<<(std::ostream &os, State const &s) {
-    os << "{a=" << s.a << ",b=" << s.b << ",a_pending=" << s.a_pending
-        << ",b_pending=" << s.b_pending << ",pendingRequestCount=" << s.pendingRequestCount
-        << "}";
-    return os;
-}
 
 class StateFolder {
 public:
     using ResultType = State;
-    State initialize(void *) {
-        return State::initState();
+    static State initialize(infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>> *) {
+        return State {1000, 1000, 0, 0, 0, ""};
     } 
-    State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
-        return std::visit([&lastState](auto const &x) -> State {
+    static State initialize(infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::EtcdChain<DataOnChain>>> *env) {
+        auto val = env->value().chain->loadExtraData<State>(
+            env->value().todayStr+"-state"
+        );
+        if (val) {
+            return *val;
+        } else {
+            return State {1000, 1000, 0, 0, 0, ""};
+        }   
+    }
+    static std::string const &chainIDForValue(State const &s) {
+        return s.lastSeenID;
+    }
+    static State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
+        auto id = newInfo.id;
+        return std::visit([&lastState,&id](auto const &x) -> State {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 State newState = lastState;
@@ -73,6 +85,7 @@ public:
                     newState.b_pending += x.amount;
                 }
                 ++(newState.pendingRequestCount);
+                newState.lastSeenID = id;
                 return newState;
             } else if constexpr (std::is_same_v<T, Process>) {
                 State newState = lastState;
@@ -81,6 +94,7 @@ public:
                 newState.b += newState.b_pending;
                 newState.b_pending = 0;
                 newState.pendingRequestCount = 0;
+                newState.lastSeenID = id;
                 return newState;
             } else {
                 return lastState;
@@ -135,7 +149,7 @@ public:
 };
 
 template <class A, class ClockImp, class Chain>
-void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part, std::function<void()> tc) {
+void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part, std::function<void()> tc, std::chrono::system_clock::time_point startTP, std::chrono::system_clock::time_point endTP) {
     using TheEnvironment = typename A::EnvironmentType;
 
     env->setLogFilePrefix("shared_chain_test_"+part, true);
@@ -144,8 +158,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     std::srand(std::time(nullptr));
     
     auto readerClockImporter = ClockImp::template createRecurringClockImporter<basic::VoidStruct>(
-        infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-        , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+        startTP
+        , endTP
         , std::chrono::minutes(1)
         , [](typename TheEnvironment::TimePointType const &tp) {
             return basic::VoidStruct {};
@@ -165,14 +179,24 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     );
     r.registerExporter("printState", printState);
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
+
+    if (part == "" || part == "process") {
+        auto saveState = A::template pureExporter<State>(
+            [env,chain](State &&s) {
+                chain->saveExtraData(env->value().todayStr+"-state", s);
+            }
+        );
+        r.registerExporter("saveState", saveState);
+        r.exportItem(saveState, r.actionAsSource(readerAction));
+    }
     
     auto keyify = A::template kleisli<DataOnChain>(basic::CommonFlowUtilComponents<A>::template keyify<DataOnChain>());
     r.registerAction("keyify", keyify);
 
     if (part == "" || part == "a-to-b") {
         auto transferImporter1 = ClockImp::template createVariableDurationRecurringClockImporter<DataOnChain>(
-            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            startTP
+            , endTP
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%5+1);
             }
@@ -189,8 +213,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     }
     if (part == "" || part == "b-to-a") {
         auto transferImporter2 = ClockImp::template createVariableDurationRecurringClockImporter<DataOnChain>(
-            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            startTP
+            , endTP
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%5+1);
             }
@@ -207,8 +231,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     }
     if (part == "" || part == "process") {
         auto processImporter = ClockImp::template createVariableDurationRecurringClockConstImporter<DataOnChain>(
-            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
-            , infra::withtime_utils::parseLocalTime("2020-01-01T11:00:00")
+            startTP
+            , endTP
             , [](typename TheEnvironment::TimePointType const &tp) -> typename TheEnvironment::DurationType {
                 return std::chrono::seconds(std::rand()%20+1);
             }
@@ -229,99 +253,187 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
 }
 
 template <class Chain>
-void histRun(Chain *chain, std::string const &part) {
+void histRun(Chain *chain, std::string const &part, std::string const &todayStr) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithSpdLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>, false>,
-        transport::CrossGuidComponent
+        transport::CrossGuidComponent,
+        infra::ConstValueHolderComponent<EnvValues<Chain>>
     >;
     using ClockImp = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>;
     using A = infra::SinglePassIterationApp<TheEnvironment>;
-    TheEnvironment env;    
+    TheEnvironment env;  
+    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+    );  
     run<A,ClockImp,Chain>(&env, chain, part, []() {
         infra::terminationController(infra::ImmediatelyTerminate {});
-    });
+    }
+    , infra::withtime_utils::parseLocalTime(todayStr+"T10:00:00")
+    , infra::withtime_utils::parseLocalTime(todayStr+"T11:00:00"));
 }
 
 template <class Chain>
-void rtRun(Chain *chain, std::string const &part) {
+void simRun(Chain *chain, std::string const &part, std::string const &todayStr) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
-        transport::CrossGuidComponent
+        transport::CrossGuidComponent,
+        infra::ConstValueHolderComponent<EnvValues<Chain>>
     >;
     using ClockImp = basic::real_time_clock::ClockImporter<TheEnvironment>;
     using A = infra::RealTimeApp<TheEnvironment>;
     TheEnvironment env;
     auto clockSettings = TheEnvironment::clockSettingsWithStartPointCorrespondingToNextAlignment(
         1
-        , "2020-01-01T10:00"
+        , todayStr+"T10:00"
         , 10.0
     );
     env.basic::real_time_clock::ClockComponent::operator=(
         basic::real_time_clock::ClockComponent(clockSettings)
     );
-    run<A,ClockImp,Chain>(&env, chain, part, [&env]() {
+    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+    );
+    run<A,ClockImp,Chain>(&env, chain, part, [&env,todayStr]() {
         infra::terminationController(infra::TerminateAtTimePoint {
             env.actualTime(
-                infra::withtime_utils::parseLocalTime("2020-01-01T11:00:01")
+                infra::withtime_utils::parseLocalTime(todayStr+"T11:00:01")
             )
         });
-    });
+    }
+    , infra::withtime_utils::parseLocalTime(todayStr+"T10:00:00")
+    , infra::withtime_utils::parseLocalTime(todayStr+"T11:00:00"));
+}
+
+template <class Chain>
+void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent,
+        infra::ConstValueHolderComponent<EnvValues<Chain>>
+    >;
+    using ClockImp = basic::real_time_clock::ClockImporter<TheEnvironment>;
+    using A = infra::RealTimeApp<TheEnvironment>;
+    TheEnvironment env;
+    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+    );
+    run<A,ClockImp,Chain>(&env, chain, part, []() {
+        infra::terminationController(infra::TerminateAfterDuration {
+            std::chrono::minutes(61)
+        });
+    }
+    , env.now()+std::chrono::seconds(5)
+    , env.now()+std::chrono::hours(1)+std::chrono::seconds(5));
 }
 
 int main(int argc, char **argv) {
-    bool rt = (argc == 1 || std::string(argv[1]) != "hist");
-    std::string chainChoice = (argc<=2)?"etcd1":std::string(argv[2]);
-    std::string part = ((argc <= 3)?"":argv[3]);
-    if (rt) {
-        if (chainChoice == "in-mem") {
-            transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
-            rtRun(&chain, part);
-        } else if (chainChoice == "etcd1") {
-            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
-                transport::etcd_shared_chain::EtcdChainConfiguration()
-                    .HeadKey("2020-01-01-head")
-                    .SaveDataOnSeparateStorage(false)
-                    .DuplicateFromRedis(true)
-                    .RedisTTLSeconds(20)
-                    .AutomaticallyDuplicateToRedis(true)
-            };
-            rtRun(&etcdChain, part);
-        } else {
-            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
-                transport::etcd_shared_chain::EtcdChainConfiguration()
-                    .HeadKey("2020-01-01-head")
-                    .SaveDataOnSeparateStorage(true)
-                    .DuplicateFromRedis(true)
-                    .RedisTTLSeconds(20)
-                    .AutomaticallyDuplicateToRedis(true)
-            };
-            rtRun(&etcdChain, part);
-        }
+    if (argc > 1 && std::string(argv[1]) == "help") {
+        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|in-mem) [a-to-b|b-to-a|process]\n";
+        return 0;
+    }
+    enum {
+        Hist, Sim, RT
+    } mode;
+    if (argc <= 1) {
+        mode = RT;
+    } else if (std::string(argv[1]) == "hist") {
+        mode = Hist;
+    } else if (std::string(argv[1]) == "sim") {
+        mode = Sim;
     } else {
-        if (chainChoice == "in-mem") {
-            transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
-            histRun(&chain, part);
-        } else if (chainChoice == "etcd1") {
-            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
-                transport::etcd_shared_chain::EtcdChainConfiguration()
-                    .HeadKey("2020-01-01-head")
-                    .SaveDataOnSeparateStorage(false)
-                    .DuplicateFromRedis(false)
-            };
-            histRun(&etcdChain, part);
-        } else {
-            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
-                transport::etcd_shared_chain::EtcdChainConfiguration()
-                    .HeadKey("2020-01-01-head")
-                    .SaveDataOnSeparateStorage(true)
-                    .DuplicateFromRedis(false)
-            };
-            histRun(&etcdChain, part);
+        mode = RT;
+    }
+    enum {
+        Etcd1, Etcd2, InMem
+    } chainChoice;
+    if (argc <= 2) {
+        chainChoice = Etcd1; 
+    } else if (std::string(argv[2]) == "in-mem") {
+        chainChoice = InMem;
+    } else if (std::string(argv[2]) == "etcd2") {
+        chainChoice = Etcd2;
+    } else {
+        chainChoice = Etcd1;
+    }
+    std::string part = ((argc <= 3)?"":argv[3]);
+    switch (mode) {
+    case RT:
+        if (chainChoice == InMem) {
+            std::cerr << "RT run cannot use in-mem chain\n";
+            return 1;
         }
+        {
+            std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
+            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
+                transport::etcd_shared_chain::EtcdChainConfiguration()
+                    .HeadKey(today+"-head")
+                    .SaveDataOnSeparateStorage(chainChoice == Etcd2)
+                    .DuplicateFromRedis(true)
+                    .RedisTTLSeconds(20)
+                    .AutomaticallyDuplicateToRedis(true)
+            };
+            rtRun(&etcdChain, part, today);
+        }
+        break;
+    case Sim:
+        if (chainChoice == InMem) {
+            std::cerr << "Sim run cannot use in-mem chain\n";
+            return 1;
+        }
+        {
+            transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
+                transport::etcd_shared_chain::EtcdChainConfiguration()
+                    .HeadKey("2020-01-01-head")
+                    .SaveDataOnSeparateStorage(chainChoice == Etcd2)
+                    .DuplicateFromRedis(true)
+                    .RedisTTLSeconds(20)
+                    .AutomaticallyDuplicateToRedis(true)
+            };
+            simRun(&etcdChain, part, "2020-01-01");
+        }
+        break;
+    case Hist:
+        switch (chainChoice) {
+        case Etcd1:
+            {
+                transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
+                    transport::etcd_shared_chain::EtcdChainConfiguration()
+                        .HeadKey("2020-01-01-head")
+                        .SaveDataOnSeparateStorage(false)
+                        .DuplicateFromRedis(false)
+                };
+                histRun(&etcdChain, part, "2020-01-01");
+            }
+            break;
+        case Etcd2:
+            {
+                transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
+                    transport::etcd_shared_chain::EtcdChainConfiguration()
+                        .HeadKey("2020-01-01-head")
+                        .SaveDataOnSeparateStorage(true)
+                        .DuplicateFromRedis(false)
+                };
+                histRun(&etcdChain, part, "2020-01-01");
+            }
+            break;
+        case InMem:
+            {
+                transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
+                histRun(&chain, part, "2020-01-01");
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
     }
     return 0;
 }
