@@ -9,6 +9,7 @@ config.saveDataOnSeparateStorage = true;
 config.headKey = '2020-01-01-head';
 config.duplicateFromRedis = true;
 config.automaticallyDuplicateToRedis = true;
+config.redisTTLSeconds = 5;
 
 let chain = new EtcdSharedChain(config);
 
