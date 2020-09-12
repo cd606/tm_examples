@@ -5,7 +5,7 @@ let config = EtcdSharedChain.defaultEtcdSharedChainConfiguration();
 config.chainPrefix = "shared_chain_test";
 config.dataPrefix = "shared_chain_test_data";
 config.extraDataPrefix = "shared_chain_test_extra_data";
-config.saveDataOnSeparateStorage = true;
+config.saveDataOnSeparateStorage = false;
 config.headKey = '2020-01-01-head';
 config.duplicateFromRedis = true;
 config.automaticallyDuplicateToRedis = true;
@@ -33,5 +33,8 @@ let chain = new EtcdSharedChain(config);
     console.log(chain.currentValue());
     console.log(await chain.idIsAlreadyOnChain(id1));
     console.log(await chain.idIsAlreadyOnChain(id2));
+    await chain.saveExtraData('abc', 'test')
+    console.log(await chain.loadExtraData('abc'))
+    console.log(await chain.loadExtraData('def'))
     await chain.close();
 })();
