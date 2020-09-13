@@ -10,9 +10,9 @@ config['dataPrefix'] = "shared_chain_test_data"
 config['extraDataPrefix'] = "shared_chain_test_extra_data"
 config['saveDataOnSeparateStorage'] = False
 config['headKey'] = '2020-01-01-head'
-#config['duplicateFromRedis'] = True
-#config['automaticallyDuplicateToRedis'] = True
-#config['redisTTLSeconds'] = 5
+config['duplicateFromRedis'] = True
+config['automaticallyDuplicateToRedis'] = True
+config['redisTTLSeconds'] = 5
 
 chain = TMTransport.EtcdSharedChain(config)
 chain.start([1, {}])
