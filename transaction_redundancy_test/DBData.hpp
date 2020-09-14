@@ -64,10 +64,17 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(test::OverallStat, OverallStatFields);
     ((typename, AccountPartType)) \
     ((typename, PendingPartType))
 
-#define ShapedFields \
-    ((StatPartType, overallStat)) \
-    (((std::map<std::string, AccountPartType>), accounts)) \
-    ((PendingPartType, pendingTransfers))
+#ifdef _MSC_VER 
+    #define ShapedFields \
+        ((StatPartType, overallStat)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::map<std::string, AccountPartType), accounts)) \
+        ((PendingPartType, pendingTransfers))
+#else
+    #define ShapedFields \
+        ((StatPartType, overallStat)) \
+        (((std::map<std::string, AccountPartType>), accounts)) \
+        ((PendingPartType, pendingTransfers))
+#endif
 
 namespace test {
     TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(ShapedTemplateParams, Shaped, ShapedFields);
