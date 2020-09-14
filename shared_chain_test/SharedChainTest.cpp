@@ -264,7 +264,7 @@ void histRun(Chain *chain, std::string const &part, std::string const &todayStr)
     using ClockImp = basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>;
     using A = infra::SinglePassIterationApp<TheEnvironment>;
     TheEnvironment env;  
-    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+    env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
         infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
     );  
     run<A,ClockImp,Chain>(&env, chain, part, []() {
@@ -294,7 +294,7 @@ void simRun(Chain *chain, std::string const &part, std::string const &todayStr) 
     env.basic::real_time_clock::ClockComponent::operator=(
         basic::real_time_clock::ClockComponent(clockSettings)
     );
-    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+    env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
         infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
     );
     run<A,ClockImp,Chain>(&env, chain, part, [&env,todayStr]() {
@@ -320,7 +320,7 @@ void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
     using ClockImp = basic::real_time_clock::ClockImporter<TheEnvironment>;
     using A = infra::RealTimeApp<TheEnvironment>;
     TheEnvironment env;
-    env.infra::ConstValueHolderComponent<EnvValues<Chain>>::operator=(
+    env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
         infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
     );
     run<A,ClockImp,Chain>(&env, chain, part, []() {
