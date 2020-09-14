@@ -59,13 +59,18 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(test::OverallStat, OverallStatFields);
 
 //Now, the "shape" of the complete data
 
+#define ShapedTemplateParams \
+    ((typename, StatPartType)) \
+    ((typename, AccountPartType)) \
+    ((typename, PendingPartType))
+
+#define ShapedFields \
+    ((StatPartType, overallStat)) \
+    (((std::map<std::string, AccountPartType>), accounts)) \
+    ((PendingPartType, pendingTransfers))
+
 namespace test {
-    template <class StatPartType, class AccountPartType, class PendingPartType>
-    struct Shaped {
-        StatPartType overallStat;
-        std::map<std::string, AccountPartType> accounts;
-        PendingPartType pendingTransfers;
-    };
+    TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(ShapedTemplateParams, Shaped, ShapedFields);
 
     template <class StatPartType, class AccountPartType, class PendingPartType>
     using ShapedOptionals = Shaped<
@@ -75,42 +80,7 @@ namespace test {
     >;
 }
 
-namespace dev { namespace cd606 { namespace tm { namespace basic { namespace bytedata_utils {
-    template <class StartPartType, class AccountPartType, class PendingPartType>
-    struct RunCBORSerializer<test::Shaped<StartPartType,AccountPartType,PendingPartType>, void> {
-        static std::vector<uint8_t> apply(test::Shaped<StartPartType,AccountPartType,PendingPartType> const &x) {
-            std::tuple<StartPartType const *, std::map<std::string, AccountPartType> const *, PendingPartType const *> t {&x.overallStat, &x.accounts, &x.pendingTransfers};
-            return bytedata_utils::RunCBORSerializerWithNameList<std::tuple<StartPartType const *, std::map<std::string, AccountPartType> const *, PendingPartType const *>, 3>
-                ::apply(t, {
-                    "overall_stat"
-                    , "accounts"
-                    , "pending_transfers"
-                });
-        }
-    };
-    template <class StartPartType, class AccountPartType, class PendingPartType>
-    struct RunCBORDeserializer<test::Shaped<StartPartType,AccountPartType,PendingPartType>, void> {
-        static std::optional<std::tuple<test::Shaped<StartPartType,AccountPartType,PendingPartType>,size_t>> apply(std::string_view const &data, size_t start) {
-            auto t = bytedata_utils::RunCBORDeserializerWithNameList<std::tuple<StartPartType,std::map<std::string,AccountPartType>,PendingPartType>, 3>
-                ::apply(data, start, {
-                    "overall_stat"
-                    , "accounts"
-                    , "pending_transfers"
-                });
-            if (!t) {
-                return std::nullopt;
-            }
-            return std::tuple<test::Shaped<StartPartType,AccountPartType,PendingPartType>,size_t> {
-                test::Shaped<StartPartType,AccountPartType,PendingPartType> {
-                    std::move(std::get<0>(std::get<0>(*t)))
-                    , std::move(std::get<1>(std::get<0>(*t)))
-                    , std::move(std::get<2>(std::get<0>(*t)))
-                }
-                , std::get<1>(*t)
-            };
-        }
-    };
-}}}}}
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE(ShapedTemplateParams, test::Shaped, ShapedFields);
 
 //These are the two other commands (than transfer data) that the system supports.
 

@@ -75,28 +75,35 @@ int main(int argc, char **argv) {
         , std::tuple<> {}
         , std::tuple<float, double> {1.2f, 3.4}
     };
+    char buf1[1024];
     auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
         t
         , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
+        , buf1
     );
-    auto encoded = std::string(bytedata_utils::extractCBORSerializerResult(encodedV));
-    //auto encoded = bytedata_utils::RunSerializer<CBOR<TestType>>::apply({std::move(t)});
+    auto encoded = std::string_view(buf1, encodedV);
+    /*auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
+        t
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
+    );
+    auto encoded = std::string(bytedata_utils::extractCBORSerializerResult(encodedV));*/
+    //auto encoded = bytedata_utils::RunSerializer<CBORWithMaxSizeHint<TestType>>::apply({std::move(t), 1024});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
-    bytedata_utils::printByteDataDetails(std::cout, ByteData {encoded});
+    bytedata_utils::printByteDataDetails(std::cout, ByteDataView {encoded});
     std::cout << "\n";
     auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 15>::apply(
         encoded, 0
         , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
     );
-    //auto decoded = bytedata_utils::RunDeserializer<CBOR<TestType>>::apply(encoded);
+    //auto decoded = bytedata_utils::RunDeserializer<CBORWithMaxSizeHint<TestType>>::apply(encoded);
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
     if (decoded) {
         std::cout << "Decode success\n";
         TestType const &data = std::get<0>(*decoded);
-	PrintHelper<TestType>::print(std::cout, data);
-	std::cout << '\n';
         //TestType const &data = decoded->value;
         //TestType const &data = *decoded;
+        PrintHelper<TestType>::print(std::cout, data);
+	    std::cout << '\n';
         std::cout << "TestType {\n";
         std::cout << "\t" << std::get<0>(data) << "\n"
             << "\t, " << std::get<1>(data) << "\n"
