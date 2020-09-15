@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
             , std::tuple<float, double>
         >
     ;
-    char buf[5] = {0x1, 0x2, 0x3, 0x4, 0x5};
+    char buf[10] = {0x1, 0x2, 0x3, 0x4, 0x5, (char) 0xff, (char) 0xfe, (char) 0xfd, (char) 0xfc, (char) 0xfb};
     TestType t {
         -5
         , 2.3E7
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
         , std::make_unique<ByteDataWithTopic>(
             ByteDataWithTopic {
                 "test.topic"
-                , std::string {buf, buf+5}
+                , std::string {buf, buf+10}
             }
         )
         , VoidStruct {}
@@ -82,11 +82,11 @@ int main(int argc, char **argv) {
         , buf1
     );
     auto encoded = std::string_view(buf1, encodedV);
-    /*auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
+    /*
+    auto encoded = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
         t
         , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
-    );
-    auto encoded = std::string(bytedata_utils::extractCBORSerializerResult(encodedV));*/
+    );*/
     //auto encoded = bytedata_utils::RunSerializer<CBORWithMaxSizeHint<TestType>>::apply({std::move(t), 1024});
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
     bytedata_utils::printByteDataDetails(std::cout, ByteDataView {encoded});
