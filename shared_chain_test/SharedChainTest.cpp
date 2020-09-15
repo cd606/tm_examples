@@ -45,8 +45,9 @@ template <class Chain>
 struct EnvValues {
     Chain *chain;
     std::string todayStr;
-    EnvValues() : chain(nullptr), todayStr() {}
-    EnvValues(Chain *p, std::string const &s) : chain(p), todayStr(s) {}
+    bool dontLog;
+    EnvValues() : chain(nullptr), todayStr(), dontLog(false) {}
+    EnvValues(Chain *p, std::string const &s, bool d) : chain(p), todayStr(s), dontLog(d) {}
 };
 
 template <class Env>
@@ -120,45 +121,60 @@ public:
 
 template <class App>
 class RequestHandler {
+private:
+    bool dontLog_;
 public:
     using ResponseType = bool;
     using InputType = DataOnChain;
     using Env = typename App::EnvironmentType;
-    void initialize(Env *) {
+    void initialize(Env *env) {
+        dontLog_ = env->value().dontLog;
     }
     std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> handleInput(Env *env, typename App::template Key<InputType> &&input, State const &currentState) {
         auto idStr = Env::id_to_string(input.id());
-        return std::visit([env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> {
+        return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 if (currentState.pendingRequestCount >= 10) {
-                    env->log(infra::LogLevel::Warning, "too many pending requests");
+                    if (!dontLog_) {
+                        env->log(infra::LogLevel::Warning, "too many pending requests");
+                    }
                     return {false, std::nullopt};
                 }
                 if ((x.from != "a" && x.from != "b") || (x.to != "a" && x.to != "b")) {
-                    env->log(infra::LogLevel::Warning, "can only transfer between a and b");
+                    if (!dontLog_) {
+                        env->log(infra::LogLevel::Warning, "can only transfer between a and b");
+                    }
                     return {false, std::nullopt};
                 }
                 if (x.from == "a" && (static_cast<int64_t>(currentState.a)+static_cast<int64_t>(currentState.a_pending-x.amount) < 0)) {
-                    std::ostringstream oss;
-                    oss << currentState;
-                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in a, current state is "+oss.str());
+                    if (!dontLog_) {
+                        std::ostringstream oss;
+                        oss << currentState;
+                        env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in a, current state is "+oss.str());
+                    }
                     return {false, std::nullopt};
                 }
                 if (x.from == "b" && (static_cast<int64_t>(currentState.b)+static_cast<int64_t>(currentState.b_pending-x.amount) < 0)) {
-                    std::ostringstream oss;
-                    oss << currentState;
-                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in b, current state is "+oss.str());
+                    if (!dontLog_) {
+                        std::ostringstream oss;
+                        oss << currentState;
+                        env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in b, current state is "+oss.str());
+                    }
                     return {false, std::nullopt};
                 }
-                std::ostringstream oss;
-                oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
-                env->log(infra::LogLevel::Info, oss.str());
+                if (!dontLog_) {
+                    std::ostringstream oss;
+                    oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
+                    env->log(infra::LogLevel::Info, oss.str());
+                }
                 return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else if constexpr (std::is_same_v<T, Process>) {
-                std::ostringstream oss;
-                oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
-                env->log(infra::LogLevel::Info, oss.str());
+                if (!dontLog_) {
+                    std::ostringstream oss;
+                    oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
+                    env->log(infra::LogLevel::Info, oss.str());
+                }
                 return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else {
                 return {false, std::nullopt};
@@ -191,9 +207,11 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
 
     auto printState = A::template pureExporter<State>(
         [env](State &&s) {
-            std::ostringstream oss;
-            oss << "Current state: " << s;
-            env->log(infra::LogLevel::Info, oss.str());
+            if (!env->value().dontLog) {
+                std::ostringstream oss;
+                oss << "Current state: " << s;
+                env->log(infra::LogLevel::Info, oss.str());
+            }
         }
     );
     r.registerExporter("printState", printState);
@@ -272,7 +290,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
 }
 
 template <class Chain>
-void histRun(Chain *chain, std::string const &part, std::string const &todayStr) {
+void histRun(Chain *chain, std::string const &part, std::string const &todayStr, bool dontLog) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
@@ -284,13 +302,22 @@ void histRun(Chain *chain, std::string const &part, std::string const &todayStr)
     using A = infra::SinglePassIterationApp<TheEnvironment>;
     TheEnvironment env;  
     env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
-        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr, dontLog}
     );  
+    std::chrono::steady_clock::time_point tp1, tp2;
+    if (dontLog) {
+        tp1 = std::chrono::steady_clock::now();
+    }
     run<A,ClockImp,Chain>(&env, chain, part, []() {
         infra::terminationController(infra::ImmediatelyTerminate {});
     }
     , infra::withtime_utils::parseLocalTime(todayStr+"T10:00:00")
     , infra::withtime_utils::parseLocalTime(todayStr+"T11:00:00"));
+    if (dontLog) {
+        tp2 = std::chrono::steady_clock::now();
+        auto micros = std::chrono::duration_cast<std::chrono::microseconds>(tp2-tp1).count();
+        std::cerr << "Used time: " << micros << " micros\n";
+    }
 }
 
 template <class Chain>
@@ -314,7 +341,7 @@ void simRun(Chain *chain, std::string const &part, std::string const &todayStr) 
         basic::real_time_clock::ClockComponent(clockSettings)
     );
     env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
-        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr, false}
     );
     run<A,ClockImp,Chain>(&env, chain, part, [&env,todayStr]() {
         infra::terminationController(infra::TerminateAtTimePoint {
@@ -340,7 +367,7 @@ void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
     using A = infra::RealTimeApp<TheEnvironment>;
     TheEnvironment env;
     env.infra::template ConstValueHolderComponent<EnvValues<Chain>>::operator=(
-        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr}
+        infra::ConstValueHolderComponent<EnvValues<Chain>> {chain, todayStr, false}
     );
     run<A,ClockImp,Chain>(&env, chain, part, []() {
         infra::terminationController(infra::TerminateAfterDuration {
@@ -357,12 +384,14 @@ int main(int argc, char **argv) {
         return 0;
     }
     enum {
-        Hist, Sim, RT
+        Hist, Sim, RT, HistNoLog
     } mode;
     if (argc <= 1) {
         mode = RT;
     } else if (std::string(argv[1]) == "hist") {
         mode = Hist;
+    } else if (std::string(argv[1]) == "histNoLog") {
+        mode = HistNoLog;
     } else if (std::string(argv[1]) == "sim") {
         mode = Sim;
     } else {
@@ -420,6 +449,7 @@ int main(int argc, char **argv) {
         }
         break;
     case Hist:
+    case HistNoLog:
         switch (chainChoice) {
         case Etcd1:
             {
@@ -430,7 +460,7 @@ int main(int argc, char **argv) {
                         .DuplicateFromRedis(false)
                         .UseWatchThread(false)
                 };
-                histRun(&etcdChain, part, "2020-01-01");
+                histRun(&etcdChain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
         case Etcd2:
@@ -442,13 +472,13 @@ int main(int argc, char **argv) {
                         .DuplicateFromRedis(false)
                         .UseWatchThread(false)
                 };
-                histRun(&etcdChain, part, "2020-01-01");
+                histRun(&etcdChain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
         case InMem:
             {
                 transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
-                histRun(&chain, part, "2020-01-01");
+                histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
         default:
