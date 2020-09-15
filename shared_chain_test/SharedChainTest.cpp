@@ -49,28 +49,35 @@ struct EnvValues {
     EnvValues(Chain *p, std::string const &s) : chain(p), todayStr(s) {}
 };
 
+template <class Env>
 class StateFolder {
+private:
+    Env *env_;
 public:
     using ResultType = State;
-    static State initialize(infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>> *) {
-        return State {1000, 1000, 0, 0, 0, ""};
-    } 
-    static State initialize(infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::EtcdChain<DataOnChain>>> *env) {
-        auto val = env->value().chain->loadExtraData<State>(
-            env->value().todayStr+"-state"
-        );
-        if (val) {
-            return *val;
-        } else {
+    State initialize(Env *env) {
+        env_ = env;
+        if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>> *>) {
             return State {1000, 1000, 0, 0, 0, ""};
-        }   
+        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::EtcdChain<DataOnChain>>> *>) {
+            auto val = env->value().chain->template loadExtraData<State>(
+                env->value().todayStr+"-state"
+            );
+            if (val) {
+                return *val;
+            } else {
+                return State {1000, 1000, 0, 0, 0, ""};
+            }
+        } else {
+            throw "StateFolder initialization error, environment is not recognized";
+        }
     }
     static std::string const &chainIDForValue(State const &s) {
         return s.lastSeenID;
     }
-    static State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
+    State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
         auto id = newInfo.id;
-        return std::visit([&lastState,&id](auto const &x) -> State {
+        return std::visit([this,&lastState,&id](auto const &x) -> State {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 State newState = lastState;
@@ -86,6 +93,10 @@ public:
                 }
                 ++(newState.pendingRequestCount);
                 newState.lastSeenID = id;
+                /*
+                std::ostringstream oss;
+                oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
+                env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else if constexpr (std::is_same_v<T, Process>) {
                 State newState = lastState;
@@ -95,6 +106,10 @@ public:
                 newState.b_pending = 0;
                 newState.pendingRequestCount = 0;
                 newState.lastSeenID = id;
+                /*
+                std::ostringstream oss;
+                oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
+                env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else {
                 return lastState;
@@ -125,20 +140,24 @@ public:
                     return {false, std::nullopt};
                 }
                 if (x.from == "a" && (static_cast<int64_t>(currentState.a)+static_cast<int64_t>(currentState.a_pending-x.amount) < 0)) {
-                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in a");
+                    std::ostringstream oss;
+                    oss << currentState;
+                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in a, current state is "+oss.str());
                     return {false, std::nullopt};
                 }
                 if (x.from == "b" && (static_cast<int64_t>(currentState.b)+static_cast<int64_t>(currentState.b_pending-x.amount) < 0)) {
-                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in b");
+                    std::ostringstream oss;
+                    oss << currentState;
+                    env->log(infra::LogLevel::Warning, "not enough amount "+std::to_string(x.amount)+" in b, current state is "+oss.str());
                     return {false, std::nullopt};
                 }
                 std::ostringstream oss;
-                oss << "Appending request " << x;
+                oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
                 env->log(infra::LogLevel::Info, oss.str());
                 return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else if constexpr (std::is_same_v<T, Process>) {
                 std::ostringstream oss;
-                oss << "Appending request " << x;
+                oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
                 env->log(infra::LogLevel::Info, oss.str());
                 return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
             } else {
@@ -167,7 +186,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     );
     r.registerImporter("readerClockImporter", readerClockImporter);
 
-    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, Chain, StateFolder>(env, chain));
+    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment>>(env, chain));
     r.registerAction("readerAction", readerAction);
 
     auto printState = A::template pureExporter<State>(
@@ -242,7 +261,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(processImporter));
     }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder, RequestHandler<A>>(chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment>, RequestHandler<A>>(chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
@@ -377,6 +396,7 @@ int main(int argc, char **argv) {
                     .DuplicateFromRedis(true)
                     .RedisTTLSeconds(20)
                     .AutomaticallyDuplicateToRedis(true)
+                    .UseWatchThread(true)
             };
             rtRun(&etcdChain, part, today);
         }
@@ -394,6 +414,7 @@ int main(int argc, char **argv) {
                     .DuplicateFromRedis(true)
                     .RedisTTLSeconds(20)
                     .AutomaticallyDuplicateToRedis(true)
+                    .UseWatchThread(true)
             };
             simRun(&etcdChain, part, "2020-01-01");
         }
@@ -407,6 +428,7 @@ int main(int argc, char **argv) {
                         .HeadKey("2020-01-01-head")
                         .SaveDataOnSeparateStorage(false)
                         .DuplicateFromRedis(false)
+                        .UseWatchThread(false)
                 };
                 histRun(&etcdChain, part, "2020-01-01");
             }
@@ -418,6 +440,7 @@ int main(int argc, char **argv) {
                         .HeadKey("2020-01-01-head")
                         .SaveDataOnSeparateStorage(true)
                         .DuplicateFromRedis(false)
+                        .UseWatchThread(false)
                 };
                 histRun(&etcdChain, part, "2020-01-01");
             }
