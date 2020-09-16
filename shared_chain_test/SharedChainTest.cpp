@@ -130,8 +130,8 @@ public:
     void initialize(Env *env) {
         dontLog_ = env->value().dontLog;
     }
-    std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> handleInput(Env *env, typename App::template Key<InputType> &&input, State const &currentState) {
-        auto idStr = Env::id_to_string(input.id());
+    std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> handleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+        auto idStr = Env::id_to_string(input.value.id());
         return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
@@ -179,7 +179,7 @@ public:
             } else {
                 return {false, std::nullopt};
             }
-        }, std::move(input.key().value));
+        }, std::move(input.value.key().value));
     }
 };
 
