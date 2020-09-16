@@ -12,7 +12,8 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/etcd_shared_chain/EtcdSharedChain.hpp>
-#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemorySharedChain.hpp>
+#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
+//#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -72,6 +73,16 @@ public:
             }
         } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>> *>) {
             return State {1000, 1000, 0, 0, 0, ""};
+        /*
+        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>> *>) {
+            auto val = env->value().chain->template loadExtraData<State>(
+                env->value().todayStr+"-state"
+            );
+            if (val) {
+                return *val;
+            } else {
+                return State {1000, 1000, 0, 0, 0, ""};
+            }*/
         } else {
             throw std::string("StateFolder initialization error, environment is not recognized");
         }
@@ -129,6 +140,7 @@ public:
     State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> const &newInfo) {
         auto newState = fold(lastState, newInfo->data);
         if (newState) {
+            newState->lastSeenID = newInfo->id;
             return *newState;
         } else {
             return lastState;
@@ -136,33 +148,49 @@ public:
     }
 };
 
-template <class ChainItem>
-inline ChainItem formChainItem(std::string const &, DataOnChain &&);
+template <class Chain>
+inline typename Chain::ItemType formChainItem(Chain *, std::string const &, DataOnChain &&);
 template <>
-inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transport::etcd_shared_chain::ChainItem<DataOnChain>>(std::string const &id, DataOnChain &&d) {
+inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transport::etcd_shared_chain::EtcdChain<DataOnChain>>(transport::etcd_shared_chain::EtcdChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
     return {0, id, std::move(d), ""};
 }
 template <>
-inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain>>(std::string const &, DataOnChain &&d) {
-    return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {std::move(d), nullptr};
+inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>(transport::etcd_shared_chain::InMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
+    return {0, id, std::move(d), ""};
 }
-
-template <class ChainItem>
-inline void discardChainItem(ChainItem &) {}
 template <>
-inline void discardChainItem(transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> &item) {
+inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
+    return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {id, std::move(d), nullptr};
+}
+/*
+template <>
+inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
+    return chain->createItemFromData(id, std::move(d));
+}*/
+
+template <class Chain>
+inline void discardChainItem(Chain *, typename Chain::ItemType &) {}
+template <>
+inline void discardChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *, transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>::ItemType &item) {
     delete item;
 }
+/*
+template <>
+inline void discardChainItem<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>::ItemType &item) {
+    chain->destroyItem(item);
+}*/
 
 template <class App, class Chain>
 class RequestHandler {
 private:
+    typename App::EnvironmentType *env_;
     bool dontLog_;
 public:
     using ResponseType = bool;
     using InputType = DataOnChain;
     using Env = typename App::EnvironmentType;
     void initialize(Env *env) {
+        env_ = env;
         dontLog_ = env->value().dontLog;
     }
     std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
@@ -220,13 +248,13 @@ public:
         auto idStr = App::EnvironmentType::id_to_string(input.value.id());
         auto resp = basicHandleInput(env, std::move(input), currentState);
         if (std::get<1>(resp)) {
-            return {std::get<0>(resp), formChainItem<typename Chain::ItemType>(idStr, std::move(*std::get<1>(resp)))};
+            return {std::get<0>(resp), formChainItem<Chain>(env_->value().chain, idStr, std::move(*std::get<1>(resp)))};
         } else {
             return {std::get<0>(resp), std::nullopt};
         }
     }
     void discardUnattachedChainItem(typename Chain::ItemType &item) {
-        discardChainItem(item);
+        discardChainItem<Chain>(env_->value().chain, item);
     }
 };
 
@@ -445,7 +473,7 @@ int main(int argc, char **argv) {
         mode = RT;
     }
     enum {
-        Etcd1, Etcd2, InMem, LockFreeInMem
+        Etcd1, Etcd2, InMem, LockFreeInMem, LockFreeInSharedMem
     } chainChoice;
     if (argc <= 2) {
         chainChoice = Etcd1; 
@@ -453,6 +481,9 @@ int main(int argc, char **argv) {
         chainChoice = InMem;
     } else if (std::string(argv[2]) == "lock-free-in-mem") {
         chainChoice = LockFreeInMem;
+        /*
+    } else if (std::string(argv[2]) == "lock-free-in-shared-mem") {
+        chainChoice = LockFreeInSharedMem;*/
     } else if (std::string(argv[2]) == "etcd2") {
         chainChoice = Etcd2;
     } else {
@@ -461,7 +492,7 @@ int main(int argc, char **argv) {
     std::string part = ((argc <= 3)?"":argv[3]);
     switch (mode) {
     case RT:
-        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
+        if (chainChoice == InMem || chainChoice == LockFreeInMem || chainChoice == LockFreeInSharedMem) {
             std::cerr << "RT run cannot use in-mem chain\n";
             return 1;
         }
@@ -480,7 +511,7 @@ int main(int argc, char **argv) {
         }
         break;
     case Sim:
-        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
+        if (chainChoice == InMem || chainChoice == LockFreeInMem || chainChoice == LockFreeInSharedMem) {
             std::cerr << "Sim run cannot use in-mem chain\n";
             return 1;
         }
@@ -536,6 +567,14 @@ int main(int argc, char **argv) {
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
+            /*
+        case LockFreeInSharedMem:
+            {
+                transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> chain {"2020-01-01-chain", 10*1024*1024};
+                histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
+            }
+            break;
+            */
         default:
             break;
         }
