@@ -12,6 +12,7 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/etcd_shared_chain/EtcdSharedChain.hpp>
+#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemorySharedChain.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -69,16 +70,17 @@ public:
             } else {
                 return State {1000, 1000, 0, 0, 0, ""};
             }
+        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>> *>) {
+            return State {1000, 1000, 0, 0, 0, ""};
         } else {
-            throw "StateFolder initialization error, environment is not recognized";
+            throw std::string("StateFolder initialization error, environment is not recognized");
         }
     }
     static std::string const &chainIDForValue(State const &s) {
         return s.lastSeenID;
     }
-    State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
-        auto id = newInfo.id;
-        return std::visit([this,&lastState,&id](auto const &x) -> State {
+    std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
+        return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 State newState = lastState;
@@ -93,7 +95,6 @@ public:
                     newState.b_pending += x.amount;
                 }
                 ++(newState.pendingRequestCount);
-                newState.lastSeenID = id;
                 /*
                 std::ostringstream oss;
                 oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
@@ -106,20 +107,54 @@ public:
                 newState.b += newState.b_pending;
                 newState.b_pending = 0;
                 newState.pendingRequestCount = 0;
-                newState.lastSeenID = id;
                 /*
                 std::ostringstream oss;
                 oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
                 env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else {
-                return lastState;
+                return std::nullopt;
             }
-        }, newInfo.data.value);
+        }, newInfo.value);
+    }
+    State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
+        auto newState = fold(lastState, newInfo.data);
+        if (newState) {
+            newState->lastSeenID = newInfo.id;
+            return *newState;
+        } else {
+            return lastState;
+        }
+    }
+    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> const &newInfo) {
+        auto newState = fold(lastState, newInfo->data);
+        if (newState) {
+            return *newState;
+        } else {
+            return lastState;
+        }
     }
 };
 
-template <class App>
+template <class ChainItem>
+inline ChainItem formChainItem(std::string const &, DataOnChain &&);
+template <>
+inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transport::etcd_shared_chain::ChainItem<DataOnChain>>(std::string const &id, DataOnChain &&d) {
+    return {0, id, std::move(d), ""};
+}
+template <>
+inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain>>(std::string const &, DataOnChain &&d) {
+    return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {std::move(d), nullptr};
+}
+
+template <class ChainItem>
+inline void discardChainItem(ChainItem &) {}
+template <>
+inline void discardChainItem(transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> &item) {
+    delete item;
+}
+
+template <class App, class Chain>
 class RequestHandler {
 private:
     bool dontLog_;
@@ -130,9 +165,9 @@ public:
     void initialize(Env *env) {
         dontLog_ = env->value().dontLog;
     }
-    std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> handleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
         auto idStr = Env::id_to_string(input.value.id());
-        return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<transport::etcd_shared_chain::ChainItem<DataOnChain>>> {
+        return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<DataOnChain>> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 if (currentState.pendingRequestCount >= 10) {
@@ -168,18 +203,30 @@ public:
                     oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
                     env->log(infra::LogLevel::Info, oss.str());
                 }
-                return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
+                return {true, DataOnChain {std::move(x)}};
             } else if constexpr (std::is_same_v<T, Process>) {
                 if (!dontLog_) {
                     std::ostringstream oss;
                     oss << "Appending request " << x << " with ID " << idStr << ", curent state is " << currentState;
                     env->log(infra::LogLevel::Info, oss.str());
                 }
-                return {true, {transport::etcd_shared_chain::ChainItem<DataOnChain> {0, idStr, {std::move(x)}}}};
+                return {true, DataOnChain {std::move(x)}};
             } else {
                 return {false, std::nullopt};
             }
         }, std::move(input.value.key().value));
+    }
+    std::tuple<ResponseType, std::optional<typename Chain::ItemType>> handleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+        auto idStr = App::EnvironmentType::id_to_string(input.value.id());
+        auto resp = basicHandleInput(env, std::move(input), currentState);
+        if (std::get<1>(resp)) {
+            return {std::get<0>(resp), formChainItem<typename Chain::ItemType>(idStr, std::move(*std::get<1>(resp)))};
+        } else {
+            return {std::get<0>(resp), std::nullopt};
+        }
+    }
+    void discardUnattachedChainItem(typename Chain::ItemType &item) {
+        discardChainItem(item);
     }
 };
 
@@ -279,7 +326,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(processImporter));
     }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment>, RequestHandler<A>>(chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment>, RequestHandler<A,Chain>>(chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
@@ -398,12 +445,14 @@ int main(int argc, char **argv) {
         mode = RT;
     }
     enum {
-        Etcd1, Etcd2, InMem
+        Etcd1, Etcd2, InMem, LockFreeInMem
     } chainChoice;
     if (argc <= 2) {
         chainChoice = Etcd1; 
     } else if (std::string(argv[2]) == "in-mem") {
         chainChoice = InMem;
+    } else if (std::string(argv[2]) == "lock-free-in-mem") {
+        chainChoice = LockFreeInMem;
     } else if (std::string(argv[2]) == "etcd2") {
         chainChoice = Etcd2;
     } else {
@@ -412,7 +461,7 @@ int main(int argc, char **argv) {
     std::string part = ((argc <= 3)?"":argv[3]);
     switch (mode) {
     case RT:
-        if (chainChoice == InMem) {
+        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
             std::cerr << "RT run cannot use in-mem chain\n";
             return 1;
         }
@@ -431,7 +480,7 @@ int main(int argc, char **argv) {
         }
         break;
     case Sim:
-        if (chainChoice == InMem) {
+        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
             std::cerr << "Sim run cannot use in-mem chain\n";
             return 1;
         }
@@ -478,6 +527,12 @@ int main(int argc, char **argv) {
         case InMem:
             {
                 transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
+                histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
+            }
+            break;
+        case LockFreeInMem:
+            {
+                transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> chain;
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
