@@ -127,9 +127,9 @@ int main(int argc, char **argv) {
         }
     );
     r.registerImporter("broadcastKey", broadcastKey);
-    auto discardTopic = M::template liftPure<basic::TypedDataWithTopic<TI::TransactionWithAccountInfo>>(
-        [](basic::TypedDataWithTopic<TI::TransactionWithAccountInfo> &&d) {
-            return std::move(d.content);
+    auto discardTopic = M::template liftPure<basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>>>(
+        [](basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>> &&d) {
+            return std::move(d.content.value);
         }
     );
     r.registerAction("discardTopic", discardTopic);
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
         r
         , r.importItem(broadcastKey)
         , M::onOrderFacilityWithExternalEffects(
-            new transport::MultiTransportBroadcastListener<TheEnvironment, TI::TransactionWithAccountInfo>()
+            new transport::MultiTransportBroadcastListener<TheEnvironment, basic::CBOR<TI::TransactionWithAccountInfo>>()
         )
         , std::nullopt //the trigger response is not needed
         , "transactionInput"

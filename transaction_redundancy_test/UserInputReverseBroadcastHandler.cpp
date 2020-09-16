@@ -481,15 +481,15 @@ int main(int argc, char **argv) {
     );
 
     auto addAccount = M::liftPure<TI::Transaction>(
-        [](TI::Transaction &&t) -> basic::TypedDataWithTopic<TI::TransactionWithAccountInfo> {
+        [](TI::Transaction &&t) -> basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>> {
             return {
                 "etcd_test.transaction_commands"
-                , {"transaction_redundancy_test_client", std::move(t)}
+                , {{"transaction_redundancy_test_client", std::move(t)}}
             };
         }
     );
     auto transactionPublisher = transport::redis::RedisImporterExporter<TheEnvironment>::
-        createTypedExporter<TI::TransactionWithAccountInfo>(
+        createTypedExporter<basic::CBOR<TI::TransactionWithAccountInfo>>(
             transport::ConnectionLocator::parse("127.0.0.1:6379")
         );
 
