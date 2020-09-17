@@ -11,7 +11,7 @@
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-#include <tm_kit/transport/etcd_shared_chain/EtcdSharedChain.hpp>
+#include <tm_kit/transport/etcd_shared_chain/EtcdChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
 //#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 
