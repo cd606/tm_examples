@@ -478,7 +478,7 @@ void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
 
 int main(int argc, char **argv) {
     if (argc > 1 && std::string(argv[1]) == "help") {
-        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|in-mem) [a-to-b|b-to-a|process]\n";
+        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|in-mem|lock-free-in-mem|lock-free-in-shared-mem) [a-to-b|b-to-a|process]\n";
         return 0;
     }
     enum {
@@ -514,11 +514,15 @@ int main(int argc, char **argv) {
     std::string part = ((argc <= 3)?"":argv[3]);
     switch (mode) {
     case RT:
-        if (chainChoice == InMem || chainChoice == LockFreeInMem || chainChoice == LockFreeInSharedMem) {
-            std::cerr << "RT run cannot use in-mem chain\n";
+        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
+            std::cerr << "RT run cannot use in-mem chain unless it is in-shared-mem\n";
             return 1;
         }
-        {
+        if (chainChoice == LockFreeInSharedMem) {
+            std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
+            transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> sharedMemChain {today+"-chain", 10*1024*1024};
+            rtRun(&sharedMemChain, part, today);
+        } else {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
                 transport::etcd_shared_chain::EtcdChainConfiguration()
@@ -533,11 +537,14 @@ int main(int argc, char **argv) {
         }
         break;
     case Sim:
-        if (chainChoice == InMem || chainChoice == LockFreeInMem || chainChoice == LockFreeInSharedMem) {
-            std::cerr << "Sim run cannot use in-mem chain\n";
+        if (chainChoice == InMem || chainChoice == LockFreeInMem) {
+            std::cerr << "Sim run cannot use in-mem chain unless it is in-shared-mem\n";
             return 1;
         }
-        {
+        if (chainChoice == LockFreeInSharedMem) {
+            transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> sharedMemChain {"2020-01-01-chain", 10*1024*1024};
+            simRun(&sharedMemChain, part, "2020-01-01");
+        } else {
             transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
                 transport::etcd_shared_chain::EtcdChainConfiguration()
                     .HeadKey("2020-01-01-head")
