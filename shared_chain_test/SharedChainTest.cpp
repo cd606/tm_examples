@@ -12,6 +12,7 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/etcd_shared_chain/EtcdChain.hpp>
+#include <tm_kit/transport/redis_shared_chain/RedisChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 
@@ -87,6 +88,15 @@ public:
             } else {
                 return State {1000, 1000, 0, 0, 0, idForStorage("")};
             }
+        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::redis_shared_chain::RedisChain<DataOnChain>>> *>) {
+            auto val = env->value().chain->template loadExtraData<State>(
+                env->value().todayStr+"-state"
+            );
+            if (val) {
+                return *val;
+            } else {
+                return State {1000, 1000, 0, 0, 0, idForStorage("")};
+            }
         } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>> *>) {
             return State {1000, 1000, 0, 0, 0, idForStorage("")};
         } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>> *>) {
@@ -152,6 +162,15 @@ public:
             return lastState;
         }
     }
+    State fold(State const &lastState, transport::redis_shared_chain::ChainItem<DataOnChain> const &newInfo) {
+        auto newState = fold(lastState, newInfo.data);
+        if (newState) {
+            newState->lastSeenID = idForStorage(newInfo.id);
+            return *newState;
+        } else {
+            return lastState;
+        }
+    }
     State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> const &newInfo) {
         auto newState = fold(lastState, newInfo->data);
         if (newState) {
@@ -182,6 +201,10 @@ inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transp
 template <>
 inline transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>(transport::etcd_shared_chain::InMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
     return {0, id, std::move(d), ""};
+}
+template <>
+inline transport::redis_shared_chain::ChainItem<DataOnChain> formChainItem<transport::redis_shared_chain::RedisChain<DataOnChain>>(transport::redis_shared_chain::RedisChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
+    return {id, std::move(d), ""};
 }
 template <>
 inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
@@ -478,7 +501,7 @@ void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
 
 int main(int argc, char **argv) {
     if (argc > 1 && std::string(argv[1]) == "help") {
-        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|in-mem|lock-free-in-mem|lock-free-in-shared-mem) [a-to-b|b-to-a|process]\n";
+        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|redis|in-mem|lock-free-in-mem|lock-free-in-shared-mem) [a-to-b|b-to-a|process]\n";
         return 0;
     }
     enum {
@@ -496,10 +519,12 @@ int main(int argc, char **argv) {
         mode = RT;
     }
     enum {
-        Etcd1, Etcd2, InMem, LockFreeInMem, LockFreeInSharedMem
+        Etcd1, Etcd2, Redis, InMem, LockFreeInMem, LockFreeInSharedMem
     } chainChoice;
     if (argc <= 2) {
         chainChoice = Etcd1; 
+    } else if (std::string(argv[2]) == "redis") {
+        chainChoice = Redis;
     } else if (std::string(argv[2]) == "in-mem") {
         chainChoice = InMem;
     } else if (std::string(argv[2]) == "lock-free-in-mem") {
@@ -582,6 +607,15 @@ int main(int argc, char **argv) {
                         .UseWatchThread(false)
                 };
                 histRun(&etcdChain, part, "2020-01-01", (mode == HistNoLog));
+            }
+            break;
+        case Redis:
+            {
+                transport::redis_shared_chain::RedisChain<DataOnChain> redisChain {
+                    transport::redis_shared_chain::RedisChainConfiguration()
+                        .HeadKey("2020-01-01-head")
+                };
+                histRun(&redisChain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
         case InMem:
