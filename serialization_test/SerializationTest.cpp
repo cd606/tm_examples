@@ -18,11 +18,11 @@ int main(int argc, char **argv) {
             , std::variant<
                 std::vector<uint16_t>
                 , std::optional<SingleLayerWrapper<
-                    std::array<float,5>
+                    std::array<char,5>
                 >>
             >
             , GroupedVersionedData<std::string, int64_t, double>
-            , bool
+            , char
             , std::map<std::string, int32_t>
             , std::unordered_map<int32_t, double>
             , ConstType<5>
@@ -49,18 +49,18 @@ int main(int argc, char **argv) {
             10000, 11000, 12000
         }*/
         , std::optional<SingleLayerWrapper<
-                    std::array<float,5>
+                    std::array<char,5>
                 >> {
             SingleLayerWrapper<
-                std::array<float,5>
+                std::array<char,5>
             > {
-                {1.2f, 2.3f, 3.4f, 4.5f, 5.6f}
+                {'a','b','c','d','e'}
             }
         }
         , GroupedVersionedData<std::string, int64_t, double> {
             "group1", 20, 1111.11
         }
-        , true
+        , 'x'
         , std::map<std::string, int32_t> {
             {"a", 5}
             , {"b", 6}
