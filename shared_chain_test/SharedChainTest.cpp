@@ -13,13 +13,21 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/etcd_shared_chain/EtcdChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
-//#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
+#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 
 using namespace dev::cd606::tm;
 
+using AccountInfo = std::array<char,11>;
+inline AccountInfo account(std::string const &x) {
+    AccountInfo ret;
+    std::memset(ret.data(), 0, 11);
+    std::memcpy(ret.data(), x.c_str(), std::min<std::size_t>(10, x.length()));
+    return ret;
+}
+
 #define TransferRequestFields \
-    ((std::string, from)) \
-    ((std::string, to)) \
+    ((AccountInfo, from)) \
+    ((AccountInfo, to)) \
     ((uint16_t, amount))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(TransferRequest, TransferRequestFields);
@@ -32,13 +40,21 @@ TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(Process);
 //then there will be some issue using it as data flow object type in our applicatives
 using DataOnChain = basic::SingleLayerWrapper<std::variant<TransferRequest, Process>>;
 
+using IDStorageType = std::array<char,37>;
+inline IDStorageType idForStorage(std::string const &id) {
+    IDStorageType ret;
+    std::memset(ret.data(), 0, 37);
+    std::memcpy(ret.data(), id.c_str(), std::min<std::size_t>(36, id.length()));
+    return ret;
+}
+
 #define StateFields \
     ((uint32_t, a)) \
     ((uint32_t, b)) \
     ((int32_t, a_pending)) \
     ((int32_t, b_pending)) \
     ((uint16_t, pendingRequestCount)) \
-    ((std::string, lastSeenID))
+    ((IDStorageType, lastSeenID))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(State, StateFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(State, StateFields);
@@ -61,7 +77,7 @@ public:
     State initialize(Env *env) {
         env_ = env;
         if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::InMemoryChain<DataOnChain>>> *>) {
-            return State {1000, 1000, 0, 0, 0, ""};
+            return State {1000, 1000, 0, 0, 0, idForStorage("")};
         } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::etcd_shared_chain::EtcdChain<DataOnChain>>> *>) {
             auto val = env->value().chain->template loadExtraData<State>(
                 env->value().todayStr+"-state"
@@ -69,40 +85,39 @@ public:
             if (val) {
                 return *val;
             } else {
-                return State {1000, 1000, 0, 0, 0, ""};
+                return State {1000, 1000, 0, 0, 0, idForStorage("")};
             }
         } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>> *>) {
-            return State {1000, 1000, 0, 0, 0, ""};
-        /*
-        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>> *>) {
+            return State {1000, 1000, 0, 0, 0, idForStorage("")};
+        } else if constexpr (std::is_convertible_v<Env *, infra::ConstValueHolderComponent<EnvValues<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>> *>) {
             auto val = env->value().chain->template loadExtraData<State>(
                 env->value().todayStr+"-state"
             );
             if (val) {
                 return *val;
             } else {
-                return State {1000, 1000, 0, 0, 0, ""};
-            }*/
+                return State {1000, 1000, 0, 0, 0, idForStorage("")};
+            }
         } else {
             throw std::string("StateFolder initialization error, environment is not recognized");
         }
     }
-    static std::string const &chainIDForValue(State const &s) {
-        return s.lastSeenID;
+    static std::string chainIDForValue(State const &s) {
+        return std::string(s.lastSeenID.data());
     }
     std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
         return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 State newState = lastState;
-                if (x.from == "a") {
+                if (std::strcmp(x.from.data(), "a") == 0) {
                     newState.a_pending -= x.amount;
-                } else if (x.from == "b") {
+                } else if (std::strcmp(x.from.data(), "b") == 0) {
                     newState.b_pending -= x.amount;
                 }
-                if (x.to == "a") {
+                if (std::strcmp(x.to.data(), "a") == 0) {
                     newState.a_pending += x.amount;
-                } else if (x.to == "b") {
+                } else if (std::strcmp(x.to.data(), "b") == 0) {
                     newState.b_pending += x.amount;
                 }
                 ++(newState.pendingRequestCount);
@@ -131,7 +146,7 @@ public:
     State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
         auto newState = fold(lastState, newInfo.data);
         if (newState) {
-            newState->lastSeenID = newInfo.id;
+            newState->lastSeenID = idForStorage(newInfo.id);
             return *newState;
         } else {
             return lastState;
@@ -140,7 +155,17 @@ public:
     State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> const &newInfo) {
         auto newState = fold(lastState, newInfo->data);
         if (newState) {
-            newState->lastSeenID = newInfo->id;
+            newState->lastSeenID = idForStorage(newInfo->id);
+            return *newState;
+        } else {
+            return lastState;
+        }
+    }
+    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain> const &newInfo) {
+        auto newState = fold(lastState, newInfo->data);
+        if (newState) {
+            std::memcpy(newState->lastSeenID.data(), newInfo->id, 36);
+            newState->lastSeenID[36] = '\0';
             return *newState;
         } else {
             return lastState;
@@ -162,11 +187,10 @@ template <>
 inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
     return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {id, std::move(d), nullptr};
 }
-/*
 template <>
-inline transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
+inline transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain> formChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
     return chain->createItemFromData(id, std::move(d));
-}*/
+}
 
 template <class Chain>
 inline void discardChainItem(Chain *, typename Chain::ItemType &) {}
@@ -174,11 +198,10 @@ template <>
 inline void discardChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *, transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>::ItemType &item) {
     delete item;
 }
-/*
 template <>
-inline void discardChainItem<transport::lock_free_in_boost_shared_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>::ItemType &item) {
+inline void discardChainItem<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>>(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> *chain, transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>::ItemType &item) {
     chain->destroyItem(item);
-}*/
+}
 
 template <class App, class Chain>
 class RequestHandler {
@@ -204,13 +227,13 @@ public:
                     }
                     return {false, std::nullopt};
                 }
-                if ((x.from != "a" && x.from != "b") || (x.to != "a" && x.to != "b")) {
+                if ((std::strcmp(x.from.data(), "a") != 0 && std::strcmp(x.from.data(), "b") != 0) || (std::strcmp(x.to.data(), "a") != 0 && std::strcmp(x.to.data(), "b") != 0)) {
                     if (!dontLog_) {
                         env->log(infra::LogLevel::Warning, "can only transfer between a and b");
                     }
                     return {false, std::nullopt};
                 }
-                if (x.from == "a" && (static_cast<int64_t>(currentState.a)+static_cast<int64_t>(currentState.a_pending-x.amount) < 0)) {
+                if (std::strcmp(x.from.data(), "a") == 0 && (static_cast<int64_t>(currentState.a)+static_cast<int64_t>(currentState.a_pending-x.amount) < 0)) {
                     if (!dontLog_) {
                         std::ostringstream oss;
                         oss << currentState;
@@ -218,7 +241,7 @@ public:
                     }
                     return {false, std::nullopt};
                 }
-                if (x.from == "b" && (static_cast<int64_t>(currentState.b)+static_cast<int64_t>(currentState.b_pending-x.amount) < 0)) {
+                if (std::strcmp(x.from.data(), "b") == 0 && (static_cast<int64_t>(currentState.b)+static_cast<int64_t>(currentState.b_pending-x.amount) < 0)) {
                     if (!dontLog_) {
                         std::ostringstream oss;
                         oss << currentState;
@@ -314,8 +337,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
             }
             , [](typename TheEnvironment::TimePointType const &tp) -> DataOnChain {
                 TransferRequest req;
-                req.from = "a";
-                req.to = "b";
+                req.from = account("a");
+                req.to = account("b");
                 req.amount = (std::rand()%9+1)*100;
                 return {{req}};
             }
@@ -332,8 +355,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
             }
             , [](typename TheEnvironment::TimePointType const &tp) -> DataOnChain {
                 TransferRequest req;
-                req.from = "b";
-                req.to = "a";
+                req.from = account("b");
+                req.to = account("a");
                 req.amount = (std::rand()%9+1)*100;
                 return {{req}};
             }
@@ -481,9 +504,8 @@ int main(int argc, char **argv) {
         chainChoice = InMem;
     } else if (std::string(argv[2]) == "lock-free-in-mem") {
         chainChoice = LockFreeInMem;
-        /*
     } else if (std::string(argv[2]) == "lock-free-in-shared-mem") {
-        chainChoice = LockFreeInSharedMem;*/
+        chainChoice = LockFreeInSharedMem;
     } else if (std::string(argv[2]) == "etcd2") {
         chainChoice = Etcd2;
     } else {
@@ -567,14 +589,12 @@ int main(int argc, char **argv) {
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
-            /*
         case LockFreeInSharedMem:
             {
                 transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> chain {"2020-01-01-chain", 10*1024*1024};
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
-            */
         default:
             break;
         }
