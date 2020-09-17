@@ -547,6 +547,13 @@ int main(int argc, char **argv) {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> sharedMemChain {today+"-chain", 10*1024*1024};
             rtRun(&sharedMemChain, part, today);
+        } else if (chainChoice == Redis) {
+            std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
+            transport::redis_shared_chain::RedisChain<DataOnChain> redisChain {
+                    transport::redis_shared_chain::RedisChainConfiguration()
+                        .HeadKey(today+"-head")
+                };
+            rtRun(&redisChain, part, today);
         } else {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
@@ -569,6 +576,12 @@ int main(int argc, char **argv) {
         if (chainChoice == LockFreeInSharedMem) {
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain> sharedMemChain {"2020-01-01-chain", 10*1024*1024};
             simRun(&sharedMemChain, part, "2020-01-01");
+        } else if (chainChoice == Redis) {
+            transport::redis_shared_chain::RedisChain<DataOnChain> redisChain {
+                transport::redis_shared_chain::RedisChainConfiguration()
+                    .HeadKey("2020-01-01-head")
+            };
+            simRun(&redisChain, part, "2020-01-01");
         } else {
             transport::etcd_shared_chain::EtcdChain<DataOnChain> etcdChain {
                 transport::etcd_shared_chain::EtcdChainConfiguration()
