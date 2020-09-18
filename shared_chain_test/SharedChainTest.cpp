@@ -671,7 +671,7 @@ int main(int argc, char **argv) {
             {
                 transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
                     DataOnChain
-                    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
+                    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::Unsafe
                 > chain {"2020-01-01-chain", 10*1024*1024};
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
