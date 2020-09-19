@@ -23,11 +23,11 @@ if build_machine.system() == 'windows'
     add_global_arguments('/bigobj', language: 'cpp')
 endif
 
-#subdir('clock_logic_test')
-#subdir('transport_utils')
-#subdir('simple_demo')
-#subdir('db_subscription')
-#subdir('db_one_list_subscription')
-#subdir('serialization_test')
-#subdir('transaction_redundancy_test')
+subdir('clock_logic_test')
+subdir('transport_utils')
+subdir('simple_demo')
+subdir('db_subscription')
+subdir('db_one_list_subscription')
+subdir('serialization_test')
+subdir('transaction_redundancy_test')
 subdir('shared_chain_test')
