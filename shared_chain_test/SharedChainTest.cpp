@@ -14,7 +14,13 @@
 #include <tm_kit/transport/etcd_shared_chain/EtcdChain.hpp>
 #include <tm_kit/transport/redis_shared_chain/RedisChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
+//std::variant is standard layout in g++, however, it is not standard layout in MSVC
+//Therefore, when we try to use the data structure definition in this file on a boost
+//shared memory chain (which requires the structure to be standard layout), MSVC compilation
+//will fail. For this reason boost shared memory chain is disabled in this file for MSVC
+#ifndef _MSC_VER
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
+#endif
 
 using namespace dev::cd606::tm;
 
@@ -99,6 +105,7 @@ public:
             }
         } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *>) {
             return State {1000, 1000, 0, 0, 0, idForStorage("")};
+#ifndef _MSC_VER
         } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Enabled> *>) {
             auto val = env->value().chain->template loadExtraData<State>(
                 env->value().todayStr+"-state"
@@ -110,6 +117,7 @@ public:
             }
         } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Disabled> *>) {
             return State {1000, 1000, 0, 0, 0, idForStorage("")};
+#endif
         } else {
             throw std::string("StateFolder initialization error, environment is not recognized");
         }
@@ -182,6 +190,7 @@ public:
             return lastState;
         }
     }
+#ifndef _MSC_VER
     State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Enabled> const &newInfo) {
         auto newState = fold(lastState, newInfo->data);
         if (newState) {
@@ -201,6 +210,7 @@ public:
             return lastState;
         }
     }
+#endif
 };
 
 template <class Chain>
@@ -231,6 +241,7 @@ struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInMe
         return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {id, std::move(d), nullptr};
     }
 };
+#ifndef _MSC_VER
 template <
     transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport FRS
     , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
@@ -240,6 +251,7 @@ struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInBo
         return chain->createItemFromData(id, std::move(d));
     }
 };
+#endif
 
 template <class Chain>
 struct ChainItemDiscarder {
@@ -253,6 +265,7 @@ struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeI
         }
     }
 };
+#ifndef _MSC_VER
 template <
     transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport FRS
     , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
@@ -264,6 +277,7 @@ struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeI
         }
     }
 };
+#endif
 
 template <class App, class Chain>
 class RequestHandler {
@@ -540,7 +554,11 @@ void rtRun(Chain *chain, std::string const &part, std::string const &todayStr) {
 
 int main(int argc, char **argv) {
     if (argc > 1 && std::string(argv[1]) == "help") {
+#ifdef _MSC_VER
+        std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|redis|in-mem|lock-free-in-mem) [a-to-b|b-to-a|process]\n";
+#else
         std::cout << "Usage: shared_chain_test (rt|hist|sim) (etcd1|etcd2|redis|in-mem|lock-free-in-mem|lock-free-in-shared-mem) [a-to-b|b-to-a|process]\n";
+#endif
         return 0;
     }
     enum {
@@ -558,7 +576,10 @@ int main(int argc, char **argv) {
         mode = RT;
     }
     enum {
-        Etcd1, Etcd2, Redis, InMem, LockFreeInMem, LockFreeInSharedMem
+        Etcd1, Etcd2, Redis, InMem, LockFreeInMem
+#ifndef _MSC_VER
+        , LockFreeInSharedMem
+#endif
     } chainChoice;
     if (argc <= 2) {
         chainChoice = Etcd1; 
@@ -568,8 +589,10 @@ int main(int argc, char **argv) {
         chainChoice = InMem;
     } else if (std::string(argv[2]) == "lock-free-in-mem") {
         chainChoice = LockFreeInMem;
+#ifndef _MSC_VER
     } else if (std::string(argv[2]) == "lock-free-in-shared-mem") {
         chainChoice = LockFreeInSharedMem;
+#endif
     } else if (std::string(argv[2]) == "etcd2") {
         chainChoice = Etcd2;
     } else {
@@ -582,6 +605,7 @@ int main(int argc, char **argv) {
             std::cerr << "RT run cannot use in-mem chain unless it is in-shared-mem\n";
             return 1;
         }
+#ifndef _MSC_VER
         if (chainChoice == LockFreeInSharedMem) {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
@@ -590,7 +614,9 @@ int main(int argc, char **argv) {
                 , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
             > sharedMemChain {today+"-chain", 10*1024*1024};
             rtRun(&sharedMemChain, part, today);
-        } else if (chainChoice == Redis) {
+        } else 
+#endif
+        if (chainChoice == Redis) {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::redis_shared_chain::RedisChain<DataOnChain> redisChain {
                     transport::redis_shared_chain::RedisChainConfiguration()
@@ -616,6 +642,7 @@ int main(int argc, char **argv) {
             std::cerr << "Sim run cannot use in-mem chain unless it is in-shared-mem\n";
             return 1;
         }
+#ifndef _MSC_VER
         if (chainChoice == LockFreeInSharedMem) {
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
                 DataOnChain
@@ -623,7 +650,9 @@ int main(int argc, char **argv) {
                 , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
             > sharedMemChain {"2020-01-01-chain", 10*1024*1024};
             simRun(&sharedMemChain, part, "2020-01-01");
-        } else if (chainChoice == Redis) {
+        } else 
+#endif
+        if (chainChoice == Redis) {
             transport::redis_shared_chain::RedisChain<DataOnChain> redisChain {
                 transport::redis_shared_chain::RedisChainConfiguration()
                     .HeadKey("2020-01-01-head")
@@ -690,6 +719,7 @@ int main(int argc, char **argv) {
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
+#ifndef _MSC_VER
         case LockFreeInSharedMem:
             {
                 transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
@@ -700,6 +730,7 @@ int main(int argc, char **argv) {
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
+#endif
         default:
             break;
         }
