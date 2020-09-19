@@ -99,7 +99,7 @@ public:
             }
         } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *>) {
             return State {1000, 1000, 0, 0, 0, idForStorage("")};
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain> *>) {
+        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Enabled> *>) {
             auto val = env->value().chain->template loadExtraData<State>(
                 env->value().todayStr+"-state"
             );
@@ -108,6 +108,8 @@ public:
             } else {
                 return State {1000, 1000, 0, 0, 0, idForStorage("")};
             }
+        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Disabled> *>) {
+            return State {1000, 1000, 0, 0, 0, idForStorage("")};
         } else {
             throw std::string("StateFolder initialization error, environment is not recognized");
         }
@@ -180,11 +182,20 @@ public:
             return lastState;
         }
     }
-    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain> const &newInfo) {
+    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Enabled> const &newInfo) {
         auto newState = fold(lastState, newInfo->data);
         if (newState) {
             std::memcpy(newState->lastSeenID.data(), newInfo->id, 36);
             newState->lastSeenID[36] = '\0';
+            return *newState;
+        } else {
+            return lastState;
+        }
+    }
+    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Disabled> const &newInfo) {
+        auto newState = fold(lastState, newInfo->data);
+        if (newState) {
+            newState->lastSeenID[0] = '\0';
             return *newState;
         } else {
             return lastState;
@@ -220,9 +231,12 @@ struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInMe
         return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {id, std::move(d), nullptr};
     }
 };
-template <transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS>
-struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, EDPS>> {
-    inline static transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain> formChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, EDPS> *chain, std::string const &id, DataOnChain &&d) {
+template <
+    transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport FRS
+    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
+>
+struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, FRS, EDPS>> {
+    inline static transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, FRS> formChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, FRS, EDPS> *chain, std::string const &id, DataOnChain &&d) {
         return chain->createItemFromData(id, std::move(d));
     }
 };
@@ -237,9 +251,12 @@ struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeI
         delete item;
     }
 };
-template <transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS>
-struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,EDPS>> {
-    inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,EDPS> *chain, transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain>::ItemType &item) {
+template <
+    transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport FRS
+    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
+>
+struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS>> {
+    inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS> *chain, typename transport::lock_free_in_memory_shared_chain::template LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS>::ItemType &item) {
         chain->destroyItem(item);
     }
 };
@@ -565,6 +582,7 @@ int main(int argc, char **argv) {
             std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
                 DataOnChain
+                , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Disabled
                 , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
             > sharedMemChain {today+"-chain", 10*1024*1024};
             rtRun(&sharedMemChain, part, today);
@@ -597,6 +615,7 @@ int main(int argc, char **argv) {
         if (chainChoice == LockFreeInSharedMem) {
             transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
                 DataOnChain
+                , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Disabled
                 , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
             > sharedMemChain {"2020-01-01-chain", 10*1024*1024};
             simRun(&sharedMemChain, part, "2020-01-01");
@@ -671,6 +690,7 @@ int main(int argc, char **argv) {
             {
                 transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
                     DataOnChain
+                    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::Enabled
                     , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::Unsafe
                 > chain {"2020-01-01-chain", 10*1024*1024};
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
