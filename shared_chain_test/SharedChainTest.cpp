@@ -589,8 +589,11 @@ int main(int argc, char **argv) {
         chainChoice = InMem;
     } else if (std::string(argv[2]) == "lock-free-in-mem") {
         chainChoice = LockFreeInMem;
-#ifndef _MSC_VER
     } else if (std::string(argv[2]) == "lock-free-in-shared-mem") {
+#ifdef _MSC_VER
+        std::cerr << "lock-free-in-shared-mem is not supported in Windows\n";
+        return 1;
+#else
         chainChoice = LockFreeInSharedMem;
 #endif
     } else if (std::string(argv[2]) == "etcd2") {
