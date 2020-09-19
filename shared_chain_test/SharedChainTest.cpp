@@ -248,7 +248,9 @@ struct ChainItemDiscarder {
 template <>
 struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>> {
     inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *, transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>::ItemType &item) {
-        delete item;
+        if (item) {
+            delete item;
+        }
     }
 };
 template <
@@ -257,7 +259,9 @@ template <
 >
 struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS>> {
     inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS> *chain, typename transport::lock_free_in_memory_shared_chain::template LockFreeInBoostSharedMemoryChain<DataOnChain,FRS,EDPS>::ItemType &item) {
-        chain->destroyItem(item);
+        if (item) {
+            chain->destroyItem(item);
+        }
     }
 };
 

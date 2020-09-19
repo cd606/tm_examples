@@ -21,6 +21,7 @@ add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
 if build_machine.system() == 'windows'
     add_global_arguments('/bigobj', language: 'cpp')
+    add_global_arguments('/Zc:externC-', language: 'cpp')
 endif
 
 subdir('clock_logic_test')
