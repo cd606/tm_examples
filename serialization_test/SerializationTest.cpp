@@ -4,13 +4,22 @@
 #include <iostream>
 #include <iomanip>
 
+#include <tm_kit/basic/SerializationHelperMacros.hpp>
+
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
+
+/*
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING(TestEnum, (Item1) (Item2) (Item3) (Item4) (Item5));
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_SERIALIZE(TestEnum, (Item1) (Item2) (Item3) (Item4) (Item5));
+*/
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_SERIALIZE(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
 
 int main(int argc, char **argv) {
     using TestType = 
         std::tuple<
-            int32_t
+            TestEnum //int32_t
             , double
             , std::string
             , std::unique_ptr<ByteDataWithTopic>
@@ -34,7 +43,7 @@ int main(int argc, char **argv) {
     ;
     char buf[10] = {0x1, 0x2, 0x3, 0x4, 0x5, (char) 0xff, (char) 0xfe, (char) 0xfd, (char) 0xfc, (char) 0xfb};
     TestType t {
-        -5
+        TestEnum::Item3 //-5
         , 2.3E7
         , "this is a test"
         , std::make_unique<ByteDataWithTopic>(
