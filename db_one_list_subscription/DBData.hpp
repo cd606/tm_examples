@@ -41,12 +41,10 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(db_one_list_subscription::db_item, DBItem
     ((db_one_list_subscription::db_delta_delete, deletes)) \
     ((db_one_list_subscription::db_delta_insert_update, inserts_updates)) 
 
-//The reason we use "_DEF" here is that with std::vector, we cannot 
-//simply feed it to ostream, so we don't generate the print part
 namespace db_one_list_subscription {
-    TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(db_delta_delete, DBDeltaDeleteFields);
-    TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(db_delta_insert_update, DBDeltaInsertUpdateFields);
-    TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(db_delta, DBDeltaFields);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(db_delta_delete, DBDeltaDeleteFields);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(db_delta_insert_update, DBDeltaInsertUpdateFields);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(db_delta, DBDeltaFields);
 }
 
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(db_one_list_subscription::db_delta_delete, DBDeltaDeleteFields);

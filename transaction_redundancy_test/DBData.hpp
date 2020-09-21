@@ -47,8 +47,7 @@
 namespace test {
     TM_BASIC_CBOR_CAPABLE_STRUCT(AccountData, AccountDataFields);
     TM_BASIC_CBOR_CAPABLE_STRUCT(TransferData, TransferDataFields);
-    TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(TransferList, TransferListFields);
-    TM_BASIC_CBOR_CAPABLE_STRUCT_EQ(TransferList, TransferListFields);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(TransferList, TransferListFields);
     TM_BASIC_CBOR_CAPABLE_STRUCT(OverallStat, OverallStatFields);
 }
 
