@@ -18,3 +18,15 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
 )
+executable(
+    'read_only_db_one_list_server'
+    , ['ReadOnlyDBOneListServer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
+)
+executable(
+    'read_only_db_one_list_client'
+    , ['ReadOnlyDBOneListClient.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)

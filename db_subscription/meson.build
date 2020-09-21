@@ -15,3 +15,15 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps, soci_dep, tm_db_subscription_boost_dep]
 )
+executable(
+    'read_only_db_server'
+    , ['ReadOnlyDBServer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_subscription_boost_dep]
+)
+executable(
+    'read_only_db_client'
+    , ['ReadOnlyDBClient.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
