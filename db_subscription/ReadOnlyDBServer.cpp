@@ -12,6 +12,8 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
+#include <boost/hana/functional/curry.hpp>
+
 #include <soci/soci.h>
 #include <soci/sqlite3/soci-sqlite3.h>
 
@@ -25,7 +27,15 @@ using namespace dev::cd606::tm;
 
 using DBDataStorage = std::unordered_map<std::string, DBData>;
 
-DBDataStorage loadDBData(std::shared_ptr<soci::session> session, std::function<void(infra::LogLevel, std::string const &)> logger) {
+DBDataStorage loadDBData(std::string const &dbFile, std::function<void(infra::LogLevel, std::string const &)> logger) {
+    auto session = std::make_shared<soci::session>(
+#ifdef _MSC_VER
+        *soci::factory_sqlite3()
+#else
+        soci::sqlite3
+#endif
+        , dbFile
+    );
     soci::rowset<soci::row> res = 
         session->prepare << "SELECT name, value1, value2 FROM test_table";
     DBDataStorage ret;
@@ -42,6 +52,15 @@ DBDataStorage loadDBData(std::shared_ptr<soci::session> session, std::function<v
     oss << "[loadDBData] loaded " << ret.size() << " rows";
     logger(infra::LogLevel::Info, oss.str());
     return ret;
+}
+
+DBQueryResult doQuery(DBDataStorage const &storage, DBQuery const &query) {
+    auto iter = storage.find(query.name);
+    if (iter == storage.end()) {
+        return {std::nullopt};
+    } else {
+        return {iter->second};
+    }
 }
 
 int main(int argc, char **argv) {
@@ -72,35 +91,22 @@ int main(int argc, char **argv) {
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
-        transport::HeartbeatAndAlertComponent,
-        infra::ConstValueHolderComponent<std::shared_ptr<soci::session>>
+        transport::HeartbeatAndAlertComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
 
-    auto session = std::make_shared<soci::session>(
-#ifdef _MSC_VER
-        *soci::factory_sqlite3()
-#else
-        soci::sqlite3
-#endif
-        , vm["db_file"].as<std::string>()
-    );
-    env.infra::ConstValueHolderComponent<std::shared_ptr<soci::session>>::operator=(
-        infra::ConstValueHolderComponent<std::shared_ptr<soci::session>> {
-            session
-        }
-    );
-
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
         (&env, "read_only_db_server.heartbeat", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
 
     R r(&env);
-    
+
     /*
-    auto importer = basic::importerOfValueCalculatedOnInit<M,std::shared_ptr<soci::session>>(&loadDBData);
+    auto importer = basic::importerOfValueCalculatedOnInit<M>(
+        boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
+    );
     auto queryFacility = basic::localOnOrderFacilityUsingPreCalculatedValue<M,DBQuery,DBDataStorage>(
         [](DBDataStorage const &storage, DBQuery const &query) -> DBQueryResult {
             auto iter = storage.find(query.name);
@@ -115,8 +121,8 @@ int main(int argc, char **argv) {
     r.registerLocalOnOrderFacility("queryFacility", queryFacility);
     r.connect(r.importItem(importer), r.localFacilityAsSink(queryFacility));
     */
-    auto queryFacility = basic::onOrderFacilityUsingInternallyPreCalculatedValue<M,DBQuery,std::shared_ptr<soci::session>>(
-        &loadDBData
+    auto queryFacility = basic::onOrderFacilityUsingInternallyPreCalculatedValue<M,DBQuery>(
+        boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
         , [](DBDataStorage const &storage, DBQuery const &query) -> DBQueryResult {
             auto iter = storage.find(query.name);
             if (iter == storage.end()) {
