@@ -69,6 +69,8 @@ int main(int argc, char **argv) {
     auto publisher = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
                     ::createTypedExporter<InputData>(
         transport::ConnectionLocator::parse("localhost:12345")
+        , std::nullopt //no hook
+        , "input data source"
     );
 
     auto source = M::importer(new DataSourceImporter());
