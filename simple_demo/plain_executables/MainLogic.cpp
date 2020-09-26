@@ -73,6 +73,23 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     }
     R r(&env);
 
+    auto heartbeatListener = std::get<0>(
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::setupBroadcastListeners<
+            transport::HeartbeatMessage
+        >(
+            r 
+            , {
+                {
+                    "heartbeatListener"
+                    , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+                    , "simple_demo.plain_executables.#.heartbeat"
+                }
+            }
+            , "heartbeatListeners"
+        )
+    );
+
     auto listeners = transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListeners<
             InputData
@@ -99,18 +116,14 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 >
             >::run(
                 r 
-                , transport::MultiTransportBroadcastListenerAddSubscription {
-                    transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ
-                    , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]")
-                    , "simple_demo.plain_executables.calculator.heartbeat"
-                }
+                , heartbeatListener
                 , std::regex("simple_demo plain Calculator")
-                , {"facility"}
+                , {"calculator facility"}
                 , std::chrono::seconds(3)
                 , std::chrono::seconds(5)
                 , {}
                 , {}
-                , {"facility"}
+                , {"remote facility"}
                 , "facilities"
             );
         calc = std::get<0>(std::get<1>(facilities));

@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
         , r.execute("addTopic", addTopic
             , r.importItem("source", source)));
 
-    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.data_source.heartbeat", std::chrono::seconds(10));
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.data_source.heartbeat", std::chrono::seconds(10));
 
     r.finalize();
 
