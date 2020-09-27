@@ -90,20 +90,16 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         )
     );
 
-    auto listeners = transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::setupBroadcastListeners<
-            InputData
-        >(
-            r 
-            , {
-                {
-                    "inputListener"
-                    , "zeromq://localhost:12345"
-                    , "input.data"
-                }
-            }
-            , "listeners"
-        );
+    auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::setupBroadcastListenerThroughHeartbeat<InputData>
+    (
+        r 
+        , heartbeatListener
+        , std::regex("simple_demo DataSource")
+        , "input data source"
+        , "input.data"
+        , "inputDataSourceComponents"
+    );
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
     if (isReal) {
@@ -156,7 +152,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         )
     };
     auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
-    std::get<0>(listeners)(r, mainLogicOutput.dataSink);
+    r.connect(std::move(inputDataSource), mainLogicOutput.dataSink);
 
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);

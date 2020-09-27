@@ -118,20 +118,33 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     //env.setLogFilePrefix("simple_demo_secure_main", true);
     R r(&env);
 
-    auto listeners = transport::MultiTransportBroadcastListenerManagingUtils<R>
+    auto heartbeatListener = std::get<0>(
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListeners<
-            InputData
+            transport::HeartbeatMessage
         >(
             r 
             , {
                 {
-                    "inputListener"
-                    , "zeromq://localhost:12345"
-                    , "input.data"
+                    "heartbeatListener"
+                    , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+                    , "simple_demo.plain_executables.#.heartbeat"
                 }
             }
-            , "listeners"
-        );
+            , "heartbeatListeners"
+        )
+    );
+
+    auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::setupBroadcastListenerThroughHeartbeat<InputData>
+    (
+        r 
+        , heartbeatListener
+        , std::regex("simple_demo DataSource")
+        , "input data source"
+        , "input.data"
+        , "inputDataSourceComponents"
+    );
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
     if (isReal) {
@@ -206,7 +219,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         )
     };
     auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
-    std::get<0>(listeners)(r, mainLogicOutput.dataSink);
+    r.connect(std::move(inputDataSource), mainLogicOutput.dataSink);
     
     if (generateGraphOnlyWithThisFile) {
         std::ofstream ofs(*generateGraphOnlyWithThisFile);
