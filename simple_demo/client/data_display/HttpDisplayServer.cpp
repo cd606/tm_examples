@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
-    env.setLogFilePrefix("console_display", true);
+    env.setLogFilePrefix("http_display_server", true);
 
     R r(&env);
     auto dataPrinter = M::pureExporter<simple_demo::InputData>(

@@ -85,7 +85,7 @@ bool MyApp::OnInit()
     MyFrame *frame = new MyFrame( "Wx Input Data Display", wxPoint(50, 50), wxSize(450, 340) );
     frame->Show( true );
 
-    env_->setLogFilePrefix("console_display", true);
+    env_->setLogFilePrefix("wx_display", true);
 
     auto dataPrinter = M::pureExporter<simple_demo::InputData>(
         [frame](simple_demo::InputData &&d) {
