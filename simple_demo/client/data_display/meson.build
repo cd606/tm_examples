@@ -32,4 +32,5 @@ executable(
     , include_directories: inc
     , link_with: [tm_simple_demo_proto_lib]
     , dependencies: [common_deps, wx]
+    , gui_app: true
 )
