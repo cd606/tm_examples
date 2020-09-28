@@ -1,3 +1,9 @@
+#include "GuiClientDataFlow.hpp"
+
+#ifdef _MSC_VER
+#define WIN32
+#endif
+
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Table.H>
@@ -7,14 +13,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-
-#ifdef Success
-#undef Success
-#endif
-#ifdef Status
-#undef Status
-#endif
-#include "GuiClientDataFlow.hpp"
 
 class MyTable : public Fl_Table {
 private:
