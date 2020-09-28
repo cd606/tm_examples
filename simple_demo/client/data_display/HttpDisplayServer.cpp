@@ -51,7 +51,7 @@ public:
                     std::ostringstream oss;
                     {
                         std::lock_guard<std::mutex> _(*valueStorageMutex_);
-                        oss << "Value: " << std::fixed << std::setprecision(6) << *valueStorage_;
+                        oss << std::fixed << std::setprecision(6) << *valueStorage_;
                     }
                     
                     auto *res = new http::response<http::string_body> {http::status::ok, req_.version()};

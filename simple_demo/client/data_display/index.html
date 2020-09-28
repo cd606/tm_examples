@@ -1,15 +1,43 @@
 <html>
     <head>
         <title>Input Data Display</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body>
         <h3 id='value'>Value:</h3>
+        <canvas id='myChart' height="100"/>
         <script type="text/javascript">
+        var ctx = document.getElementById('myChart').getContext('2d');
+        var myChart = new Chart(ctx, {
+            type: 'bar'
+            , data: {
+                labels: []
+                , datasets: [{
+                    label: 'Data Value'
+                    , data: []
+                    , backgroundColor: 'red'
+                    , borderColor: 'red'
+                }]
+            }
+            , options: {
+                tooltips: {
+                    enabled: false
+                }
+            }
+        });
         setInterval(function() {
             var req = new XMLHttpRequest();
             req.onreadystatechange = function() {
                 if (this.readyState == 4 && this.status == 200) {
-                    document.getElementById('value').innerText = this.responseText;
+                    document.getElementById('value').innerText = 'Value: '+this.responseText;
+                    if (myChart.data.labels.length < 500) {
+                        myChart.data.labels.push('');
+                        myChart.data.datasets[0].data.push(parseFloat(this.responseText));
+                    } else {
+                        myChart.data.datasets[0].data.push(parseFloat(this.responseText));
+                        myChart.data.datasets[0].data.shift(0);
+                    }
+                    myChart.update();
                 }
             };
             req.open("GET", "/data", true);
