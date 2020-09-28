@@ -30,3 +30,4 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
+subdir('gui_client')
