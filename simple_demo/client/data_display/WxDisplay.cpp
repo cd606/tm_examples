@@ -47,9 +47,24 @@ public:
     MyApp() : wxApp(), env_(new TheEnvironment {}), r_(new R {env_}) {}
     virtual bool OnInit();
 };
+class MyPanel : public wxPanel
+{
+private:
+    static constexpr size_t DATA_SIZE = 500;
+    std::array<double,DATA_SIZE> chartData_;
+    size_t count_;
+    std::mutex mutex_;
+public:
+    MyPanel(wxFrame *parent) : wxPanel(parent), chartData_(), count_(0), mutex_() {}
+    MyPanel(wxFrame *parent, wxWindowID id, wxPoint const &pos, wxSize const &size) : wxPanel(parent,id,pos,size), chartData_(), count_(0), mutex_() {}
+    void addData(double x);
+    void OnPaint(wxPaintEvent& event);
+    wxDECLARE_EVENT_TABLE();
+};
 class MyFrame: public wxFrame
 {
 private:
+    MyPanel *panel_;
     wxStaticText *label_;
     double value_;
     std::mutex mutex_;
@@ -60,6 +75,7 @@ public:
             std::lock_guard<std::mutex> _(mutex_);
             value_ = d.value();
         }
+        panel_->addData(d.value());
         wxCommandEvent event(LABEL_UPDATE_EVENT, ID_Label_Update);
         event.SetEventObject(this);
         ProcessWindowEvent(event);
@@ -72,6 +88,9 @@ private:
     wxDECLARE_EVENT_TABLE();
 };
 
+wxBEGIN_EVENT_TABLE(MyPanel, wxPanel)
+    EVT_PAINT(MyPanel::OnPaint)
+wxEND_EVENT_TABLE()
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
     EVT_MENU(wxID_EXIT,  MyFrame::OnExit)
     EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
@@ -104,8 +123,43 @@ bool MyApp::OnInit()
 
     return true;
 }
+void MyPanel::addData(double x) {
+    std::lock_guard<std::mutex> _(mutex_);
+    if (count_ < DATA_SIZE) {
+        chartData_[count_++] = x;
+    } else {
+        std::memmove(&chartData_[0], &chartData_[1], (DATA_SIZE-1)*sizeof(double));
+        chartData_[DATA_SIZE-1] = x;
+    }
+}
+void MyPanel::OnPaint(wxPaintEvent& event) {
+    std::array<double, DATA_SIZE> dataCopy;
+    size_t countCopy;
+    {
+        std::lock_guard<std::mutex> _(mutex_);
+        countCopy = count_;
+        std::memcpy(&dataCopy[0], &chartData_[0], countCopy*sizeof(double));
+    }
+    wxPaintDC dc(this);
+    auto sz = dc.GetSize();
+    auto w = sz.GetWidth();
+    auto h = sz.GetHeight();
+    dc.SetPen(wxPen(wxColor(0,0,0), 1));
+    dc.SetBrush(wxNullBrush);
+    dc.DrawRectangle(0, 0, w, h);
+    if (countCopy == 0) {
+        return;
+    }
+    double portionW = w*1.0/countCopy;
+    dc.SetPen(wxPen(wxColor(255,0,0), 1));
+    for (size_t ii=0; ii<countCopy; ++ii) {
+        int x = (int) std::round(portionW*(ii+0.5));
+        int y = (int) std::round(h-dataCopy[ii]*h/100.0);
+        dc.DrawLine(x, h, x, y);
+    }
+}
 MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
-        : wxFrame(NULL, wxID_ANY, title, pos, size), label_(nullptr), value_(0), mutex_()
+        : wxFrame(NULL, wxID_ANY, title, pos, size), panel_(nullptr), label_(nullptr), value_(0), mutex_()
 {
     wxMenu *menuFile = new wxMenu;
     menuFile->Append(wxID_EXIT);
@@ -116,9 +170,15 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
     menuBar->Append( menuHelp, "&Help" );
     SetMenuBar( menuBar );
 
-    label_ = new wxStaticText(this, -1, "Value:");
+    auto *sizer = new wxBoxSizer(wxVERTICAL);
+    label_ = new wxStaticText(this, -1, "Value:", wxDefaultPosition, wxSize(600,20));
     label_->SetWindowStyle(wxST_NO_AUTORESIZE);
-    label_->CenterOnParent();
+    sizer->Add(label_);
+
+    panel_ = new MyPanel(this, -1, wxDefaultPosition, wxSize(1000,200));
+    sizer->Add(panel_, wxSizerFlags().Expand());
+
+    SetSizerAndFit(sizer);
 }
 void MyFrame::OnExit(wxCommandEvent& event)
 {
@@ -143,4 +203,5 @@ void MyFrame::OnLabelUpdate(wxCommandEvent& event)
         oss << "Value: " << std::fixed << std::setprecision(6) << value_;
     }
     label_->SetLabel(oss.str());
+    panel_->Refresh();
 }
