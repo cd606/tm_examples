@@ -52,7 +52,7 @@ void dataDisplayFlow(
     auto snapshotTimer = basic::real_time_clock::ClockImporter<Env>
         ::template createRecurringClockConstImporter<basic::VoidStruct>(
             r.environment()->now()
-            , r.environment()->now()+std::chrono::hours(1)
+            , r.environment()->now()+std::chrono::hours(24)
             , std::chrono::milliseconds(100)
             , basic::VoidStruct {}
         );

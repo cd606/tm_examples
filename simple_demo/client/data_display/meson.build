@@ -34,3 +34,11 @@ executable(
     , dependencies: [common_deps, wx]
     , gui_app: true
 )
+executable(
+    'fltk_display'
+    , ['FltkDisplay.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib]
+    , dependencies: [common_deps, dependency('fltk')]
+    , gui_app: true
+)
