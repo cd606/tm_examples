@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
     R r(&env);
 
     using TF = basic::transaction::v2::TransactionFacility<
-        M, TI, DI
+        M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::Verbose
         , std::equal_to<int64_t>
         , std::equal_to<int64_t>
         , CheckSummary
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
         , ApplyDelta
     >;
     auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
-        R, TI, DI, DM
+        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::Verbose
     >(
         r
         , "transaction_server_components"

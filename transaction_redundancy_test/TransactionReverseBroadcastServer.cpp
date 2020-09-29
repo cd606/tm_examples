@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     R r(&env);
 
     using TE = basic::transaction::v2::TransactionHandlingExporter<
-        M, TI, DI
+        M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::None
         , CheckVersion
         , CheckVersionSlice
         , CheckSummary
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
         env.log(infra::LogLevel::Warning, s);
     }));
     auto transactionLogicCombinationRes = basic::transaction::v2::silentTransactionLogicCombination<
-        R, TI, DI, DM
+        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
     >(
         r
         , "transaction_server_components"

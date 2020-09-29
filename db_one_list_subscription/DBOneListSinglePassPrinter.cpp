@@ -216,7 +216,7 @@ void runSinglePass(std::string const &dbFile) {
     >;
 
     auto subscriptionFacility = basic::transaction::v2::subscriptionLogicCombination<
-        R, DI, DM
+        R, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
     >(
         r
         , "subscription_server_components"

@@ -26,7 +26,7 @@ int run(Env &env, std::string const &queueNamePrefix) {
     R r(&env);
 
     using TF = basic::transaction::v2::TransactionFacility<
-        M, TI, DI
+        M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::None
         , CheckVersion
         , CheckVersionSlice
         , CheckSummary
@@ -43,7 +43,7 @@ int run(Env &env, std::string const &queueNamePrefix) {
         env.log(infra::LogLevel::Warning, s);
     }));
     auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
-        R, TI, DI, DM
+        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
     >(
         r
         , "transaction_server_components"

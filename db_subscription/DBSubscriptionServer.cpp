@@ -254,14 +254,14 @@ int main(int argc, char **argv) {
     R r(&env);
 
     using TF = basic::transaction::v2::TransactionFacility<
-        M, TI, DI
+        M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::None
     >;
     auto dataStore = std::make_shared<TF::DataStore>();
     using DM = basic::transaction::v2::TransactionDeltaMerger<
         DI, false
     >;
     auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
-        R, TI, DI, DM
+        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
     >(
         r
         , "transaction_server_components"
