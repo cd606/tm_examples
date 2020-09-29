@@ -4,6 +4,7 @@
 #include <simple_demo/program_logic/MainLogic.hpp>
 #include <boost/hana/functional/curry.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
+#include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include "defs.pb.h"
 
 template <class R>
@@ -26,15 +27,33 @@ enum class LogicChoice {
 };
 
 template <class R>
-inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLogicInput<R> &&input, LogicChoice logicChoice) {
+inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType &env, MainLogicInput<R> &&input, LogicChoice logicChoice, std::string const &alertTopic="") {
     using M = typename R::AppType;
     using namespace std::placeholders;
+    using namespace dev::cd606::tm;
+
+    auto statusUpdaterUsingHeartbeatAndAlert = [&env,alertTopic](bool enabled) {
+        if constexpr (std::is_convertible_v<typename R::EnvironmentType *, transport::HeartbeatAndAlertComponent *>) {
+            if (enabled) {
+                env.setStatus("calculation_status", transport::HeartbeatMessage::Status::Good, "enabled");
+                if (alertTopic != "") {
+                    env.sendAlert(alertTopic, infra::LogLevel::Info, "main logic calculation enabled");
+                }
+            } else {
+                env.setStatus("calculation_status", transport::HeartbeatMessage::Status::Warning, "disabled");
+                if (alertTopic != "") {
+                    env.sendAlert(alertTopic, infra::LogLevel::Warning, "main logic calculation disabled");
+                }
+            }
+        }
+    };
 
     if (logicChoice == LogicChoice::One) {
         auto mainLogicPtr = std::make_shared<MainLogic>(
             [&env](std::string const &s) {
                 env.log(dev::cd606::tm::infra::LogLevel::Info, s);
             }
+            , statusUpdaterUsingHeartbeatAndAlert
         );
         r.preservePointer(mainLogicPtr);
 
@@ -117,6 +136,7 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
             [&env](std::string const &s) {
                 env.log(dev::cd606::tm::infra::LogLevel::Info, s);
             }
+            , statusUpdaterUsingHeartbeatAndAlert
         );
         r.preservePointer(mainLogicPtr);
 

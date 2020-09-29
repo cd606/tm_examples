@@ -13,7 +13,7 @@ class MainLogic {
 private:
     std::unique_ptr<MainLogicImpl> impl_;
 public:
-    MainLogic(std::function<void(std::string const &)> logger);
+    MainLogic(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater);
     ~MainLogic();
     MainLogic(MainLogic const &) = delete;
     MainLogic &operator=(MainLogic const &) = delete;
@@ -49,7 +49,7 @@ class MainLogic2 {
 private:
     std::unique_ptr<MainLogic2Impl> impl_;
 public:
-    MainLogic2(std::function<void(std::string const &)> logger);
+    MainLogic2(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater);
     ~MainLogic2();
     MainLogic2(MainLogic2 const &) = delete;
     MainLogic2 &operator=(MainLogic2 const &) = delete;

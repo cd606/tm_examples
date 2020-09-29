@@ -49,7 +49,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ClearCommands>,
-        transport::AllNetworkTransportComponents
+        transport::AllNetworkTransportComponents,
+        transport::HeartbeatAndAlertComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -60,6 +61,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             "my_identity"
         )
     );
+    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
+        (&env, "simple_demo plain MainLogic", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
     if (!isReal) {
         env.basic::real_time_clock::ClockComponent::operator=(
             basic::real_time_clock::ClockComponent(
@@ -151,7 +154,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             , std::nullopt //no hook
         )
     };
-    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice, "simple_demo.plain_executables.main_logic.alert");
     r.connect(std::move(inputDataSource), mainLogicOutput.dataSink);
 
     if (generateGraphOnlyWithThisFile) {
@@ -160,6 +163,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ofs.close();
         return;
     }
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.main_logic.heartbeat", std::chrono::seconds(1));
 
     r.finalize();
 

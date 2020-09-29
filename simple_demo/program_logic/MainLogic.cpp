@@ -8,6 +8,7 @@
 class MainLogicImpl {
 private:
     std::function<void(std::string const &)> logger_;
+    std::function<void(bool)> statusUpdater_;
     std::unordered_set<int32_t> outstandingCommands_;
     std::mutex mutex_;
     bool enabled_;
@@ -77,8 +78,10 @@ private:
     }
 
 public:
-    MainLogicImpl(std::function<void(std::string const &)> logger)
-        : logger_(logger), outstandingCommands_(), mutex_(), enabled_(true), avgFactor_(0.0), avg_(0.0), avgTime_(std::nullopt), idCounter_(0) {}
+    MainLogicImpl(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater)
+        : logger_(logger), statusUpdater_(statusUpdater), outstandingCommands_(), mutex_(), enabled_(true), avgFactor_(0.0), avg_(0.0), avgTime_(std::nullopt), idCounter_(0) {
+        statusUpdater_(true);
+    }
     ~MainLogicImpl() = default;
     std::optional<simple_demo::CalculateCommand> runLogic(
         int which
@@ -99,6 +102,7 @@ public:
         std::lock_guard<std::mutex> _(mutex_);
         enabled_ = std::get<1>(cmd).enabled();
         logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled")+" by '"+std::get<0>(cmd)+"'");
+        statusUpdater_(enabled_);
         simple_demo::ConfigureResult res;
         res.set_enabled(enabled_);
         return res;
@@ -138,8 +142,8 @@ public:
 
 const double MainLogicImpl::decaySpeed = std::log(0.5);
 
-MainLogic::MainLogic(std::function<void(std::string const &)> logger)
-    : impl_(std::make_unique<MainLogicImpl>(logger)) {}
+MainLogic::MainLogic(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater)
+    : impl_(std::make_unique<MainLogicImpl>(logger, statusUpdater)) {}
 MainLogic::~MainLogic() {}
 MainLogic::MainLogic(MainLogic &&) = default;
 MainLogic &MainLogic::operator=(MainLogic &&) = default;
@@ -202,6 +206,7 @@ std::optional<double> ExponentialAverage::readResult() const {
 class MainLogic2Impl {
 private:
     std::function<void(std::string const &)> logger_;
+    std::function<void(bool)> statusUpdater_;
     std::unordered_set<int32_t> outstandingCommands_;
     std::mutex mutex_;
     bool enabled_;
@@ -243,8 +248,10 @@ private:
     }
 
 public:
-    MainLogic2Impl(std::function<void(std::string const &)> logger)
-        : logger_(logger), outstandingCommands_(), mutex_(), enabled_(true), idCounter_(0) {}
+    MainLogic2Impl(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater)
+        : logger_(logger), statusUpdater_(statusUpdater), outstandingCommands_(), mutex_(), enabled_(true), idCounter_(0) {
+        statusUpdater_(true);
+    }
     ~MainLogic2Impl() = default;
     std::optional<simple_demo::CalculateCommand> runLogic(
         int which
@@ -265,6 +272,7 @@ public:
         std::lock_guard<std::mutex> _(mutex_);
         enabled_ = std::get<1>(cmd).enabled();
         logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled")+" by '"+std::get<0>(cmd)+"'");
+        statusUpdater_(enabled_);
         simple_demo::ConfigureResult res;
         res.set_enabled(enabled_);
         return res;
@@ -302,8 +310,8 @@ public:
     }
 };
 
-MainLogic2::MainLogic2(std::function<void(std::string const &)> logger)
-    : impl_(std::make_unique<MainLogic2Impl>(logger)) {}
+MainLogic2::MainLogic2(std::function<void(std::string const &)> logger, std::function<void(bool)> statusUpdater)
+    : impl_(std::make_unique<MainLogic2Impl>(logger, statusUpdater)) {}
 MainLogic2::~MainLogic2() {}
 MainLogic2::MainLogic2(MainLogic2 &&) = default;
 MainLogic2 &MainLogic2::operator=(MainLogic2 &&) = default;

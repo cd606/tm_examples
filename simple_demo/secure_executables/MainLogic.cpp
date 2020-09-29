@@ -36,6 +36,7 @@
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
+#include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -57,7 +58,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
-        transport::AllNetworkTransportComponents
+        transport::AllNetworkTransportComponents,
+        transport::HeartbeatAndAlertComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -117,6 +119,28 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     //env.setLogFilePrefix("simple_demo_secure_main", true);
     R r(&env);
+
+    std::array<unsigned char, 64> heartbeat_sign_prv_key { 
+        0x03,0x52,0x91,0x4C,0x68,0x72,0xA6,0xB3,0x7D,0xC6,0xBA,0x71,0x65,0x5D,0xEB,0x5C,
+        0xC9,0xE8,0x3D,0x84,0xE5,0x90,0x36,0x5F,0xBF,0x3B,0xAF,0xB7,0x44,0xC4,0xA1,0x50,
+        0xDA,0xA0,0x15,0xD4,0x33,0xE8,0x92,0xC9,0xF2,0x96,0xA1,0xF8,0x1F,0x79,0xBC,0xF4,
+        0x2D,0x7A,0xDE,0x48,0x03,0x47,0x16,0x0C,0x57,0xBD,0x1F,0x45,0x81,0xB5,0x18,0x2E 
+    };
+    /*
+    std::array<unsigned char, 32> heartbeat_sign_pub_key { 
+        0xDA,0xA0,0x15,0xD4,0x33,0xE8,0x92,0xC9,0xF2,0x96,0xA1,0xF8,0x1F,0x79,0xBC,0xF4,
+        0x2D,0x7A,0xDE,0x48,0x03,0x47,0x16,0x0C,0x57,0xBD,0x1F,0x45,0x81,0xB5,0x18,0x2E 
+    };*/
+    DHServerSideHeartbeatCombination<
+        infra::AppRunner<M>
+        , transport::rabbitmq::RabbitMQComponent
+    >(
+        r
+        , heartbeat_sign_prv_key
+        , "simple_demo secure MainLogic" //server name for heartbeat
+        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]") //heartbeat locator
+        , "testkey" //encrypt heartbeat with this key
+    );
 
     auto heartbeatListener = std::get<0>(
         transport::MultiTransportBroadcastListenerManagingUtils<R>
@@ -218,7 +242,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             , std::nullopt //no hook
         )
     };
-    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice);
+    auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice, "simple_demo.secure_executables.main_logic.alert");
     r.connect(std::move(inputDataSource), mainLogicOutput.dataSink);
     
     if (generateGraphOnlyWithThisFile) {
@@ -227,6 +251,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ofs.close();
         return;
     }
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.main_logic.heartbeat", std::chrono::seconds(1));
 
     r.finalize();
 

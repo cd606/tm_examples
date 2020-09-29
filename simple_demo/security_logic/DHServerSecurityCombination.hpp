@@ -94,4 +94,38 @@ void DHServerSideCombination(
         (r.environment(), heartbeatServerName, heartbeatLocator, heartbeatHook);
 }
 
+template <
+    class R
+    , class HeartbeatTransportComponent
+>
+void DHServerSideHeartbeatCombination(
+    R &r
+    , std::array<unsigned char, 64> privateKey
+    , std::string const &heartbeatServerName
+    , transport::ConnectionLocator const &heartbeatLocator
+    , std::string const &heartbeatEncryptionKey
+) {
+    using Env = typename R::EnvironmentType;
+
+    auto signer = std::make_shared<SignHelper>("", privateKey);
+    r.preservePointer(signer);
+    transport::UserToWireHook signHook = {
+        boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
+    };
+
+    auto aes = std::make_shared<AESHook>();
+    r.preservePointer(aes);
+    aes->setKey(AESHook::keyFromString(heartbeatEncryptionKey));
+
+    auto heartbeatHook = transport::composeUserToWireHook(
+        transport::UserToWireHook {
+            boost::hana::curry<2>(std::mem_fn(&AESHook::encode))(aes.get())
+        }
+        , signHook
+    );
+
+    transport::HeartbeatAndAlertComponentInitializer<Env,HeartbeatTransportComponent>()
+        (r.environment(), heartbeatServerName, heartbeatLocator, heartbeatHook);
+}
+
 #endif
