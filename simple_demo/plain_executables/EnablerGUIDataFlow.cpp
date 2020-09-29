@@ -13,7 +13,7 @@ void enablerGUIDataFlow(
             clientName
         )
     ); 
-    r.environment()->setLogFilePrefix(clientName);
+    r.environment()->setLogFilePrefix(clientName, true);
 
     auto heartbeatListener = std::get<0>(
         transport::MultiTransportBroadcastListenerManagingUtils<R>

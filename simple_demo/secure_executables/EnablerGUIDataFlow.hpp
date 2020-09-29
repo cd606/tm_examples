@@ -6,10 +6,10 @@
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
-#include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
+#include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 
-#include <tm_kit/transport/BoostUUIDComponent.hpp>
+#include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 
@@ -22,8 +22,8 @@ using namespace simple_demo;
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<false>,
     infra::TrivialExitControlComponent,
-    basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
-    transport::BoostUUIDComponent,
+    basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+    transport::CrossGuidComponent,
     ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>,
     transport::AllNetworkTransportComponents
 >;

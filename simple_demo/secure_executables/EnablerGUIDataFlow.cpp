@@ -22,7 +22,7 @@ void enablerGUIDataFlow(
         )
     );
 
-    r.environment()->setLogFilePrefix(clientName);
+    r.environment()->setLogFilePrefix(clientName, true);
 
     std::array<unsigned char, 32> heartbeat_sign_pub_key { 
         0xDA,0xA0,0x15,0xD4,0x33,0xE8,0x92,0xC9,0xF2,0x96,0xA1,0xF8,0x1F,0x79,0xBC,0xF4,
