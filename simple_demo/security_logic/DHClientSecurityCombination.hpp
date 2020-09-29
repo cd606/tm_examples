@@ -145,4 +145,39 @@ auto DHClientSideCombination(
     return std::get<0>(std::get<1>(facilities));
 }
 
+template <
+    class R
+>
+auto clientSideHeartbeatHook(
+    R &r
+    , std::array<unsigned char, 32> serverPublicKey
+    , std::string const &heartbeatDecryptionKey
+)
+    -> transport::WireToUserHook
+{
+    auto verifier = std::make_shared<VerifyHelper>();
+    r.preservePointer(verifier);
+    verifier->addKey("", serverPublicKey);
+    transport::WireToUserHook verifyHook = {
+        [verifier](basic::ByteData &&d) -> std::optional<basic::ByteData> {
+            auto x = verifier->verify(std::move(d));
+            if (x) {
+                return std::move(std::get<1>(*x));
+            } else {
+                return std::nullopt;
+            }
+        }
+    };
+    auto aes = std::make_shared<AESHook>();
+    r.preservePointer(aes);
+    aes->setKey(AESHook::keyFromString(heartbeatDecryptionKey));
+
+    return transport::composeWireToUserHook(
+        verifyHook
+        , transport::WireToUserHook {
+            boost::hana::curry<2>(std::mem_fn(&AESHook::decode))(aes.get())
+        }
+    );
+}
+
 #endif

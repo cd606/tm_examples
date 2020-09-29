@@ -24,3 +24,27 @@ tm_simple_demo_secure_main_logic_exec = executable(
     , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_program_logic_lib, tm_simple_demo_security_logic_lib]
     , dependencies: [common_deps, tm_simple_demo_boost_dep]
 )
+
+executable(
+    'fltk_enabler'
+    , ['FltkEnablerGUI.cpp', 'EnablerGUIDataFlow.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib]
+    , dependencies: [common_deps, dependency('fltk')]
+    , gui_app: true
+)
+
+if build_machine.system() == 'windows'
+    wx = dependency('wxwidgets-vcpkg')
+else
+    wx = dependency('wxwidgets')
+endif
+
+executable(
+    'wx_enabler'
+    , ['WxEnablerGUI.cpp', 'EnablerGUIDataFlow.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib]
+    , dependencies: [common_deps, wx]
+    , gui_app: true
+)

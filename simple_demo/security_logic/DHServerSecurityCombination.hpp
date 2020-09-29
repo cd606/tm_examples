@@ -98,7 +98,7 @@ template <
     class R
     , class HeartbeatTransportComponent
 >
-void DHServerSideHeartbeatCombination(
+void serverSideHeartbeatCombination(
     R &r
     , std::array<unsigned char, 64> privateKey
     , std::string const &heartbeatServerName
