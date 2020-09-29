@@ -35,6 +35,23 @@ void guiClientDataFlow(
         }
     );
     r.registerImporter("gsSubscriptionCmdCreator", gsSubscriptionCmdCreator);
+    //The reason that we pass gsSubscriptionCmdCreator through gsInputPipe is that,
+    //by default, when an on-order facility is added into the data flow graph, its 
+    //maximum output connection number is set at 1. (This can be changed through a 
+    //method call to AppRunner, and as long as the call happens before finalize() it
+    //will be effective, however, since we have a way to deal with the problem through 
+    //introducing gsInputPipe here, we do not use this method.) In this program, we
+    //want to pass two things to gsFacility, one is the subscription (at the beginning
+    //of the program) and another is the unsubscription (at the end of the program), and
+    //we do have two sources (gsSubscriptionCmdCreator above, and gsUnsubscriber below),
+    //however, if we do two placeOrderWithFacility calls, then we need to provide two
+    //handlers for the output from the facility, and this will cause the maximum output
+    //connection number check to fail. If we make one of these calls placeOrderWithFacilityAndForget,
+    //then we won't be able to process the corresponding callback, but we want both
+    //callbacks in order for the program to function well. Therefore, we pass both 
+    //gsSubscriptionCmdCreator and gsUnsubscriber through gsInputPipe, and thus only one
+    //thing (the output from gsInputPipe) needs to be passed to gsFacility, and only one
+    //handler for the output is needed (which is provided from within dataStreamClientCombination).
     auto gsInputPipe = M::kleisli<M::Key<GS::Input>>(basic::CommonFlowUtilComponents<M>::idFunc<M::Key<GS::Input>>());
     r.registerAction("gsInputPipe", gsInputPipe);
     auto gsClientOutputs = basic::transaction::v2::dataStreamClientCombination<
