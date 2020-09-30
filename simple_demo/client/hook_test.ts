@@ -15,7 +15,10 @@ const serverPublicKey = Buffer.from([
 ]);
 /*let verifier = new EDDSA('ed25519');
 const decryptKey = aes.utils.utf8.toBytes("testkey"+(' '.repeat(9)));*/
-const decryptKey = Buffer.from("testkey"+(' '.repeat(25)));
+//const decryptKey = Buffer.from("testkey"+(' '.repeat(25)));
+let decryptKey = Buffer.alloc(sodium.crypto_generichash_BYTES);
+sodium.crypto_generichash(decryptKey, Buffer.from("testkey"));
+decryptKey = decryptKey.slice(0, 32);
 
 function verifyAndDecrypt(data : Buffer) : Buffer {
     let cborDecoded = cbor.decode(data);

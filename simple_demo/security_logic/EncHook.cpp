@@ -149,6 +149,17 @@ EncHook::~EncHook() {}
 EncHook::EncHook(EncHook &&) = default;
 EncHook &EncHook::operator=(EncHook &&) = default;
 std::array<unsigned char,EncHook::KeyLength/8> EncHook::keyFromString(std::string const &s) {
+    static_assert(crypto_generichash_BYTES >= EncHook::KeyLength/8, "generic hash bytes not long enough");
+    unsigned char hash_res[crypto_generichash_BYTES];
+    crypto_generichash(
+        hash_res, crypto_generichash_BYTES
+        , reinterpret_cast<unsigned char const *>(s.data()), s.length()
+        , 0, 0
+    );
+    std::array<unsigned char,EncHook::KeyLength/8> ret;
+    std::memcpy(ret.data(), hash_res, EncHook::KeyLength/8);
+    return ret;
+    /*
     if (s.length() < EncHook::KeyLength/8) {
         return keyFromString(s+std::string(EncHook::KeyLength/8-s.length(), ' '));
     } else {
@@ -156,6 +167,7 @@ std::array<unsigned char,EncHook::KeyLength/8> EncHook::keyFromString(std::strin
         std::memcpy(ret.data(), s.c_str(), EncHook::KeyLength/8);
         return ret;
     }
+    */
 }
 void EncHook::setKey(std::array<unsigned char,EncHook::KeyLength/8> const &key) {
     impl_->setKey(key);

@@ -12,6 +12,7 @@ import nacl.encoding
 import nacl.signing
 import nacl.secret
 import nacl.utils
+import nacl.hash
 #from Crypto.Cipher import AES
 
 async def asyncMain() :
@@ -19,7 +20,7 @@ async def asyncMain() :
     heartbeatTopic = 'simple_demo.secure_executables.calculator.heartbeat'
 
     serverPublicKey = b'\x69\x61\xB9\xCF\xBA\x37\xD0\xE2\x70\x32\x84\xF9\x41\x02\x17\x22\xFA\x89\x0F\xE4\xBA\xAC\xC8\x73\xB9\x00\x99\x24\x38\x42\xC2\x9A'
-    decryptKey = ('testkey'+(' '*25)).encode('utf-8')
+    decryptKey = nacl.hash.generichash('testkey'.encode('utf-8'), encoder=nacl.encoding.RawEncoder)[0:32]
 
     verifyKey = nacl.signing.VerifyKey(serverPublicKey)
 
