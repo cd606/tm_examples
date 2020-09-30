@@ -1,10 +1,10 @@
 #ifndef DH_SERVER_SECURITY_COMBINATION_HPP_
 #define DH_SERVER_SECURITY_COMBINATION_HPP_
 
-#include "simple_demo/security_logic/AESHook.hpp"
+#include "simple_demo/security_logic/EncHook.hpp"
 #include "simple_demo/security_logic/DHHelper.hpp"
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
-#include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
+#include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 
 #include <boost/hana/functional/curry.hpp>
 
@@ -25,7 +25,7 @@ template <
             ,typename R::EnvironmentType>            
         &&
         std::is_base_of_v<
-            ServerSideSignatureAndAESBasedIdentityCheckerComponent<CommandToBeSecured>
+            ServerSideSignatureAndEncBasedIdentityCheckerComponent<CommandToBeSecured>
             ,typename R::EnvironmentType>
         &&
         std::is_base_of_v<
@@ -47,7 +47,7 @@ void DHServerSideCombination(
 
     auto dh = std::make_shared<DHServerHelper>(
         boost::hana::curry<3>(
-            std::mem_fn(&ServerSideSignatureAndAESBasedIdentityCheckerComponent<CommandToBeSecured>::set_aes_key_for_identity)
+            std::mem_fn(&ServerSideSignatureAndEncBasedIdentityCheckerComponent<CommandToBeSecured>::set_enc_key_for_identity)
         )(r.environment())
     );
     r.preservePointer(dh);
@@ -79,13 +79,13 @@ void DHServerSideCombination(
         } //the outgoing data is signed, the incoming data does not need extra hook
     );
 
-    auto aes = std::make_shared<AESHook>();
-    r.preservePointer(aes);
-    aes->setKey(AESHook::keyFromString(heartbeatEncryptionKey));
+    auto enc = std::make_shared<EncHook>();
+    r.preservePointer(enc);
+    enc->setKey(EncHook::keyFromString(heartbeatEncryptionKey));
 
     auto heartbeatHook = transport::composeUserToWireHook(
         transport::UserToWireHook {
-            boost::hana::curry<2>(std::mem_fn(&AESHook::encode))(aes.get())
+            boost::hana::curry<2>(std::mem_fn(&EncHook::encode))(enc.get())
         }
         , signHook
     );
@@ -113,13 +113,13 @@ void serverSideHeartbeatCombination(
         boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
     };
 
-    auto aes = std::make_shared<AESHook>();
-    r.preservePointer(aes);
-    aes->setKey(AESHook::keyFromString(heartbeatEncryptionKey));
+    auto enc = std::make_shared<EncHook>();
+    r.preservePointer(enc);
+    enc->setKey(EncHook::keyFromString(heartbeatEncryptionKey));
 
     auto heartbeatHook = transport::composeUserToWireHook(
         transport::UserToWireHook {
-            boost::hana::curry<2>(std::mem_fn(&AESHook::encode))(aes.get())
+            boost::hana::curry<2>(std::mem_fn(&EncHook::encode))(enc.get())
         }
         , signHook
     );

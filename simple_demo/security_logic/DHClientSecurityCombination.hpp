@@ -1,10 +1,10 @@
 #ifndef DH_CLIENT_SECURITY_COMBINATION_HPP_
 #define DH_CLIENT_SECURITY_COMBINATION_HPP_
 
-#include "simple_demo/security_logic/AESHook.hpp"
+#include "simple_demo/security_logic/EncHook.hpp"
 #include "simple_demo/security_logic/DHHelper.hpp"
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
-#include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
+#include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 
 #include <boost/hana/functional/curry.hpp>
 
@@ -28,7 +28,7 @@ template <
             ,typename R::EnvironmentType>            
         &&
         std::is_base_of_v<
-            ClientSideSignatureAndAESBasedIdentityAttacherComponent<CommandToBeSecured>
+            ClientSideSignatureAndEncBasedIdentityAttacherComponent<CommandToBeSecured>
             ,typename R::EnvironmentType>
         &&
         std::is_base_of_v<
@@ -53,7 +53,7 @@ auto DHClientSideCombination(
 
     auto dhClientHelper = std::make_shared<DHClientHelper>(
         boost::hana::curry<2>(
-            std::mem_fn(&ClientSideSignatureAndAESBasedIdentityAttacherComponent<CommandToBeSecured>::set_aes_key)
+            std::mem_fn(&ClientSideSignatureAndEncBasedIdentityAttacherComponent<CommandToBeSecured>::set_enc_key)
         )(env)
     );
     auto dhClientHelperMutex = std::make_shared<std::mutex>();
@@ -80,14 +80,14 @@ auto DHClientSideCombination(
         }
     };
 
-    auto aes = std::make_shared<AESHook>();
-    r.preservePointer(aes);
-    aes->setKey(AESHook::keyFromString(heartbeatDecryptionKey));
+    auto enc = std::make_shared<EncHook>();
+    r.preservePointer(enc);
+    enc->setKey(EncHook::keyFromString(heartbeatDecryptionKey));
 
     auto heartbeatHook = transport::composeWireToUserHook(
         verifyHook
         , transport::WireToUserHook {
-            boost::hana::curry<2>(std::mem_fn(&AESHook::decode))(aes.get())
+            boost::hana::curry<2>(std::mem_fn(&EncHook::decode))(enc.get())
         }
     );
   
@@ -168,14 +168,14 @@ auto clientSideHeartbeatHook(
             }
         }
     };
-    auto aes = std::make_shared<AESHook>();
-    r.preservePointer(aes);
-    aes->setKey(AESHook::keyFromString(heartbeatDecryptionKey));
+    auto enc = std::make_shared<EncHook>();
+    r.preservePointer(enc);
+    enc->setKey(EncHook::keyFromString(heartbeatDecryptionKey));
 
     return transport::composeWireToUserHook(
         verifyHook
         , transport::WireToUserHook {
-            boost::hana::curry<2>(std::mem_fn(&AESHook::decode))(aes.get())
+            boost::hana::curry<2>(std::mem_fn(&EncHook::decode))(enc.get())
         }
     );
 }

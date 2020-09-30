@@ -25,7 +25,7 @@
 #include "defs.pb.h"
 #include "simple_demo/external_logic/Calculator.hpp"
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
-#include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
+#include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
 
 #include <iostream>
@@ -40,7 +40,7 @@ using TheEnvironment = infra::Environment<
     basic::TrivialBoostLoggingComponent,
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,
-    ServerSideSignatureAndAESBasedIdentityCheckerComponent<CalculateCommand>,
+    ServerSideSignatureAndEncBasedIdentityCheckerComponent<CalculateCommand>,
     ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
     transport::rabbitmq::RabbitMQComponent,
     transport::redis::RedisComponent,
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
     };
 
     TheEnvironment env;
-    env.ServerSideSignatureAndAESBasedIdentityCheckerComponent<CalculateCommand>::add_identity_and_key(
+    env.ServerSideSignatureAndEncBasedIdentityCheckerComponent<CalculateCommand>::add_identity_and_key(
         "main_logic_identity"
         , main_logic_pub_key
     );

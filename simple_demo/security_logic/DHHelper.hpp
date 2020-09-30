@@ -41,7 +41,7 @@ class DHServerHelper {
 private:
     std::unique_ptr<DHServerHelperImpl> impl_;
 public:
-    DHServerHelper(std::function<void(std::string const &, std::array<unsigned char, 16> const &)> localRegistryUpdater);
+    DHServerHelper(std::function<void(std::string const &, std::array<unsigned char, 32> const &)> localRegistryUpdater);
     ~DHServerHelper();
     
     DHHelperReply process(std::tuple<std::string, DHHelperCommand> &&input);
@@ -53,7 +53,7 @@ class DHClientHelper {
 private:
     std::unique_ptr<DHClientHelperImpl> impl_;
 public:
-    DHClientHelper(std::function<void(std::array<unsigned char, 16> const &)> localKeyUpdater);
+    DHClientHelper(std::function<void(std::array<unsigned char, 32> const &)> localKeyUpdater);
     ~DHClientHelper();
     
     void reset();

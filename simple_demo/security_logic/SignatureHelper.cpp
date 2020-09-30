@@ -3,24 +3,41 @@
 #include <unordered_map>
 
 //The implementation is from https://github.com/msotoodeh/curve25519.git
-#include <curve25519/C++/ed25519.h>
+//#include <curve25519/C++/ed25519.h>
+//Now we move to libsodium
+#include <sodium.h>
 
 #include "SignatureHelper.hpp"
+
+static_assert(crypto_sign_SECRETKEYBYTES == 64, "libsodium private key length is not 64");
+static_assert(crypto_sign_PUBLICKEYBYTES == 32, "libsodium public key length is not 32");
+static_assert(crypto_sign_BYTES == 64, "libsodium signature length is not 64");
 
 class SignHelperImpl {
 private:
     std::string name_;
-    ED25519Private signer_;
+    //ED25519Private signer_;
+    std::array<unsigned char, 64> privateKey_;
 public:
     SignHelperImpl(std::string const &name, std::array<unsigned char, 64> const &privateKey) : 
-        name_(name), signer_(privateKey.data(), 64) {}
+        //name_(name), signer_(privateKey.data(), 64) {}
+        name_(name), privateKey_(privateKey) {}
     ~SignHelperImpl() {}
     dev::cd606::tm::basic::ByteData sign(dev::cd606::tm::basic::ByteData &&data) {       
         std::array<unsigned char, 64> signature;
+        /*
         signer_.SignMessage(
             reinterpret_cast<unsigned char const *>(data.content.c_str())
             , data.content.length()
             , signature.data()
+        );
+        */
+        crypto_sign_detached(
+            signature.data()
+            , 0
+            , reinterpret_cast<unsigned char const *>(data.content.c_str())
+            , data.content.length()
+            , privateKey_.data()
         );
         std::tuple<dev::cd606::tm::basic::ByteData, dev::cd606::tm::basic::ByteData const *> t {dev::cd606::tm::basic::ByteData {std::string(reinterpret_cast<char const *>(signature.data()), signature.size())}, &data};
         auto res = dev::cd606::tm::basic::bytedata_utils::RunCBORSerializerWithNameList<
@@ -48,17 +65,21 @@ dev::cd606::tm::basic::ByteData SignHelper::sign(dev::cd606::tm::basic::ByteData
 
 class VerifyHelperImpl {
 private:
-    std::unordered_map<std::string, std::unique_ptr<ED25519Public>> verifiers_;
+    //std::unordered_map<std::string, std::unique_ptr<ED25519Public>> verifiers_;
+    std::unordered_map<std::string, std::array<unsigned char, 32>> publicKeys_;
     std::mutex mutex_;
 public:
-    VerifyHelperImpl() : verifiers_(), mutex_() {}
+    VerifyHelperImpl() : /*verifiers_()*/publicKeys_(), mutex_() {}
     ~VerifyHelperImpl() {}
     void addKey(std::string const &name, std::array<unsigned char, 32> const &publicKey) {
         std::lock_guard<std::mutex> _(mutex_);
+        /*
         verifiers_.insert({
             name
             , std::make_unique<ED25519Public>(publicKey.data())
         });
+        */
+        publicKeys_.insert({name, publicKey});
     }
     std::optional<std::tuple<std::string,dev::cd606::tm::basic::ByteData>> verify(dev::cd606::tm::basic::ByteData &&data) {       
          auto res = dev::cd606::tm::basic::bytedata_utils::RunCBORDeserializerWithNameList<
@@ -82,11 +103,18 @@ public:
         
         auto const *p = reinterpret_cast<const unsigned char *>(signedData.content.c_str());
         auto const *q = reinterpret_cast<const unsigned char *>(signature.content.c_str());
+        std::size_t l = signedData.content.length();
         std::string name;
         {
             std::lock_guard<std::mutex> _(mutex_);
-            for (auto const &item : verifiers_) {
-                result = result || item.second->VeifySignature(p, signedData.content.length(), q);
+            //for (auto const &item : verifiers_) {
+            for (auto const &item : publicKeys_) {
+                //result = result || item.second->VeifySignature(p, signedData.content.length(), q);
+                result = 
+                    result ||
+                    (
+                        crypto_sign_verify_detached(q, p, l, item.second.data()) == 0
+                    );
                 if (result) {
                     name = item.first;
                     break;

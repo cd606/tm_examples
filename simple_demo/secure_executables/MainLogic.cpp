@@ -34,7 +34,7 @@
 #include "simple_demo/app_combination/MainLogicCombination.hpp"
 #include "simple_demo/app_combination/MockCalculatorCombination.hpp"
 #include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
-#include "simple_demo/security_logic/SignatureAndAESBasedIdentityCheckerComponent.hpp"
+#include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
 
@@ -54,7 +54,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         //basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
-        ClientSideSignatureAndAESBasedIdentityAttacherComponent<CalculateCommand>,
+        ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>,
         ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
@@ -188,8 +188,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             0xFA,0x89,0x0F,0xE4,0xBA,0xAC,0xC8,0x73,0xB9,0x00,0x99,0x24,0x38,0x42,0xC2,0x9A 
         };
 
-        env.ClientSideSignatureAndAESBasedIdentityAttacherComponent<CalculateCommand>::operator=(
-            ClientSideSignatureAndAESBasedIdentityAttacherComponent<CalculateCommand>(
+        env.ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>::operator=(
+            ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>(
                 "my_identity"
                 , my_private_key
             )
