@@ -28,12 +28,12 @@
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
 #include "simple_demo/app_combination/MainLogicCombination.hpp"
 #include "simple_demo/app_combination/MockCalculatorCombination.hpp"
-#include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
@@ -55,9 +55,9 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         //basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>,
-        ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
-        ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
-        ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
+        transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
+        transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
+        transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent
     >;
@@ -115,11 +115,11 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         }
     };
     for (auto const &clientItem : client_pub_keys) {
-        env.ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>
+        env.transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>
             ::add_identity_and_key(
             std::get<0>(clientItem), std::get<1>(clientItem)
         );
-        env.ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>
+        env.transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>
             ::add_identity_and_key(
             std::get<0>(clientItem), std::get<1>(clientItem)
         );
@@ -194,8 +194,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 , my_private_key
             )
         );
-        env.ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>::operator=(
-            ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>(
+        env.transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>::operator=(
+            transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>(
                 "my_identity"
                 , my_private_key
             )

@@ -12,9 +12,9 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
+#include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 
 #include "defs.pb.h"
-#include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 
 using namespace dev::cd606::tm;
 using namespace simple_demo;
@@ -24,7 +24,7 @@ using TheEnvironment = infra::Environment<
     infra::TrivialExitControlComponent,
     basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
     transport::CrossGuidComponent,
-    ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>,
+    transport::security::ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>,
     transport::AllNetworkTransportComponents
 >;
 using M = infra::RealTimeApp<TheEnvironment>;

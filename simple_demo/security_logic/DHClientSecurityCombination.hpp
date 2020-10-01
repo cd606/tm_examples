@@ -3,7 +3,6 @@
 
 #include "simple_demo/security_logic/EncHook.hpp"
 #include "simple_demo/security_logic/DHHelper.hpp"
-#include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 
 #include <boost/hana/functional/curry.hpp>
@@ -15,6 +14,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -32,7 +32,7 @@ template <
             ,typename R::EnvironmentType>
         &&
         std::is_base_of_v<
-            ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>
+            dev::cd606::tm::transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>
             ,typename R::EnvironmentType>
         ,int
         > = 0
@@ -61,7 +61,7 @@ auto DHClientSideCombination(
     r.preservePointer(dhClientHelper);
     r.preservePointer(dhClientHelperMutex);
     
-    auto verifier = std::make_shared<VerifyHelper>();
+    auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
     r.preservePointer(verifier);
     verifier->addKey("", serverPublicKey);
     transport::WireToUserHook verifyHook = {
@@ -155,7 +155,7 @@ auto clientSideHeartbeatHook(
 )
     -> transport::WireToUserHook
 {
-    auto verifier = std::make_shared<VerifyHelper>();
+    auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
     r.preservePointer(verifier);
     verifier->addKey("", serverPublicKey);
     transport::WireToUserHook verifyHook = {

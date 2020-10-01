@@ -15,8 +15,8 @@ void enablerGUIDataFlow(
         0x3E,0xCD,0x80,0x72,0x7F,0x86,0xB2,0x22,0xB8,0xDB,0x46,0x3F,0x5C,0x75,0x74,0x54,
         0x96,0x14,0x08,0x35,0xB6,0x18,0xFE,0xCD,0xB6,0xC2,0xC3,0xCA,0xB5,0x3E,0xEC,0x0C
     };
-    r.environment()->ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>::operator=(
-        ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>(
+    r.environment()->transport::security::ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>::operator=(
+        transport::security::ClientSideSignatureBasedIdentityAttacherComponent<ConfigureCommand>(
             clientName
             , my_private_key
         )

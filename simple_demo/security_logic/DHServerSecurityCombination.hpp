@@ -3,7 +3,6 @@
 
 #include "simple_demo/security_logic/EncHook.hpp"
 #include "simple_demo/security_logic/DHHelper.hpp"
-#include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 
 #include <boost/hana/functional/curry.hpp>
@@ -29,7 +28,7 @@ template <
             ,typename R::EnvironmentType>
         &&
         std::is_base_of_v<
-            ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>
+            dev::cd606::tm::transport::security::ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>
             ,typename R::EnvironmentType>
         ,int
         > = 0
@@ -57,7 +56,7 @@ void DHServerSideCombination(
     );
     r.registerOnOrderFacility("dh_server_facility", facility);
 
-    auto signer = std::make_shared<SignHelper>("", privateKey);
+    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>("", privateKey);
     r.preservePointer(signer);
     transport::WireToUserHook emptyHook = {
         [](basic::ByteData &&d) -> std::optional<basic::ByteData> {
@@ -65,7 +64,7 @@ void DHServerSideCombination(
         }
     };
     transport::UserToWireHook signHook = {
-        boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
+        boost::hana::curry<2>(std::mem_fn(&dev::cd606::tm::transport::security::SignatureHelper::Signer::sign))(signer.get())
     };
 
     OnOrderFacilityTransport::template wrapOnOrderFacility
@@ -107,10 +106,10 @@ void serverSideHeartbeatCombination(
 ) {
     using Env = typename R::EnvironmentType;
 
-    auto signer = std::make_shared<SignHelper>("", privateKey);
+    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>("", privateKey);
     r.preservePointer(signer);
     transport::UserToWireHook signHook = {
-        boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
+        boost::hana::curry<2>(std::mem_fn(&dev::cd606::tm::transport::security::SignatureHelper::Signer::sign))(signer.get())
     };
 
     auto enc = std::make_shared<EncHook>();

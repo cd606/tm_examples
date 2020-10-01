@@ -18,13 +18,13 @@
 #include <tm_kit/transport/redis/RedisImporterExporter.hpp>
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/hana/functional/curry.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/external_logic/Calculator.hpp"
-#include "simple_demo/security_logic/SignatureBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
 
@@ -41,7 +41,7 @@ using TheEnvironment = infra::Environment<
     basic::real_time_clock::ClockComponent,
     transport::BoostUUIDComponent,
     ServerSideSignatureAndEncBasedIdentityCheckerComponent<CalculateCommand>,
-    ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
+    transport::security::ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
     transport::rabbitmq::RabbitMQComponent,
     transport::redis::RedisComponent,
     transport::HeartbeatAndAlertComponent
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
         "main_logic_identity"
         , main_logic_pub_key
     );
-    env.ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>::add_identity_and_key(
+    env.transport::security::ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>::add_identity_and_key(
         "main_logic_identity"
         , main_logic_pub_key
     );

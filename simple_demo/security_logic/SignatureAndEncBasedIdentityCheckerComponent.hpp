@@ -2,7 +2,7 @@
 #define SIGNATURE_AND_ENC_BASED_IDENTITY_CHECKER_COMPONENT_HPP_
 
 #include <tm_kit/transport/AbstractIdentityCheckerComponent.hpp>
-#include "simple_demo/security_logic/SignatureHelper.hpp"
+#include <tm_kit/transport/security/SignatureHelper.hpp>
 #include "simple_demo/security_logic/EncHook.hpp"
 
 #include <unordered_map>
@@ -13,7 +13,7 @@ class ClientSideSignatureAndEncBasedIdentityAttacherComponent
     : public dev::cd606::tm::transport::ClientSideAbstractIdentityAttacherComponent<std::string, Req>
 {
 private:
-    SignHelper signer_;
+    dev::cd606::tm::transport::security::SignatureHelper::Signer signer_;
     EncHook enc_;
 public:
     ClientSideSignatureAndEncBasedIdentityAttacherComponent() : signer_(), enc_() {}
@@ -36,7 +36,7 @@ class ServerSideSignatureAndEncBasedIdentityCheckerComponent
     : public dev::cd606::tm::transport::ServerSideAbstractIdentityCheckerComponent<std::string, Req>
 {
 private:
-    VerifyHelper verifier_;
+    dev::cd606::tm::transport::security::SignatureHelper::Verifier verifier_;
     std::unordered_map<std::string, std::unique_ptr<EncHook>> enc_;
     std::mutex mutex_;
 public:
