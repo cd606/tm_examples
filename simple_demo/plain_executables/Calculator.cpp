@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("calculator facility", facility);
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacility(
+    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacility<CalculateCommand,CalculateResult>(
         r, facility, transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_queue"), "wrapper_"
         , std::nullopt //hook
     );

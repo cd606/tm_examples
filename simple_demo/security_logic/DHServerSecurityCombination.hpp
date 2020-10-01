@@ -68,7 +68,7 @@ void DHServerSideCombination(
         boost::hana::curry<2>(std::mem_fn(&SignHelper::sign))(signer.get())
     };
 
-    OnOrderFacilityTransport::template WithIdentity<std::string>::template wrapOnOrderFacility
+    OnOrderFacilityTransport::template wrapOnOrderFacility
         <DHHelperCommand, DHHelperReply>(
           r 
         , facility

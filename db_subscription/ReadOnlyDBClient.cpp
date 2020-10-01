@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 
     TheEnvironment env;
 
-    auto result = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithoutIdentity
+    auto result = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>
         ::typedOneShotRemoteCall<DBQuery, DBQueryResult>(
             &env 
             , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_read_only_queue")

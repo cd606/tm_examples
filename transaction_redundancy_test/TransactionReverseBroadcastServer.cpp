@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
         , r.execute(discardTopic, std::move(transactionInput))
     );
 
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapLocalOnOrderFacility
+    transport::redis::RedisOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility

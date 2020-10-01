@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("facility", facility);
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacility(
+    transport::redis::RedisOnOrderFacility<TheEnvironment>::wrapOnOrderFacility<CalculateCommand,CalculateResult>(
         r, facility, transport::ConnectionLocator::parse("localhost:6379:::test_queue"), "wrapper_"
         , std::nullopt //hook
     );

@@ -226,19 +226,19 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     
     MainLogicInput<R> combinationInput {
         calc
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
             transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_config_queue")
             , "cfg_wrapper_"
             , std::nullopt //no hook
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithoutIdentity::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
             transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_query_queue")
             , "query_wrapper_"
             , std::nullopt //no hook
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::facilityWrapper
+        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
             <ClearCommands,ClearCommandsResult>(
             transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_clear_queue")
             , "clear_cmd_wrapper_"

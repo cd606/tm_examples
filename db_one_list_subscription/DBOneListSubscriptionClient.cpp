@@ -59,7 +59,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
 
     R r(&env); 
 
-    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
         <GS::Input,GS::Output>(
         transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
     );
@@ -233,7 +233,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     R r(&env); 
 
-    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
         <TI::Transaction,TI::TransactionResponse>(
         transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue")
     );

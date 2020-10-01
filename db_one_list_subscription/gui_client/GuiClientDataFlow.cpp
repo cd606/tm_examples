@@ -24,7 +24,7 @@ void guiClientDataFlow(
     r.environment()->setLogFilePrefix(clientName);
 
     //Now set up data subscription and unsubscription
-    auto gsFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+    auto gsFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
         <GS::Input,GS::Output>(
         transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
     );
@@ -117,7 +117,7 @@ void guiClientDataFlow(
     unsubscribeSink(r, r.execute(unsubscribeDetector, gsClientOutputs.rawSubscriptionOutputs.clone()));
 
     //Now set up transactions
-    auto tiFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::createTypedRPCOnOrderFacility
+    auto tiFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
         <TI::Transaction,TI::TransactionResponse>(
         transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue")
     );

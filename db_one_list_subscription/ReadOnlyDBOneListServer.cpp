@@ -104,10 +104,10 @@ int main(int argc, char **argv) {
     );
     r.registerOnOrderFacility("queryFacility", queryFacility);
     /*
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithoutIdentity::wrapLocalOnOrderFacility
+    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
         <DBQuery,DBQueryResult,DBQueryResult>(
     */
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithoutIdentity::wrapOnOrderFacility
+    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacility
         <DBQuery,DBQueryResult>(
         r
         , queryFacility

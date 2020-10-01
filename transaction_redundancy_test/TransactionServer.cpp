@@ -50,7 +50,7 @@ int run(Env &env, std::string const &queueNamePrefix) {
         , &tf
     );
 
-    using RedisWrapper = typename transport::redis::RedisOnOrderFacility<Env>::template WithIdentity<std::string>;
+    using RedisWrapper = transport::redis::RedisOnOrderFacility<Env>;
     RedisWrapper::template wrapOnOrderFacilityWithExternalEffects
         <TI::Transaction,TI::TransactionResponse,DI::Update>(
         r

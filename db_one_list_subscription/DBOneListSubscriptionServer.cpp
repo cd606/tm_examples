@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapOnOrderFacilityWithExternalEffects
+    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacilityWithExternalEffects
         <TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
         , "transaction_wrapper_"
         , std::nullopt //no hook
     );
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::WithIdentity<std::string>::wrapLocalOnOrderFacility
+    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
