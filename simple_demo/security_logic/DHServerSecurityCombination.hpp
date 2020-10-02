@@ -56,7 +56,7 @@ void DHServerSideCombination(
     );
     r.registerOnOrderFacility("dh_server_facility", facility);
 
-    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>("", privateKey);
+    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(privateKey);
     r.preservePointer(signer);
     transport::WireToUserHook emptyHook = {
         [](basic::ByteData &&d) -> std::optional<basic::ByteData> {
@@ -106,7 +106,7 @@ void serverSideHeartbeatCombination(
 ) {
     using Env = typename R::EnvironmentType;
 
-    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>("", privateKey);
+    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(privateKey);
     r.preservePointer(signer);
     transport::UserToWireHook signHook = {
         boost::hana::curry<2>(std::mem_fn(&dev::cd606::tm::transport::security::SignatureHelper::Signer::sign))(signer.get())

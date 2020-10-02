@@ -17,7 +17,7 @@ private:
     EncHook enc_;
 public:
     ClientSideSignatureAndEncBasedIdentityAttacherComponent() : signer_(), enc_() {}
-    ClientSideSignatureAndEncBasedIdentityAttacherComponent(std::string const &name, std::array<unsigned char, 64> const &privateKey) : signer_(name, privateKey), enc_() {}
+    ClientSideSignatureAndEncBasedIdentityAttacherComponent(std::array<unsigned char, 64> const &privateKey) : signer_(privateKey), enc_() {}
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(ClientSideSignatureAndEncBasedIdentityAttacherComponent const &) = delete;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent &operator=(ClientSideSignatureAndEncBasedIdentityAttacherComponent const &) = delete;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(ClientSideSignatureAndEncBasedIdentityAttacherComponent &&) = default;

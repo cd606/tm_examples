@@ -190,14 +190,12 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
         env.ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>::operator=(
             ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>(
-                "my_identity"
-                , my_private_key
+                my_private_key
             )
         );
         env.transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>::operator=(
             transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>(
-                "my_identity"
-                , my_private_key
+                my_private_key
             )
         );
 
