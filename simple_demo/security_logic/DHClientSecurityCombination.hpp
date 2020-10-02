@@ -16,6 +16,7 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
+#include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -62,24 +63,15 @@ auto DHClientSideCombination(
     r.preservePointer(dhClientHelper);
     r.preservePointer(dhClientHelperMutex);
     
-    auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
-    r.preservePointer(verifier);
-    verifier->addKey("", serverPublicKey);
-    transport::WireToUserHook verifyHook = {
-        [verifier](basic::ByteData &&d) -> std::optional<basic::ByteData> {
-            auto x = verifier->verify(std::move(d));
-            if (x) {
-                return std::move(std::get<1>(*x));
-            } else {
-                return std::nullopt;
-            }
+    auto verifyHook = transport::security::VerifyHookFactoryComponent<void> {
+        {
+            {"", serverPublicKey}
         }
-    };
-    transport::UserToWireHook emptyHook = {
-        [](basic::ByteData &&d) -> basic::ByteData {
-            return std::move(d);
-        }
-    };
+    }.defaultHook();
+    //this hook is used for sending DH request out
+    //The reason why it is an empty hook is that the ClientSideIdentityAttacher already
+    //signs the request, and currently no further hook is needed
+    auto emptyHook = transport::EmptyOutgoingBroadcastHookFactoryComponent<void>().defaultHook();
 
     auto heartbeatHook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>(heartbeatDecryptionKey, serverPublicKey).defaultHook();
   

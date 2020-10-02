@@ -5,6 +5,8 @@
 #include "simple_demo/security_logic/DHHelper.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 
+#include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
+
 #include <boost/hana/functional/curry.hpp>
 
 #include <array>
@@ -51,16 +53,13 @@ void DHServerSideCombination(
     );
     r.registerOnOrderFacility("dh_server_facility", facility);
 
-    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(privateKey);
-    r.preservePointer(signer);
-    transport::WireToUserHook emptyHook = {
-        [](basic::ByteData &&d) -> std::optional<basic::ByteData> {
-            return std::move(d);
-        }
-    };
-    transport::UserToWireHook signHook = {
-        boost::hana::curry<2>(std::mem_fn(&dev::cd606::tm::transport::security::SignatureHelper::Signer::sign))(signer.get())
-    };
+    auto signHook = transport::security::SignatureHookFactoryComponent<void> {
+        privateKey
+    }.defaultHook();
+    //this hook is used to receive DH request
+    //The reason why it is an empty hook is that the ServerSideIdentityChecker already
+    //verifies the request, and currently no further hook is needed
+    auto emptyHook = transport::EmptyIncomingBroadcastHookFactoryComponent<void>().defaultHook();
 
     OnOrderFacilityTransport::template wrapOnOrderFacility
         <DHHelperCommand, DHHelperReply>(
