@@ -5,6 +5,13 @@ test_gen_out = test_gen.process(
     '../proto/defs.proto'
 )
 tm_simple_demo_boost_dep = dependency('boost', modules: ['program_options'])
+tm_simple_demo_secure_data_source_exec = executable(
+    'data_source'
+    , ['DataSource.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_external_logic_lib, tm_simple_demo_security_logic_lib]
+    , dependencies: [common_deps]
+)
 tm_simple_demo_secure_calculator_exec = executable(
     'calculator'
     , ['Calculator.cpp', test_gen_out]

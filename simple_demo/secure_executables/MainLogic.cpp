@@ -61,7 +61,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
-        EncAndSignHookFactoryComponent<transport::HeartbeatMessage>
+        EncAndSignHookFactoryComponent<transport::HeartbeatMessage>,
+        DecHookFactoryComponent<InputData>
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -148,6 +149,12 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
     );
 
+    env.DecHookFactoryComponent<InputData>::operator=(
+        DecHookFactoryComponent<InputData> {
+            "input_data_key"
+        }
+    );
+
     auto heartbeatListener = std::get<0>(
         transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListeners<
@@ -158,7 +165,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 {
                     "heartbeatListener"
                     , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-                    , "simple_demo.plain_executables.#.heartbeat"
+                    , "simple_demo.secure_executables.#.heartbeat"
                 }
             }
             , "heartbeatListeners"
@@ -170,7 +177,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     (
         r 
         , heartbeatListener
-        , std::regex("simple_demo DataSource")
+        , std::regex("simple_demo secure DataSource")
         , "input data source"
         , "input.data"
         , "inputDataSourceComponents"

@@ -2,6 +2,7 @@
 #define ENC_AND_SIGN_HOOK_FACTORY_HPP_
 
 #include <tm_kit/transport/AbstractBroadcastHookFactoryComponent.hpp>
+#include <tm_kit/transport/security/SignatureHelper.hpp>
 #include "simple_demo/security_logic/EncHook.hpp"
 
 template <class T>
@@ -57,6 +58,47 @@ public:
                 return decHook->decode(std::move(d));
             } }
         );
+    }
+};
+
+
+template <class T>
+class EncHookFactoryComponent : public dev::cd606::tm::transport::AbstractOutgoingBroadcastHookFactoryComponent<T> {
+private:
+    std::string encKey_;
+public:
+    EncHookFactoryComponent() : encKey_() {}
+    EncHookFactoryComponent(std::string const &encKey)
+        : encKey_(encKey) {}
+    virtual ~EncHookFactoryComponent() {}
+    virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
+        auto encHook = std::make_shared<EncHook>();
+        encHook->setKey(EncHook::keyFromString(encKey_));
+        return dev::cd606::tm::transport::UserToWireHook { 
+            [encHook](dev::cd606::tm::basic::ByteData &&d) {
+                return encHook->encode(std::move(d));
+            } 
+        };
+    }
+};
+
+template <class T>
+class DecHookFactoryComponent : public dev::cd606::tm::transport::AbstractIncomingBroadcastHookFactoryComponent<T> {
+private:
+    std::string decKey_;
+public:
+    DecHookFactoryComponent() : decKey_() {}
+    DecHookFactoryComponent(std::string const &decKey)
+        : decKey_(decKey) {}
+    virtual ~DecHookFactoryComponent() {}
+    virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
+        auto decHook = std::make_shared<EncHook>();
+        decHook->setKey(EncHook::keyFromString(decKey_));
+        return dev::cd606::tm::transport::WireToUserHook { 
+            [decHook](dev::cd606::tm::basic::ByteData &&d) {
+                return decHook->decode(std::move(d));
+            } 
+        };
     }
 };
 
