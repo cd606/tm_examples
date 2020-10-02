@@ -4,6 +4,7 @@
 #include "simple_demo/security_logic/EncHook.hpp"
 #include "simple_demo/security_logic/DHHelper.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
+#include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 #include <boost/hana/functional/curry.hpp>
 
@@ -80,16 +81,7 @@ auto DHClientSideCombination(
         }
     };
 
-    auto enc = std::make_shared<EncHook>();
-    r.preservePointer(enc);
-    enc->setKey(EncHook::keyFromString(heartbeatDecryptionKey));
-
-    auto heartbeatHook = transport::composeWireToUserHook(
-        verifyHook
-        , transport::WireToUserHook {
-            boost::hana::curry<2>(std::mem_fn(&EncHook::decode))(enc.get())
-        }
-    );
+    auto heartbeatHook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>(heartbeatDecryptionKey, serverPublicKey).defaultHook();
   
     auto facilities =
         transport::MultiTransportRemoteFacilityManagingUtils<R>
@@ -143,41 +135,6 @@ auto DHClientSideCombination(
         );
 
     return std::get<0>(std::get<1>(facilities));
-}
-
-template <
-    class R
->
-auto clientSideHeartbeatHook(
-    R &r
-    , std::array<unsigned char, 32> serverPublicKey
-    , std::string const &heartbeatDecryptionKey
-)
-    -> transport::WireToUserHook
-{
-    auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
-    r.preservePointer(verifier);
-    verifier->addKey("", serverPublicKey);
-    transport::WireToUserHook verifyHook = {
-        [verifier](basic::ByteData &&d) -> std::optional<basic::ByteData> {
-            auto x = verifier->verify(std::move(d));
-            if (x) {
-                return std::move(std::get<1>(*x));
-            } else {
-                return std::nullopt;
-            }
-        }
-    };
-    auto enc = std::make_shared<EncHook>();
-    r.preservePointer(enc);
-    enc->setKey(EncHook::keyFromString(heartbeatDecryptionKey));
-
-    return transport::composeWireToUserHook(
-        verifyHook
-        , transport::WireToUserHook {
-            boost::hana::curry<2>(std::mem_fn(&EncHook::decode))(enc.get())
-        }
-    );
 }
 
 #endif

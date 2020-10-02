@@ -2,6 +2,7 @@
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
+#include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 void enablerGUIDataFlow(
     R &r
@@ -28,7 +29,7 @@ void enablerGUIDataFlow(
         0x2D,0x7A,0xDE,0x48,0x03,0x47,0x16,0x0C,0x57,0xBD,0x1F,0x45,0x81,0xB5,0x18,0x2E 
     };
 
-    auto hook = clientSideHeartbeatHook<R>(r, heartbeat_sign_pub_key, "testkey");
+    auto hook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>("testkey", heartbeat_sign_pub_key).defaultHook();
 
     auto heartbeatListener = std::get<0>(
         transport::MultiTransportBroadcastListenerManagingUtils<R>

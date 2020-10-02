@@ -37,6 +37,7 @@
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
+#include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -59,7 +60,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
-        transport::HeartbeatAndAlertComponent
+        transport::HeartbeatAndAlertComponent,
+        EncAndSignHookFactoryComponent<transport::HeartbeatMessage>
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -134,15 +136,16 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         0xDA,0xA0,0x15,0xD4,0x33,0xE8,0x92,0xC9,0xF2,0x96,0xA1,0xF8,0x1F,0x79,0xBC,0xF4,
         0x2D,0x7A,0xDE,0x48,0x03,0x47,0x16,0x0C,0x57,0xBD,0x1F,0x45,0x81,0xB5,0x18,0x2E 
     };
-    serverSideHeartbeatCombination<
-        infra::AppRunner<M>
-        , transport::rabbitmq::RabbitMQComponent
-    >(
-        r
-        , heartbeat_sign_prv_key
-        , "simple_demo secure MainLogic" //server name for heartbeat
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]") //heartbeat locator
-        , "testkey" //encrypt heartbeat with this key
+    env.EncAndSignHookFactoryComponent<transport::HeartbeatMessage>::operator=(
+        EncAndSignHookFactoryComponent<transport::HeartbeatMessage> {
+            "testkey",
+            heartbeat_sign_prv_key
+        }
+    );
+    transport::initializeHeartbeatAndAlertComponent(
+        &env
+        , "simple_demo secure MainLogic"
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
     );
 
     auto heartbeatListener = std::get<0>(

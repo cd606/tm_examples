@@ -17,7 +17,6 @@ template <
     class R
     , class CommandToBeSecured
     , class OnOrderFacilityTransport
-    , class HeartbeatTransportComponent
     , std::enable_if_t<
         std::is_base_of_v<
             basic::real_time_clock::ClockComponent
@@ -37,11 +36,7 @@ void DHServerSideCombination(
     R &r
     , std::array<unsigned char, 64> privateKey
     , transport::ConnectionLocator const &dhQueueLocator
-    , std::string const &heartbeatServerName
-    , transport::ConnectionLocator const &heartbeatLocator
-    , std::string const &heartbeatEncryptionKey
 ) {
-    using Env = typename R::EnvironmentType;
     using M = typename R::AppType;
 
     auto dh = std::make_shared<DHServerHelper>(
@@ -77,54 +72,6 @@ void DHServerSideCombination(
             signHook, emptyHook
         } //the outgoing data is signed, the incoming data does not need extra hook
     );
-
-    auto enc = std::make_shared<EncHook>();
-    r.preservePointer(enc);
-    enc->setKey(EncHook::keyFromString(heartbeatEncryptionKey));
-
-    auto heartbeatHook = transport::composeUserToWireHook(
-        transport::UserToWireHook {
-            boost::hana::curry<2>(std::mem_fn(&EncHook::encode))(enc.get())
-        }
-        , signHook
-    );
-
-    transport::HeartbeatAndAlertComponentInitializer<Env,HeartbeatTransportComponent>()
-        (r.environment(), heartbeatServerName, heartbeatLocator, heartbeatHook);
-}
-
-template <
-    class R
-    , class HeartbeatTransportComponent
->
-void serverSideHeartbeatCombination(
-    R &r
-    , std::array<unsigned char, 64> privateKey
-    , std::string const &heartbeatServerName
-    , transport::ConnectionLocator const &heartbeatLocator
-    , std::string const &heartbeatEncryptionKey
-) {
-    using Env = typename R::EnvironmentType;
-
-    auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(privateKey);
-    r.preservePointer(signer);
-    transport::UserToWireHook signHook = {
-        boost::hana::curry<2>(std::mem_fn(&dev::cd606::tm::transport::security::SignatureHelper::Signer::sign))(signer.get())
-    };
-
-    auto enc = std::make_shared<EncHook>();
-    r.preservePointer(enc);
-    enc->setKey(EncHook::keyFromString(heartbeatEncryptionKey));
-
-    auto heartbeatHook = transport::composeUserToWireHook(
-        transport::UserToWireHook {
-            boost::hana::curry<2>(std::mem_fn(&EncHook::encode))(enc.get())
-        }
-        , signHook
-    );
-
-    transport::HeartbeatAndAlertComponentInitializer<Env,HeartbeatTransportComponent>()
-        (r.environment(), heartbeatServerName, heartbeatLocator, heartbeatHook);
 }
 
 #endif

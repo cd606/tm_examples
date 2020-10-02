@@ -27,6 +27,7 @@
 #include "simple_demo/external_logic/Calculator.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
 #include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
+#include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -44,7 +45,8 @@ using TheEnvironment = infra::Environment<
     transport::security::ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
     transport::rabbitmq::RabbitMQComponent,
     transport::redis::RedisComponent,
-    transport::HeartbeatAndAlertComponent
+    transport::HeartbeatAndAlertComponent,
+    EncAndSignHookFactoryComponent<transport::HeartbeatMessage>
 >;
 using M = infra::RealTimeApp<TheEnvironment>;
 
@@ -127,6 +129,18 @@ int main(int argc, char **argv) {
         "main_logic_identity"
         , main_logic_pub_key
     );
+    env.EncAndSignHookFactoryComponent<transport::HeartbeatMessage>::operator=(
+        EncAndSignHookFactoryComponent<transport::HeartbeatMessage> {
+            "testkey",
+            my_prv_key
+        }
+    );
+
+    transport::initializeHeartbeatAndAlertComponent(
+        &env
+        , "simple_demo secure Calculator"
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+    );
 
     infra::AppRunner<M> r(&env);
 
@@ -141,14 +155,10 @@ int main(int argc, char **argv) {
         infra::AppRunner<M>
         , CalculateCommand
         , transport::redis::RedisOnOrderFacility<TheEnvironment>
-        , transport::rabbitmq::RabbitMQComponent
     >(
         r
         , my_prv_key
         , transport::ConnectionLocator::parse("localhost:6379:::test_dh_queue") //facility locator
-        , "simple_demo secure Calculator" //server name for heartbeat
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]") //heartbeat locator
-        , "testkey" //encrypt heartbeat with this key
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.calculator.heartbeat", std::chrono::seconds(1));
