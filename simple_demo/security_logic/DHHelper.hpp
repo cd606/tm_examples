@@ -26,14 +26,6 @@ struct DHHelperReply {
         return true;
     }
 };
-struct DHHelperRestarted {
-    void SerializeToString(std::string *s) const {
-        *s = "";
-    }
-    bool ParseFromString(std::string const &s) {
-        return true;
-    }
-};
 
 class DHServerHelperImpl;
 
