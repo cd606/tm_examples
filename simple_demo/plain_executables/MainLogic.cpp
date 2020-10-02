@@ -61,8 +61,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             "my_identity"
         )
     );
-    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "simple_demo plain MainLogic", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
+    transport::initializeHeartbeatAndAlertComponent
+        (&env, "simple_demo plain MainLogic", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
     if (!isReal) {
         env.basic::real_time_clock::ClockComponent::operator=(
             basic::real_time_clock::ClockComponent(
