@@ -58,8 +58,8 @@ public:
 int main(int argc, char **argv) {
     TheEnvironment env;
     
-    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "simple_demo DataSource", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
+    transport::initializeHeartbeatAndAlertComponent
+        (&env, "simple_demo DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
     infra::AppRunner<M> r(&env);
