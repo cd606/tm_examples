@@ -19,6 +19,7 @@
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
+#include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/hana/functional/curry.hpp>
@@ -43,6 +44,7 @@ using TheEnvironment = infra::Environment<
     transport::BoostUUIDComponent,
     ServerSideSignatureAndEncBasedIdentityCheckerComponent<CalculateCommand>,
     transport::security::ServerSideSignatureBasedIdentityCheckerComponent<DHHelperCommand>,
+    transport::security::SignatureHookFactoryComponent<DHHelperReply>,
     transport::rabbitmq::RabbitMQComponent,
     transport::redis::RedisComponent,
     transport::HeartbeatAndAlertComponent,
@@ -129,6 +131,11 @@ int main(int argc, char **argv) {
         "main_logic_identity"
         , main_logic_pub_key
     );
+    env.transport::security::SignatureHookFactoryComponent<DHHelperReply>::operator=(
+        transport::security::SignatureHookFactoryComponent<DHHelperReply>(
+            my_prv_key
+        )
+    );
     env.EncAndSignHookFactoryComponent<transport::HeartbeatMessage>::operator=(
         EncAndSignHookFactoryComponent<transport::HeartbeatMessage> {
             "testkey",
@@ -157,7 +164,6 @@ int main(int argc, char **argv) {
         , transport::redis::RedisOnOrderFacility<TheEnvironment>
     >(
         r
-        , my_prv_key
         , transport::ConnectionLocator::parse("localhost:6379:::test_dh_queue") //facility locator
     );
 

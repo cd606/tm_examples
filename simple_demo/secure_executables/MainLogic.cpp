@@ -29,6 +29,7 @@
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
+#include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -57,6 +58,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::BoostUUIDComponent,
         ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>,
         transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
+        transport::security::VerifyHookFactoryComponent<DHHelperReply>,
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
@@ -206,6 +208,11 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         env.transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>::operator=(
             transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>(
                 my_private_key
+            )
+        );
+        env.transport::security::VerifyHookFactoryComponent<DHHelperReply>::operator=(
+            transport::security::VerifyHookFactoryComponent<DHHelperReply>(
+                {{"calculate_server", calculate_server_public_key}}
             )
         );
 

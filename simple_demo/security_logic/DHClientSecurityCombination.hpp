@@ -62,16 +62,6 @@ auto DHClientSideCombination(
 
     r.preservePointer(dhClientHelper);
     r.preservePointer(dhClientHelperMutex);
-    
-    auto verifyHook = transport::security::VerifyHookFactoryComponent<void> {
-        {
-            {"", serverPublicKey}
-        }
-    }.defaultHook();
-    //this hook is used for sending DH request out
-    //The reason why it is an empty hook is that the ClientSideIdentityAttacher already
-    //signs the request, and currently no further hook is needed
-    auto emptyHook = transport::EmptyOutgoingBroadcastHookFactoryComponent<void>().defaultHook();
 
     auto heartbeatHook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>(heartbeatDecryptionKey, serverPublicKey).defaultHook();
   
@@ -113,17 +103,6 @@ auto DHClientSideCombination(
             }
             , "facilities"
             , heartbeatHook
-            , [emptyHook,verifyHook](std::string const &remoteName, transport::ConnectionLocator const &)
-                -> std::optional<transport::ByteDataHookPair>
-                {
-                    if (remoteName == "dh_server_facility") {
-                        return transport::ByteDataHookPair {
-                            emptyHook, verifyHook
-                        };
-                    } else {
-                        return std::nullopt;
-                    }
-                }
         );
 
     return std::get<0>(std::get<1>(facilities));
