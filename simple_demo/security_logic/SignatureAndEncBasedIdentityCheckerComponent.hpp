@@ -29,6 +29,9 @@ public:
     virtual dev::cd606::tm::basic::ByteData attach_identity(dev::cd606::tm::basic::ByteData &&d) override final {
         return signer_.sign(enc_.encode(std::move(d)));
     }
+    virtual std::optional<dev::cd606::tm::basic::ByteData> process_incoming_data(dev::cd606::tm::basic::ByteData &&d) override final {
+        return {std::move(d)};
+    }
 };
 
 template <class Req>
@@ -87,6 +90,9 @@ public:
         } else {
             return std::nullopt;
         }
+    }
+    virtual dev::cd606::tm::basic::ByteData process_outgoing_data(std::string const &identity, dev::cd606::tm::basic::ByteData &&d) override final {
+        return std::move(d);
     }
 };
 #endif
