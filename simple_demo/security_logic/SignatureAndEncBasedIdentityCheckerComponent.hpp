@@ -4,6 +4,7 @@
 #include <tm_kit/transport/AbstractIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/security/SignatureHelper.hpp>
 #include "simple_demo/security_logic/EncHook.hpp"
+#include "simple_demo/security_logic/DHHelper.hpp"
 
 #include <unordered_map>
 #include <mutex>
@@ -14,23 +15,24 @@ class ClientSideSignatureAndEncBasedIdentityAttacherComponent
 {
 private:
     dev::cd606::tm::transport::security::SignatureHelper::Signer signer_;
-    EncHook enc_;
+    EncHook outgoing_, incoming_;
 public:
-    ClientSideSignatureAndEncBasedIdentityAttacherComponent() : signer_(), enc_() {}
-    ClientSideSignatureAndEncBasedIdentityAttacherComponent(std::array<unsigned char, 64> const &privateKey) : signer_(privateKey), enc_() {}
+    ClientSideSignatureAndEncBasedIdentityAttacherComponent() : signer_(), outgoing_(), incoming_() {}
+    ClientSideSignatureAndEncBasedIdentityAttacherComponent(std::array<unsigned char, 64> const &privateKey) : signer_(privateKey), outgoing_(), incoming_() {}
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(ClientSideSignatureAndEncBasedIdentityAttacherComponent const &) = delete;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent &operator=(ClientSideSignatureAndEncBasedIdentityAttacherComponent const &) = delete;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(ClientSideSignatureAndEncBasedIdentityAttacherComponent &&) = default;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent &operator=(ClientSideSignatureAndEncBasedIdentityAttacherComponent &&) = default;
     ~ClientSideSignatureAndEncBasedIdentityAttacherComponent() = default;
-    void set_enc_key(std::array<unsigned char, 32> const &encKey) {
-        enc_.setKey(encKey);
+    void set_encdec_keys(FacilityKeyPair const &keys) {
+        outgoing_.setKey(keys.outgoingKey);
+        incoming_.setKey(keys.incomingKey);
     }
     virtual dev::cd606::tm::basic::ByteData attach_identity(dev::cd606::tm::basic::ByteData &&d) override final {
-        return signer_.sign(enc_.encode(std::move(d)));
+        return signer_.sign(outgoing_.encode(std::move(d)));
     }
     virtual std::optional<dev::cd606::tm::basic::ByteData> process_incoming_data(dev::cd606::tm::basic::ByteData &&d) override final {
-        return {std::move(d)};
+        return incoming_.decode(std::move(d));
     }
 };
 
@@ -39,11 +41,15 @@ class ServerSideSignatureAndEncBasedIdentityCheckerComponent
     : public dev::cd606::tm::transport::ServerSideAbstractIdentityCheckerComponent<std::string, Req>
 {
 private:
+    struct EncDec {
+        EncHook outgoing;
+        EncHook incoming;
+    };
     dev::cd606::tm::transport::security::SignatureHelper::Verifier verifier_;
-    std::unordered_map<std::string, std::unique_ptr<EncHook>> enc_;
+    std::unordered_map<std::string, std::unique_ptr<EncDec>> encDecs_;
     std::mutex mutex_;
 public:
-    ServerSideSignatureAndEncBasedIdentityCheckerComponent() : verifier_() {}
+    ServerSideSignatureAndEncBasedIdentityCheckerComponent() : verifier_(), encDecs_(), mutex_() {}
     ServerSideSignatureAndEncBasedIdentityCheckerComponent(ServerSideSignatureAndEncBasedIdentityCheckerComponent const &) = delete;
     ServerSideSignatureAndEncBasedIdentityCheckerComponent &operator=(ServerSideSignatureAndEncBasedIdentityCheckerComponent const &) = delete;
     ServerSideSignatureAndEncBasedIdentityCheckerComponent(ServerSideSignatureAndEncBasedIdentityCheckerComponent &&) = default;
@@ -52,16 +58,17 @@ public:
     void add_identity_and_key(std::string const &name, std::array<unsigned char, 32> const &publicKey) {
         verifier_.addKey(name, publicKey);
     }
-    void set_enc_key_for_identity(std::string const &name, std::array<unsigned char, 32> const &encKey) {
+    void set_encdec_keys(FacilityKeyPairForIdentity const &keys) {
         std::lock_guard<std::mutex> _(mutex_);
-        auto iter = enc_.find(name);
-        if (iter == enc_.end()) {
-            iter = enc_.insert({
-                name
-                , std::make_unique<EncHook>()
+        auto iter = encDecs_.find(keys.identity);
+        if (iter == encDecs_.end()) {
+            iter = encDecs_.insert({
+                keys.identity
+                , std::make_unique<EncDec>()
             }).first;
         }
-        iter->second->setKey(encKey);
+        iter->second->outgoing.setKey(keys.outgoingKey);
+        iter->second->incoming.setKey(keys.incomingKey);
     }
     virtual std::optional<std::tuple<std::string,dev::cd606::tm::basic::ByteData>> check_identity(dev::cd606::tm::basic::ByteData &&d) override final {
         auto v = verifier_.verify(std::move(d));
@@ -69,17 +76,17 @@ public:
             return std::nullopt;
         }
         auto const &identity = std::get<0>(*v);
-        EncHook *encHook = nullptr;
+        EncDec *encDec = nullptr;
         {
             std::lock_guard<std::mutex> _(mutex_);
-            auto iter = enc_.find(identity);
-            if (iter == enc_.end()) {
+            auto iter = encDecs_.find(identity);
+            if (iter == encDecs_.end()) {
                 return std::nullopt;
             }
-            encHook = iter->second.get();
+            encDec = iter->second.get();
         }
-        if (encHook) {
-            auto d = encHook->decode(std::move(std::get<1>(*v)));
+        if (encDec) {
+            auto d = encDec->incoming.decode(std::move(std::get<1>(*v)));
             if (!d) {
                 return std::nullopt;
             }
@@ -92,7 +99,20 @@ public:
         }
     }
     virtual dev::cd606::tm::basic::ByteData process_outgoing_data(std::string const &identity, dev::cd606::tm::basic::ByteData &&d) override final {
-        return std::move(d);
+        EncDec *encDec = nullptr;
+        {
+            std::lock_guard<std::mutex> _(mutex_);
+            auto iter = encDecs_.find(identity);
+            if (iter == encDecs_.end()) {
+                return dev::cd606::tm::basic::ByteData {};
+            }
+            encDec = iter->second.get();
+        }
+        if (encDec) {
+            return encDec->outgoing.encode(std::move(d));
+        } else {
+            return dev::cd606::tm::basic::ByteData {};
+        }
     }
 };
 #endif

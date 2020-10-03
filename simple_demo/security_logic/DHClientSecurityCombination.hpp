@@ -55,7 +55,7 @@ auto DHClientSideCombination(
 
     auto dhClientHelper = std::make_shared<DHClientHelper>(
         boost::hana::curry<2>(
-            std::mem_fn(&ClientSideSignatureAndEncBasedIdentityAttacherComponent<CommandToBeSecured>::set_enc_key)
+            std::mem_fn(&ClientSideSignatureAndEncBasedIdentityAttacherComponent<CommandToBeSecured>::set_encdec_keys)
         )(env)
     );
     auto dhClientHelperMutex = std::make_shared<std::mutex>();

@@ -66,31 +66,14 @@ template <class T>
 class EncHookFactoryComponent : public dev::cd606::tm::transport::AbstractOutgoingHookFactoryComponent<T> {
 private:
     std::string encKey_;
-    std::mutex mutex_;
 public:
-    EncHookFactoryComponent() : encKey_(), mutex_() {}
+    EncHookFactoryComponent() : encKey_() {}
     EncHookFactoryComponent(std::string const &encKey)
-        : encKey_(encKey), mutex_() {}
-    EncHookFactoryComponent &operator=(EncHookFactoryComponent &&c) {
-        if (this == &c) {
-            return *this;
-        }
-        std::lock_guard<std::mutex> _(mutex_);
-        std::lock_guard<std::mutex> __(c.mutex_);
-        encKey_ = std::move(c.encKey_);
-        return *this;
-    }
-    void setEncKey(std::string const &k) {
-        std::lock_guard<std::mutex> _(mutex_);
-        encKey_ = k;
-    }
+        : encKey_(encKey) {}
     virtual ~EncHookFactoryComponent() {}
     virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
         auto encHook = std::make_shared<EncHook>();
-        {
-            std::lock_guard<std::mutex> _(mutex_);
-            encHook->setKey(EncHook::keyFromString(encKey_));
-        }
+        encHook->setKey(EncHook::keyFromString(encKey_));
         return dev::cd606::tm::transport::UserToWireHook { 
             [encHook](dev::cd606::tm::basic::ByteData &&d) {
                 return encHook->encode(std::move(d));
@@ -103,31 +86,17 @@ template <class T>
 class DecHookFactoryComponent : public dev::cd606::tm::transport::AbstractIncomingHookFactoryComponent<T> {
 private:
     std::string decKey_;
-    std::mutex mutex_;
 public:
-    DecHookFactoryComponent() : decKey_(), mutex_() {}
+    DecHookFactoryComponent() : decKey_() {}
     DecHookFactoryComponent(std::string const &decKey)
-        : decKey_(decKey), mutex_() {}
-    DecHookFactoryComponent &operator=(DecHookFactoryComponent &&d) {
-        if (this == &d) {
-            return *this;
-        }
-        std::lock_guard<std::mutex> _(mutex_);
-        std::lock_guard<std::mutex> __(d.mutex_);
-        decKey_ = std::move(d.decKey_);
-        return *this;
-    }
+        : decKey_(decKey) {}
     virtual ~DecHookFactoryComponent() {}
     void setDecKey(std::string const &k) {
-        std::lock_guard<std::mutex> _(mutex_);
         decKey_ = k;
     }
     virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
         auto decHook = std::make_shared<EncHook>();
-        {
-            std::lock_guard<std::mutex> _(mutex_);
-            decHook->setKey(EncHook::keyFromString(decKey_));
-        }
+        decHook->setKey(EncHook::keyFromString(decKey_));
         return dev::cd606::tm::transport::WireToUserHook { 
             [decHook](dev::cd606::tm::basic::ByteData &&d) {
                 return decHook->decode(std::move(d));

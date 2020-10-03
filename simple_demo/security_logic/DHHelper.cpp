@@ -9,9 +9,9 @@ static_assert(crypto_kx_SESSIONKEYBYTES >= 32, "libsodium kx session key length 
 
 class DHServerHelperImpl {
 private:
-    std::function<void(std::string const &, std::array<unsigned char, 32> const &)> localRegistryUpdater_;
+    std::function<void(FacilityKeyPairForIdentity const &)> localRegistryUpdater_;
 public:
-    DHServerHelperImpl(std::function<void(std::string const &, std::array<unsigned char, 32> const &)> localRegistryUpdater)
+    DHServerHelperImpl(std::function<void(FacilityKeyPairForIdentity const &)> localRegistryUpdater)
         : localRegistryUpdater_(localRegistryUpdater) {}
     ~DHServerHelperImpl() {}
     DHHelperReply process(std::tuple<std::string, DHHelperCommand> &&input) {
@@ -27,9 +27,14 @@ public:
         ) != 0) {
             return DHHelperReply {};
         }
-        std::array<unsigned char, 32> sharedKey;
-        std::memcpy(sharedKey.data(), server_rx, 32);
-        localRegistryUpdater_(std::get<0>(input), sharedKey);
+        std::array<unsigned char, 32> sharedOutgoingKey, sharedIncomingKey;
+        std::memcpy(sharedOutgoingKey.data(), server_tx, 32);
+        std::memcpy(sharedIncomingKey.data(), server_rx, 32);
+        localRegistryUpdater_(FacilityKeyPairForIdentity {
+            std::get<0>(input)
+            , sharedOutgoingKey
+            , sharedIncomingKey
+        });
         DHHelperReply ret;
         ret.serverPub = dev::cd606::tm::basic::ByteData {std::string {server_pk, server_pk+crypto_kx_PUBLICKEYBYTES}};
         return ret;
@@ -51,7 +56,7 @@ public:
     }
 };
 
-DHServerHelper::DHServerHelper(std::function<void(std::string const &, std::array<unsigned char, 32> const &)> localRegistryUpdater)
+DHServerHelper::DHServerHelper(std::function<void(FacilityKeyPairForIdentity const &)> localRegistryUpdater)
     : impl_(std::make_unique<DHServerHelperImpl>(localRegistryUpdater)) {}
 DHServerHelper::~DHServerHelper() {}
     
@@ -61,12 +66,12 @@ DHHelperReply DHServerHelper::process(std::tuple<std::string, DHHelperCommand> &
 
 class DHClientHelperImpl {
 private:
-    std::function<void(std::array<unsigned char, 32> const &)> localKeyUpdater_;
+    std::function<void(FacilityKeyPair const &)> localKeyUpdater_;
     unsigned char pk_[crypto_kx_PUBLICKEYBYTES];
     unsigned char sk_[crypto_kx_SECRETKEYBYTES];
     //X25519Private x_;
 public:
-    DHClientHelperImpl(std::function<void(std::array<unsigned char, 32> const &)> localKeyUpdater)
+    DHClientHelperImpl(std::function<void(FacilityKeyPair const &)> localKeyUpdater)
         : localKeyUpdater_(localKeyUpdater), pk_(), sk_()/*, x_()*/ 
     {
         crypto_kx_keypair(pk_, sk_);
@@ -105,16 +110,20 @@ public:
         ) != 0) {
             return;
         }
-        std::array<unsigned char, 32> sharedKey;
-        std::memcpy(sharedKey.data(), client_tx, 32);
-        localKeyUpdater_(sharedKey);
+        std::array<unsigned char, 32> sharedOutgoingKey, sharedIncomingKey;
+        std::memcpy(sharedOutgoingKey.data(), client_tx, 32);
+        std::memcpy(sharedIncomingKey.data(), client_rx, 32);
+        localKeyUpdater_(FacilityKeyPair {
+            sharedOutgoingKey
+            , sharedIncomingKey
+        });
     }
-    std::function<void(std::array<unsigned char, 32> const &)> localKeyUpdater() const {
+    std::function<void(FacilityKeyPair const &)> localKeyUpdater() const {
         return localKeyUpdater_;
     }
 };
 
-DHClientHelper::DHClientHelper(std::function<void(std::array<unsigned char, 32> const &)> localKeyUpdater)
+DHClientHelper::DHClientHelper(std::function<void(FacilityKeyPair const &)> localKeyUpdater)
     : impl_(std::make_unique<DHClientHelperImpl>(localKeyUpdater)) {}
 DHClientHelper::~DHClientHelper() {}
     

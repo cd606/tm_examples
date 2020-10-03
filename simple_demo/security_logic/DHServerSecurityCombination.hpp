@@ -41,8 +41,8 @@ void DHServerSideCombination(
     using M = typename R::AppType;
 
     auto dh = std::make_shared<DHServerHelper>(
-        boost::hana::curry<3>(
-            std::mem_fn(&ServerSideSignatureAndEncBasedIdentityCheckerComponent<CommandToBeSecured>::set_enc_key_for_identity)
+        boost::hana::curry<2>(
+            std::mem_fn(&ServerSideSignatureAndEncBasedIdentityCheckerComponent<CommandToBeSecured>::set_encdec_keys)
         )(r.environment())
     );
     r.preservePointer(dh);
