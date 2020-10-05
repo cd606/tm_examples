@@ -32,11 +32,18 @@ tm_simple_demo_main_logic_exec = executable(
     , dependencies: [common_deps, tm_simple_demo_boost_dep]
 )
 
+plain_gui_library = static_library(
+    'plain_gui_library'
+    , ['EnablerGUIDataFlow.cpp', test_gen_out]
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
+
 executable(
     'fltk_enabler'
-    , ['FltkEnablerGUI.cpp', 'EnablerGUIDataFlow.cpp', test_gen_out]
+    , ['FltkEnablerGUI.cpp']
     , include_directories: inc
-    , link_with: [tm_simple_demo_proto_lib]
+    , link_with: [tm_simple_demo_proto_lib, plain_gui_library]
     , dependencies: [common_deps, dependency('fltk')]
     , gui_app: true
 )
@@ -49,9 +56,9 @@ endif
 
 executable(
     'wx_enabler'
-    , ['WxEnablerGUI.cpp', 'EnablerGUIDataFlow.cpp', test_gen_out]
+    , ['WxEnablerGUI.cpp']
     , include_directories: inc
-    , link_with: [tm_simple_demo_proto_lib]
+    , link_with: [tm_simple_demo_proto_lib, plain_gui_library]
     , dependencies: [common_deps, wx]
     , gui_app: true
 )
