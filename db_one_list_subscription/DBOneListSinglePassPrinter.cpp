@@ -19,7 +19,7 @@
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
 #include "TransactionHelpers.hpp"
 
@@ -272,9 +272,9 @@ void runRealTime() {
 
     R r(&env); 
 
-    auto facility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
         <GS::Input,GS::Output>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
+        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("facility", facility);
 

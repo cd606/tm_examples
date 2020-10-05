@@ -9,7 +9,7 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <boost/hana/functional/curry.hpp>
@@ -133,17 +133,13 @@ int main(int argc, char **argv) {
         }
     );
     r.registerOnOrderFacility("queryFacility", queryFacility);
-    /*
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
-        <DBQuery,DBQueryResult,DBDataStorage>(
-    */
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacility
+    transport::MultiTransportFacilityWrapper<R>::wrap
+        //<DBQuery,DBQueryResult,DBDataStorage>(
         <DBQuery,DBQueryResult>(
         r
         , queryFacility
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_read_only_queue")
-        , "server_wrapper_"
-        , std::nullopt //no hook
+        , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_queue"
+        , "server_wrapper/"
     );
     
     std::ostringstream graphOss;

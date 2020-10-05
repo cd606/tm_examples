@@ -30,49 +30,27 @@ void enablerGUIDataFlow(
 
     auto hook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>("testkey", heartbeat_sign_pub_key).defaultHook();
 
-    auto heartbeatListener = std::get<0>(
+    auto heartbeatSource = 
         transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::setupBroadcastListeners<
+        ::oneBroadcastListener<
             transport::HeartbeatMessage
         >(
             r 
-            , {
-                {
-                    "heartbeatListener"
-                    , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-                    , "simple_demo.secure_executables.#.heartbeat"
-                }
-            }
-            , "heartbeatListeners"
-            , [hook](std::string const &s) -> std::optional<transport::WireToUserHook> {
-                if (s == "heartbeatListener") {
-                    return hook;
-                } else {
-                    return std::nullopt;
-                }
-            }
-        )
-    );
-    auto configureFacilityConnector = std::get<0>(std::get<1>(
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , "simple_demo.secure_executables.#.heartbeat"
+            , hook
+        );
+    auto configureFacilityConnector = 
         transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::SetupRemoteFacilities<
-            std::tuple<>
-            , std::tuple<
-                std::tuple<std::string, ConfigureCommand, ConfigureResult>
-            >
-        >::run(
+        ::setupOneNonDistinguishedRemoteFacility<
+            ConfigureCommand, ConfigureResult
+        >(
             r 
-            , heartbeatListener
+            , heartbeatSource.clone()
             , std::regex("simple_demo secure MainLogic")
-            , {"cfgFacility"}
-            , std::chrono::seconds(3)
-            , std::chrono::seconds(5)
-            , {}
-            , {}
-            , {"main logic configure facility"}
-            , "facilities"
-        )
-    ));
+            , "cfgFacility"
+        );
 
     auto keyify = M::template kleisli<ConfigureCommand>(
         basic::CommonFlowUtilComponents<M>::template keyify<ConfigureCommand>()
@@ -102,6 +80,6 @@ void enablerGUIDataFlow(
         }
     );
     r.registerAction("heartbeatHandler", heartbeatHandler);
-    heartbeatListener(r, r.actionAsSink(heartbeatHandler));
+    r.execute(heartbeatHandler, heartbeatSource.clone());
     statusSink(r, r.actionAsSource(heartbeatHandler));
 }

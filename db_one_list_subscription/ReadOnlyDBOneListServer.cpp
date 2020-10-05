@@ -9,7 +9,7 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <boost/hana/functional/curry.hpp>
@@ -103,17 +103,13 @@ int main(int argc, char **argv) {
         boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
     );
     r.registerOnOrderFacility("queryFacility", queryFacility);
-    /*
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
-        <DBQuery,DBQueryResult,DBQueryResult>(
-    */
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacility
+    transport::MultiTransportFacilityWrapper<R>::wrap
+        //<DBQuery,DBQueryResult,DBQueryResult>(
         <DBQuery,DBQueryResult>(
         r
         , queryFacility
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_read_only_one_list_queue")
-        , "server_wrapper_"
-        , std::nullopt //no hook
+        , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
+        , "server_wrapper/"
     );
     
     std::ostringstream graphOss;

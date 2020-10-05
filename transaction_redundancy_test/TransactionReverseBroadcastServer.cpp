@@ -131,12 +131,10 @@ int main(int argc, char **argv) {
     );
     r.registerAction("extractCBORValue", extractCBORValue);
 
-    if (transactionInputSource) {
-        transactionLogicCombinationRes.transactionHandler(
-            r
-            , r.execute(extractCBORValue, std::move(*transactionInputSource))
-        );
-    }
+    transactionLogicCombinationRes.transactionHandler(
+        r
+        , r.execute(extractCBORValue, std::move(transactionInputSource))
+    );
 
     transport::MultiTransportFacilityWrapper<R>::wrap
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(

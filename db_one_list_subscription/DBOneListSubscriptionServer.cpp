@@ -12,7 +12,7 @@
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include "TransactionHelpers.hpp"
@@ -290,21 +290,19 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacilityWithExternalEffects
+    transport::MultiTransportFacilityWrapper<R>::wrap
         <TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue")
-        , "transaction_wrapper_"
-        , std::nullopt //no hook
+        , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
+        , "transaction_wrapper/"
     );
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
+    transport::MultiTransportFacilityWrapper<R>::wrap
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
-        , "subscription_wrapper_"
-        , std::nullopt //no hook
+        , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
+        , "subscription_wrapper/"
     );
     
     std::ostringstream graphOss;

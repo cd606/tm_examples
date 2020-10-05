@@ -157,7 +157,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         }
     );
 
-    auto heartbeatListener = 
+    auto heartbeatSource = 
         transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::oneBroadcastListener<
             transport::HeartbeatMessage
@@ -172,7 +172,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ::setupBroadcastListenerThroughHeartbeat<InputData>
     (
         r 
-        , heartbeatListener->clone()
+        , heartbeatSource.clone()
         , std::regex("simple_demo secure DataSource")
         , "input data publisher"
         , "input.data"
@@ -240,7 +240,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 <DHHelperCommand, DHHelperReply, CalculateCommand, CalculateResult>
             (
                 r
-                , dhHeartbeatSource->clone()
+                , dhHeartbeatSource.clone()
                 , std::regex("simple_demo secure Calculator")
                 , {
                     "dh_server_facility", "facility"
