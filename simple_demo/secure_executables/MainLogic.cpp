@@ -157,22 +157,16 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         }
     );
 
-    auto heartbeatListener = std::get<0>(
+    auto heartbeatListener = 
         transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::setupBroadcastListeners<
+        ::oneBroadcastListener<
             transport::HeartbeatMessage
         >(
             r 
-            , {
-                {
-                    "heartbeatListener"
-                    , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-                    , "simple_demo.secure_executables.#.heartbeat"
-                }
-            }
-            , "heartbeatListeners"
-        )
-    );
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , "simple_demo.secure_executables.#.heartbeat"
+        );
 
     auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListenerThroughHeartbeat<InputData>
