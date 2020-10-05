@@ -1,7 +1,6 @@
 #include "EnablerGUIDataFlow.hpp"
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
-#include "simple_demo/security_logic/DHClientSecurityCombination.hpp"
 #include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 void enablerGUIDataFlow(

@@ -20,6 +20,7 @@
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/hana/functional/curry.hpp>
@@ -27,7 +28,7 @@
 #include "defs.pb.h"
 #include "simple_demo/external_logic/Calculator.hpp"
 #include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
-#include "simple_demo/security_logic/DHServerSecurityCombination.hpp"
+#include "simple_demo/security_logic/DHHelper.hpp"
 #include "simple_demo/security_logic/EncAndSignHookFactory.hpp"
 
 #include <iostream>
@@ -149,15 +150,33 @@ int main(int argc, char **argv) {
         , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
     );
 
-    infra::AppRunner<M> r(&env);
+    using R = infra::AppRunner<M>;
+    R r(&env);
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("facility", facility);
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::wrapOnOrderFacility<CalculateCommand,CalculateResult>(
-        r, facility, transport::ConnectionLocator::parse("localhost:6379:::test_queue"), "wrapper_"
-        , std::nullopt //hook
+
+    transport::MultiTransportFacilityWrapper<R>::wrap<CalculateCommand,CalculateResult>(
+        r, facility, "redis://localhost:6379:::test_queue", "wrapper/"
     );
 
+    auto dh = std::make_shared<DHServerHelper>(
+        [&env](FacilityKeyPairForIdentity const &keyPair) {
+            env.set_encdec_keys(keyPair);
+        }
+    );
+    r.preservePointer(dh);
+
+    auto dhFacility = M::template liftPureOnOrderFacility<std::tuple<std::string, DHHelperCommand>>(
+        boost::hana::curry<2>(std::mem_fn(&DHServerHelper::process))(dh.get())
+    );
+    r.registerOnOrderFacility("dh_server_facility", dhFacility);
+
+    transport::MultiTransportFacilityWrapper<R>::wrap<DHHelperCommand, DHHelperReply>(
+        r, dhFacility, "redis://localhost:6379:::test_dh_queue", "dh_wrapper/"
+    );
+    
+    /*
     DHServerSideCombination<
         infra::AppRunner<M>
         , CalculateCommand
@@ -166,6 +185,7 @@ int main(int argc, char **argv) {
         r
         , transport::ConnectionLocator::parse("localhost:6379:::test_dh_queue") //facility locator
     );
+    */
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.calculator.heartbeat", std::chrono::seconds(1));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
