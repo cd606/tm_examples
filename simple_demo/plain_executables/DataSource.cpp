@@ -14,6 +14,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/external_logic/DataSource.hpp"
@@ -62,22 +63,25 @@ int main(int argc, char **argv) {
         (&env, "simple_demo DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
-    infra::AppRunner<M> r(&env);
+    using R = infra::AppRunner<M>;
+    R r(&env);
 
     auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
 
-    auto publisher = transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                    ::createTypedExporter<InputData>(
-        transport::ConnectionLocator::parse("localhost:12345")
-        , std::nullopt //no hook
-        , "input data source"
-    );
+    auto publisherSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+        ::oneBroadcastPublisher<InputData>(
+            r
+            , "input data publisher"
+            , "zeromq://localhost:12345"
+        );
 
     auto source = M::importer(new DataSourceImporter());
 
-    r.exportItem("publisher", publisher
-        , r.execute("addTopic", addTopic
-            , r.importItem("source", source)));
+    r.connect(
+        r.execute("addTopic", addTopic
+            , r.importItem("source", source))
+        , publisherSink
+    );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.data_source.heartbeat", std::chrono::seconds(10));
 

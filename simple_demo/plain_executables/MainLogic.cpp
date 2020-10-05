@@ -99,7 +99,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         r 
         , heartbeatListener
         , std::regex("simple_demo DataSource")
-        , "input data source"
+        , "input data publisher"
         , "input.data"
         , "inputDataSourceComponents"
     );
