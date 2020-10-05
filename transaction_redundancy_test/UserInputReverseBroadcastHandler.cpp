@@ -19,13 +19,9 @@
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
-#include <tm_kit/transport/redis/RedisComponent.hpp>
-#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
-#include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
-#include <tm_kit/transport/MultiTransportRemoteFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
-#include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
-#include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
 #include "TransactionInterface.hpp"
 
@@ -84,6 +80,39 @@ int main(int argc, char **argv) {
 
     //for information on this helper function, see the comments in
     //UserInputHandler.cpp
+    auto subscriptionFacility =
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneDistinguishedRemoteFacility<GS::Input, GS::Output>
+        (
+            r 
+            , transport::MultiTransportBroadcastListenerManagingUtils<R>
+                ::oneBroadcastListener<transport::HeartbeatMessage>(
+                    r 
+                    , "heartbeat"
+                    , "redis://127.0.0.1:6379"
+                    , "heartbeats.transaction_test_reverse_broadcast_server"
+                )
+            , std::regex("transaction redundancy test reverse broadcast server")
+            , "transaction_server_components/subscription_handler"
+            , {
+                []() -> GS::Input {
+                    return GS::Input { GS::Subscription {
+                    { Key {} }
+                    } };
+                }
+            }
+            , {
+                [](GS::Input const &, GS::Output const &o) -> bool {
+                    return std::visit(
+                        [](auto const &x) -> bool {
+                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                            return ret;
+                        }, o.value
+                    );
+                }
+            }
+        );
+    /*
     auto facilities =
         transport::MultiTransportRemoteFacilityManagingUtils<R>
         ::SetupRemoteFacilities<
@@ -129,6 +158,7 @@ int main(int argc, char **argv) {
         );
 
     auto subscriptionFacility = std::get<0>(std::get<0>(facilities));
+    */
 
     //Now we manage the subscription data
 
@@ -488,6 +518,20 @@ int main(int argc, char **argv) {
             };
         }
     );
+    auto transactionPublisherSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>::
+        oneBroadcastPublisher<basic::CBOR<TI::TransactionWithAccountInfo>>(
+            r 
+            , "transactionPublisher"
+            , "redis://127.0.0.1:6379"
+        );
+    r.connect(
+        r.execute("addAccount", addAccount
+            , r.execute(
+                "transactionCommandParser", transactionCommandParser
+                , r.importItem(lineImporter)
+            ))
+        , transactionPublisherSink);
+    /*
     auto transactionPublisher = transport::redis::RedisImporterExporter<TheEnvironment>::
         createTypedExporter<basic::CBOR<TI::TransactionWithAccountInfo>>(
             transport::ConnectionLocator::parse("127.0.0.1:6379")
@@ -499,6 +543,7 @@ int main(int argc, char **argv) {
                 "transactionCommandParser", transactionCommandParser
                 , r.importItem(lineImporter)
             )));
+    */
 
     //We are done, now print the graph and run
 

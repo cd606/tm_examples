@@ -9,6 +9,7 @@
 #include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -20,8 +21,8 @@ int run(Env &env, std::string const &queueNamePrefix) {
     using M = infra::RealTimeApp<Env>;
     using R = infra::AppRunner<M>;
 
-    transport::HeartbeatAndAlertComponentInitializer<Env,transport::redis::RedisComponent>()
-        (&env, "transaction redundancy test server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
+    transport::initializeHeartbeatAndAlertComponent
+        (&env, "transaction redundancy test server", "redis://127.0.0.1:6379");
 
     R r(&env);
 
@@ -50,23 +51,20 @@ int run(Env &env, std::string const &queueNamePrefix) {
         , &tf
     );
 
-    using RedisWrapper = transport::redis::RedisOnOrderFacility<Env>;
-    RedisWrapper::template wrapOnOrderFacilityWithExternalEffects
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
-        r
-        , transactionLogicCombinationRes.transactionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue")
-        , "transaction_wrapper_"
-        , std::nullopt //no hook
-    );
-    RedisWrapper::template wrapLocalOnOrderFacility
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
-        r
-        , transactionLogicCombinationRes.subscriptionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue")
-        , "subscription_wrapper_"
-        , std::nullopt //no hook
-    );
+    transport::MultiTransportFacilityWrapper<R>
+        ::template wrap<TI::Transaction,TI::TransactionResponse,DI::Update>(
+            r
+            , transactionLogicCombinationRes.transactionFacility
+            , ("redis://127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue")
+            , "transaction_wrapper/"
+        );
+    transport::MultiTransportFacilityWrapper<R>
+        ::template wrap<GS::Input,GS::Output,GS::SubscriptionUpdate>(
+            r
+            , transactionLogicCombinationRes.subscriptionFacility
+            , ("redis://127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue")
+            , "subscription_wrapper/"
+        );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "heartbeats.transaction_test_server", std::chrono::seconds(1));
 

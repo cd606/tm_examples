@@ -91,7 +91,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ::setupBroadcastListenerThroughHeartbeat<InputData>
     (
         r 
-        , heartbeatListener
+        , heartbeatListener->clone()
         , std::regex("simple_demo DataSource")
         , "input data publisher"
         , "input.data"
@@ -104,7 +104,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             transport::MultiTransportRemoteFacilityManagingUtils<R>
             ::setupOneNonDistinguishedRemoteFacility<CalculateCommand, CalculateResult>(
                 r 
-                , heartbeatListener
+                , heartbeatListener->clone()
                 , std::regex("simple_demo plain Calculator")
                 , "calculator facility"
             );

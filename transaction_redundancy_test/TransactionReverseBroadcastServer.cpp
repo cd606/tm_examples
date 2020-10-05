@@ -11,6 +11,8 @@
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -52,10 +54,6 @@ int main(int argc, char **argv) {
     }
     std::string queueName = vm["queue_name"].as<std::string>();
 
-    std::string broadcastChannel = "redis://127.0.0.1:6379";
-    auto parsedBroadcastChannel = *transport::parseMultiTransportBroadcastChannel(broadcastChannel);
-    std::string broadcastTopic = "etcd_test.transaction_commands";
-
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
@@ -87,8 +85,8 @@ int main(int argc, char **argv) {
         }, &compoundLockQueueVersion, &compoundLockQueueRevision
     });
     
-    transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::redis::RedisComponent>()
-        (&env, "transaction redundancy test reverse broadcast server", transport::ConnectionLocator::parse("127.0.0.1:6379"));
+    transport::initializeHeartbeatAndAlertComponent
+        (&env, "transaction redundancy test reverse broadcast server", "redis://127.0.0.1:6379");
 
     R r(&env);
 
@@ -117,44 +115,35 @@ int main(int argc, char **argv) {
         , &te
     );
 
-    auto broadcastKey = M::constFirstPushKeyImporter(
-        transport::MultiTransportBroadcastListenerInput { 
-            transport::MultiTransportBroadcastListenerAddSubscription {
-                std::get<0>(parsedBroadcastChannel)
-                , std::get<1>(parsedBroadcastChannel)
-                , broadcastTopic
-            }
+    auto transactionInputSource = 
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::oneBroadcastListener<basic::CBOR<TI::TransactionWithAccountInfo>>
+        (
+            r 
+            , "transactionInput"
+            , "redis://127.0.0.1:6379"
+            , "etcd_test.transaction_commands"
+        );
+    auto extractCBORValue = M::liftPure<basic::CBOR<TI::TransactionWithAccountInfo>>(
+        [](basic::CBOR<TI::TransactionWithAccountInfo> &&d) {
+            return std::move(d.value);
         }
     );
-    r.registerImporter("broadcastKey", broadcastKey);
-    auto discardTopic = M::template liftPure<basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>>>(
-        [](basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>> &&d) {
-            return std::move(d.content.value);
-        }
-    );
-    r.registerAction("discardTopic", discardTopic);
-    auto transactionInput = basic::AppRunnerUtilComponents<R>::importWithTrigger(
-        r
-        , r.importItem(broadcastKey)
-        , M::onOrderFacilityWithExternalEffects(
-            new transport::MultiTransportBroadcastListener<TheEnvironment, basic::CBOR<TI::TransactionWithAccountInfo>>()
-        )
-        , std::nullopt //the trigger response is not needed
-        , "transactionInput"
-    );
+    r.registerAction("extractCBORValue", extractCBORValue);
 
-    transactionLogicCombinationRes.transactionHandler(
-        r
-        , r.execute(discardTopic, std::move(transactionInput))
-    );
+    if (transactionInputSource) {
+        transactionLogicCombinationRes.transactionHandler(
+            r
+            , r.execute(extractCBORValue, std::move(*transactionInputSource))
+        );
+    }
 
-    transport::redis::RedisOnOrderFacility<TheEnvironment>::wrapLocalOnOrderFacility
+    transport::MultiTransportFacilityWrapper<R>::wrap
         <GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
-        , transport::ConnectionLocator::parse("127.0.0.1:6379:::"+queueName)
+        , ("redis://127.0.0.1:6379:::"+queueName)
         , "subscription_wrapper_"
-        , std::nullopt //no hook
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "heartbeats.transaction_test_reverse_broadcast_server", std::chrono::seconds(1));

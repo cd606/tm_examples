@@ -19,12 +19,8 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
-#include <tm_kit/transport/redis/RedisComponent.hpp>
-#include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
-#include <tm_kit/transport/MultiTransportRemoteFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
-#include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
-#include <tm_kit/transport/HeartbeatMessageToRemoteFacilityCommand.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 
 #include "TransactionInterface.hpp"
 
@@ -97,6 +93,52 @@ int main(int argc, char **argv) {
     //We use a very big helper function,
     //the meanings of the parameters are commented one by one
 
+    //The original big helper function has been wrapped with a simplified one
+    //We keep the original function call down (commented) to show the meaning
+    //of each parameter. It is not difficult to see how they translate to the 
+    //simplified version
+
+    auto facilities =
+        transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupTwoStepRemoteFacility<
+            GS::Input, GS::Output, TI::Transaction, TI::TransactionResponse
+        >(
+            r 
+            , transport::MultiTransportBroadcastListenerManagingUtils<R>
+                ::oneBroadcastListener<transport::HeartbeatMessage>(
+                    r 
+                    , "heartbeat"
+                    , "redis://127.0.0.1:6379"
+                    , "heartbeats.transaction_test_server"
+                )
+            , std::regex("transaction redundancy test server")
+            , {
+                "transaction_server_components/subscription_handler"
+                , "transaction_server_components/transaction_handler"
+            }
+            , {
+                []() -> GS::Input {
+                    return GS::Input { GS::Subscription {
+                    { Key {} }
+                    } };
+                }
+            }
+            , {
+                [](GS::Input const &, GS::Output const &o) -> bool {
+                    return std::visit(
+                        [](auto const &x) -> bool {
+                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                            return ret;
+                        }, o.value
+                    );
+                }
+            }
+        );
+
+    auto subscriptionFacility = std::get<0>(facilities);
+    auto transactionFacility = std::get<1>(facilities);
+
+    /*
     //The returned value is a 2-tuple, each tuple element is a variadic-tuple
     //, with one element in such variadic-tuple corresponding to a facility.
 
@@ -182,6 +224,7 @@ int main(int argc, char **argv) {
 
     auto subscriptionFacility = std::get<0>(std::get<0>(facilities));
     auto transactionFacility = std::get<0>(std::get<1>(facilities));
+    */
 
     //Now we manage the subscription data
 
