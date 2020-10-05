@@ -100,26 +100,14 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     R::FacilitioidConnector<CalculateCommand,CalculateResult> calc;
     if (isReal) {
-        auto facilities =
+        calc = 
             transport::MultiTransportRemoteFacilityManagingUtils<R>
-            ::SetupRemoteFacilities<
-                std::tuple<>
-                , std::tuple<
-                    std::tuple<std::string, CalculateCommand, CalculateResult>
-                >
-            >::run(
+            ::setupOneNonDistinguishedRemoteFacility<CalculateCommand, CalculateResult>(
                 r 
                 , heartbeatListener
                 , std::regex("simple_demo plain Calculator")
-                , {"calculator facility"}
-                , std::chrono::seconds(3)
-                , std::chrono::seconds(5)
-                , {}
-                , {}
-                , {"remote facility"}
-                , "facilities"
+                , "calculator facility"
             );
-        calc = std::get<0>(std::get<1>(facilities));
     } else {
         calc = &(MockCalculatorCombination<
                     R

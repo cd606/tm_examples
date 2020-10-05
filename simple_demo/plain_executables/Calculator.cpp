@@ -13,6 +13,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -102,13 +103,13 @@ int main(int argc, char **argv) {
         (&env, "simple_demo plain Calculator", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
 
-    infra::AppRunner<M> r(&env);
+    using R = infra::AppRunner<M>;
+    R r(&env);
 
     auto facility = M::fromAbstractOnOrderFacility(new CalculatorFacility());
     r.registerOnOrderFacility("calculator facility", facility);
-    transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::wrapOnOrderFacility<CalculateCommand,CalculateResult>(
-        r, facility, transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_queue"), "wrapper_"
-        , std::nullopt //hook
+    transport::MultiTransportFacilityWrapper<R>::wrap<CalculateCommand,CalculateResult>(
+        r, facility, "rabbitmq://127.0.0.1::guest:guest:test_queue", "wrapper/"
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.calculator.heartbeat", std::chrono::seconds(1));
