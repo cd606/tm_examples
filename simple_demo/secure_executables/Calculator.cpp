@@ -175,17 +175,6 @@ int main(int argc, char **argv) {
     transport::MultiTransportFacilityWrapper<R>::wrap<DHHelperCommand, DHHelperReply>(
         r, dhFacility, "redis://localhost:6379:::test_dh_queue", "dh_wrapper/"
     );
-    
-    /*
-    DHServerSideCombination<
-        infra::AppRunner<M>
-        , CalculateCommand
-        , transport::redis::RedisOnOrderFacility<TheEnvironment>
-    >(
-        r
-        , transport::ConnectionLocator::parse("localhost:6379:::test_dh_queue") //facility locator
-    );
-    */
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.calculator.heartbeat", std::chrono::seconds(1));
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);

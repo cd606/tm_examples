@@ -258,25 +258,6 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 }
             )
         );
-        /*
-
-        calc = DHClientSideCombination<
-            R
-            , CalculateCommand
-            , CalculateResult
-        >(
-            r 
-            , calculate_server_public_key
-            , transport::MultiTransportBroadcastListenerAddSubscription {
-                transport::MultiTransportBroadcastListenerConnectionType::RabbitMQ
-                , transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]")
-                , "simple_demo.secure_executables.calculator.heartbeat"
-            }
-            , std::regex("simple_demo secure Calculator")
-            , "facility"
-            , "testkey" //decrypt heartbeat with this key
-        );
-        */
     } else {
         calc = &(MockCalculatorCombination<
                     R
