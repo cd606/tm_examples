@@ -130,11 +130,15 @@ public:
         }
     }
     static std::string chainIDForValue(State const &s) {
+#ifndef _MSC_VER
         if constexpr (std::is_convertible_v<decltype(env_->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset> *>) {
             return std::string(s.lastSeenID.data(), sizeof(std::ptrdiff_t));
         } else {
             return std::string(s.lastSeenID.data());
         }
+#else   
+        return std::string(s.lastSeenID.data());
+#endif
     }
     std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
         return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
