@@ -19,16 +19,9 @@
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
-#include <tm_kit/transport/redis/RedisComponent.hpp>
-#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
-#include <tm_kit/transport/redis/RedisOnOrderFacility.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
 
@@ -257,23 +250,20 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     
     MainLogicInput<R> combinationInput {
         calc
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
+        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
-            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_config_queue")
+            "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
             , "cfg_wrapper_"
-            , std::nullopt //no hook
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
+        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
-            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_query_queue")
+            "rabbitmq://127.0.0.1::guest:guest:test_query_queue"
             , "query_wrapper_"
-            , std::nullopt //no hook
         )
-        , transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::facilityWrapper
+        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ClearCommands,ClearCommandsResult>(
-            transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_clear_queue")
+            "rabbitmq://127.0.0.1::guest:guest:test_clear_queue"
             , "clear_cmd_wrapper_"
-            , std::nullopt //no hook
         )
     };
     auto mainLogicOutput = MainLogicCombination(r, env, std::move(combinationInput), logicChoice, "simple_demo.secure_executables.main_logic.alert");

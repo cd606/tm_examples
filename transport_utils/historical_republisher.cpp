@@ -14,16 +14,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
-#include <tm_kit/transport/multicast/MulticastComponent.hpp>
-#include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
-#include <tm_kit/transport/redis/RedisComponent.hpp>
-#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
-#include <tm_kit/transport/nng/NNGComponent.hpp>
-#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
@@ -42,8 +33,7 @@ struct HM {int hour; int min;};
 
 struct ReplayParameter {
     std::string inputFile;
-    std::string transport;
-    transport::ConnectionLocator address;
+    std::string address;
     double speed;
     HMS calibratePointHistorical;
     std::variant<int, HM> calibratePointActual;
@@ -96,11 +86,7 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
         basic::TrivialBoostLoggingComponent,
         basic::real_time_clock::ClockComponent,
         transport::BoostUUIDComponent,
-        transport::rabbitmq::RabbitMQComponent,
-        transport::multicast::MulticastComponent,
-        transport::zeromq::ZeroMQComponent,
-        transport::redis::RedisComponent,
-        transport::nng::NNGComponent
+        transport::AllNetworkTransportComponents
     >;
     using App = infra::RealTimeApp<TheEnvironment>;
     using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<App>;
@@ -134,7 +120,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     env.basic::real_time_clock::ClockComponent::operator=(
         basic::real_time_clock::ClockComponent(settings)
     );
-    infra::AppRunner<App> r(&env);
+    using R = infra::AppRunner<App>;
+    R r(&env);
     
     std::ifstream ifs(param.inputFile);
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
@@ -142,36 +129,13 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
         {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
         {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
     );
-    auto publisher =
-            (param.transport == "rabbitmq")
-        ?
-            transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-            ::createExporter(param.address)
-        :
-            (
-                (param.transport == "mcast")
-            ?
-                transport::multicast::MulticastImporterExporter<TheEnvironment>
-                ::createExporter(param.address)
-            :
-                (
-                    (param.transport == "zmq")
-                ?
-                    transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                    ::createExporter(param.address)
-                :
-                    (
-                        (param.transport == "nng")
-                    ?
-                        transport::nng::NNGImporterExporter<TheEnvironment>
-                        ::createExporter(param.address)
-                    :
-                        transport::redis::RedisImporterExporter<TheEnvironment>
-                        ::createExporter(param.address) 
-                    )                
-                )
-            )
-        ;
+    auto dataSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+        ::oneByteDataBroadcastPublisher
+        (
+            r
+            , "data sink"
+            , param.address
+        );
 
     auto filter = App::kleisli<basic::ByteDataWithTopic>(
         basic::CommonFlowUtilComponents<App>
@@ -182,8 +146,10 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
             )
     );
 
-    r.exportItem("publisher", publisher
-        , r.execute("filter", filter, r.importItem("importer", importer)));
+    r.connect(
+        r.execute("filter", filter, r.importItem("importer", importer))
+        , dataSink
+    );
 
     auto exiter = App::simpleExporter<basic::ByteDataWithTopic>(
         [&env](App::InnerData<basic::ByteDataWithTopic> &&d) {
@@ -211,8 +177,7 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("transport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
-        ("address", value<std::string>(), "the address to republish on")
+        ("address", value<std::string>(), "the address to republish on, with protocol info")
         ("input", value<std::string>(), "input from this file")
         ("speed", value<double>(), "republish speed factor, default 1.0")
         ("calibratePointHistorical", value<std::string>(), "calibrate time point (for historical data), format is HH:MM[:SS]")
@@ -228,22 +193,11 @@ int main(int argc, char **argv) {
         std::cout << desc << '\n';
         return 0;
     }
-    if (!vm.count("transport")) {
-        std::cerr << "No transport given!\n";
-        return 1;
-    }
-    std::string transport = vm["transport"].as<std::string>();
-    if (transport != "mcast" && transport != "rabbitmq" && transport != "zmq" && transport != "redis" && transport != "nng") {
-        std::cerr << "Transport must be mcast, zmq, nng, redis or rabbitmq!\n";
-        return 1;
-    }
-    param.transport = transport;
     if (!vm.count("address")) {
         std::cerr << "No address given!\n";
         return 1;
     }
-    auto address = transport::ConnectionLocator::parse(vm["address"].as<std::string>());
-    param.address = address;
+    param.address = vm["address"].as<std::string>();
     if (!vm.count("input")) {
         std::cerr << "No output file given!\n";
         return 1;

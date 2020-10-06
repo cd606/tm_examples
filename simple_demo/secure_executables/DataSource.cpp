@@ -49,7 +49,7 @@ public:
     virtual void start(TheEnvironment *env) override final {
         env_ = env;
         source_.start(this);
-        env->sendAlert("simple_demo.data_source.info", infra::LogLevel::Info, "Data source started");
+        env->sendAlert("simple_demo.secure_executables.data_source.info", infra::LogLevel::Info, "Data source started");
     }
     virtual void onData(DataFromSource const &data) override final {
         InputData dataCopy;

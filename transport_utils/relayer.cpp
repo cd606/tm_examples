@@ -10,16 +10,8 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
-#include <tm_kit/transport/multicast/MulticastComponent.hpp>
-#include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
-#include <tm_kit/transport/redis/RedisComponent.hpp>
-#include <tm_kit/transport/redis/RedisImporterExporter.hpp>
-#include <tm_kit/transport/nng/NNGComponent.hpp>
-#include <tm_kit/transport/nng/NNGImporterExporter.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -34,10 +26,8 @@ int main(int argc, char **argv) {
     options_description desc("allowed options");
     desc.add_options()
         ("help", "display help message")
-        ("incomingTransport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
-        ("incomingAddress", value<std::string>(), "the address to listen on")
-        ("outgoingTransport", value<std::string>(), "mcast, zmq, nng, redis or rabbitmq")
-        ("outgoingAddress", value<std::string>(), "the address to publish on")
+        ("incomingAddress", value<std::string>(), "the address to listen on, with protocol info")
+        ("outgoingAddress", value<std::string>(), "the address to publish on, with protocol info")
         ("summaryPeriod", value<int>(), "print summary every this number of seconds")
     ;
     variables_map vm;
@@ -48,34 +38,16 @@ int main(int argc, char **argv) {
         std::cout << desc << '\n';
         return 0;
     }
-    if (!vm.count("incomingTransport")) {
-        std::cerr << "No incoming transport given!\n";
-        return 1;
-    }
-    std::string incomingTransport = vm["incomingTransport"].as<std::string>();
-    if (incomingTransport != "mcast" && incomingTransport != "rabbitmq" && incomingTransport != "zmq" && incomingTransport != "redis" && incomingTransport != "nng") {
-        std::cerr << "Incoming transport must be mcast, zmq, nng, redis or rabbitmq!\n";
-        return 1;
-    }
     if (!vm.count("incomingAddress")) {
         std::cerr << "No incoming address given!\n";
         return 1;
     }
-    auto incomingAddress = transport::ConnectionLocator::parse(vm["incomingAddress"].as<std::string>());
-    if (!vm.count("outgoingTransport")) {
-        std::cerr << "No outgoing transport given!\n";
-        return 1;
-    }
-    std::string outgoingTransport = vm["outgoingTransport"].as<std::string>();
-    if (outgoingTransport != "mcast" && outgoingTransport != "rabbitmq" && outgoingTransport != "zmq" && outgoingTransport != "redis" && outgoingTransport != "nng") {
-        std::cerr << "Outgoing transport must be mcast, zmq, nng, redis or rabbitmq!\n";
-        return 1;
-    }
+    auto incomingAddress = vm["incomingAddress"].as<std::string>();
     if (!vm.count("outgoingAddress")) {
         std::cerr << "No outgoing address given!\n";
         return 1;
     }
-    auto outgoingAddress = transport::ConnectionLocator::parse(vm["outgoingAddress"].as<std::string>());
+    auto outgoingAddress = vm["outgoingAddress"].as<std::string>();
 
     std::optional<int> summaryPeriod = std::nullopt;
     if (vm.count("summaryPeriod")) {
@@ -88,11 +60,7 @@ int main(int argc, char **argv) {
         basic::TrivialBoostLoggingComponent,
         basic::real_time_clock::ClockComponent,
         transport::BoostUUIDComponent,
-        transport::rabbitmq::RabbitMQComponent,
-        transport::multicast::MulticastComponent,
-        transport::zeromq::ZeroMQComponent,  
-        transport::redis::RedisComponent,
-        transport::nng::NNGComponent
+        transport::AllNetworkTransportComponents
     >;
 
     using M = infra::RealTimeApp<TheEnvironment>;
@@ -102,70 +70,21 @@ int main(int argc, char **argv) {
     R r(&env);
 
     {
-        auto importer =
-                (incomingTransport == "rabbitmq")
-            ?
-                transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-                ::createImporter(incomingAddress, "#")
-            :
-                (
-                    (incomingTransport == "mcast")
-                ?
-                    transport::multicast::MulticastImporterExporter<TheEnvironment>
-                    ::createImporter(incomingAddress, transport::multicast::MulticastComponent::NoTopicSelection {})
-                :
-                    (
-                        (incomingTransport == "zmq")
-                    ?
-                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                        ::createImporter(incomingAddress, transport::zeromq::ZeroMQComponent::NoTopicSelection {})               
-                    :
-                        (
-                            (incomingTransport == "nng")
-                        ?
-                            transport::nng::NNGImporterExporter<TheEnvironment>
-                            ::createImporter(incomingAddress, transport::nng::NNGComponent::NoTopicSelection {})
-                        :
-                            transport::redis::RedisImporterExporter<TheEnvironment>
-                            ::createImporter(incomingAddress, "*")
-                        )   
-                    )
-                )
-            ;
-
-        auto exporter =
-                (outgoingTransport == "rabbitmq")
-            ?
-                transport::rabbitmq::RabbitMQImporterExporter<TheEnvironment>
-                ::createExporter(outgoingAddress)
-            :
-                (
-                    (outgoingTransport == "mcast")
-                ?
-                    transport::multicast::MulticastImporterExporter<TheEnvironment>
-                    ::createExporter(outgoingAddress)
-                :
-                    (
-                        (outgoingTransport == "zmq")
-                    ?
-                        transport::zeromq::ZeroMQImporterExporter<TheEnvironment>
-                        ::createExporter(outgoingAddress)
-                    :
-                        (
-                            (outgoingTransport == "nng")
-                        ?
-                            transport::nng::NNGImporterExporter<TheEnvironment>
-                            ::createExporter(outgoingAddress)
-                        :
-                            transport::redis::RedisImporterExporter<TheEnvironment>
-                            ::createExporter(outgoingAddress)
-                        )
-                    )
-                )
-            ;
-
-        r.exportItem("exporter", exporter, r.importItem("importer", importer));
-
+        auto dataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
+            ::oneByteDataBroadcastListener(
+                r 
+                , "data source"
+                , incomingAddress 
+            );
+        auto dataSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+            ::oneByteDataBroadcastPublisher
+            (
+                r
+                , "data sink"
+                , outgoingAddress
+            );
+        r.connect(dataSource.clone(), dataSink);
+        
         if (summaryPeriod) {
             auto counter = M::liftPure<basic::ByteDataWithTopic>(
                 [](basic::ByteDataWithTopic &&data) -> uint64_t {
@@ -197,7 +116,7 @@ int main(int argc, char **argv) {
             auto notUsed = r.execute("perClockUpdate", perClockUpdate, r.importItem("clockImporter", clockImporter));
             r.execute(perClockUpdate, 
                 r.execute("counter", counter, 
-                    r.importItem(importer)));
+                    dataSource.clone()));
             r.exportItem("emptyExporter", emptyExporter, std::move(notUsed));
         }
     }
