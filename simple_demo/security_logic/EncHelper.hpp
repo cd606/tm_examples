@@ -1,5 +1,5 @@
-#ifndef ENC_HOOK_HPP_
-#define ENC_HOOK_HPP_
+#ifndef ENC_HELPER_HPP_
+#define ENC_HELPER_HPP_
 
 #include <array>
 #include <memory>
@@ -8,21 +8,21 @@
 #include <optional>
 #include <tm_kit/basic/ByteData.hpp>
 
-class EncHookImpl;
+class EncHelperImpl;
 
-class EncHook {
+class EncHelper {
 private:
-    std::unique_ptr<EncHookImpl> impl_;
+    std::unique_ptr<EncHelperImpl> impl_;
 public:
     //when we move to libsodium, the key length is no longer 16 bytes but 32 bytes
     //static constexpr std::size_t KeyLength = 128;
     static constexpr std::size_t KeyLength = 256;
-    EncHook();
-    ~EncHook();
-    EncHook(EncHook const &) = delete;
-    EncHook &operator=(EncHook const &) = delete;
-    EncHook(EncHook &&);
-    EncHook &operator=(EncHook &&);
+    EncHelper();
+    ~EncHelper();
+    EncHelper(EncHelper const &) = delete;
+    EncHelper &operator=(EncHelper const &) = delete;
+    EncHelper(EncHelper &&);
+    EncHelper &operator=(EncHelper &&);
     static std::array<unsigned char,KeyLength/8> keyFromString(std::string const &s);
     void setKey(std::array<unsigned char,KeyLength/8> const &key);
     dev::cd606::tm::basic::ByteData encode(dev::cd606::tm::basic::ByteData &&);

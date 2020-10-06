@@ -157,7 +157,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         }
     );
 
-    auto heartbeatSource = 
+    auto dataSourceHeartbeatSource = 
         transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::oneBroadcastListener<
             transport::HeartbeatMessage
@@ -165,14 +165,14 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             r 
             , "heartbeatListener"
             , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-            , "simple_demo.secure_executables.#.heartbeat"
+            , "simple_demo.secure_executables.data_source.heartbeat"
         );
 
     auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListenerThroughHeartbeat<InputData>
     (
         r 
-        , heartbeatSource.clone()
+        , dataSourceHeartbeatSource.clone()
         , std::regex("simple_demo secure DataSource")
         , "input data publisher"
         , "input.data"
@@ -210,15 +210,8 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             )
         );
 
-        auto dhClientHelper = std::make_shared<DHClientHelper>(
-            [&env](FacilityKeyPair const &keyPair) {
-                env.set_encdec_keys(keyPair);
-            }
-        );
-        auto dhClientHelperMutex = std::make_shared<std::mutex>();
-
+        auto dhClientHelper = std::make_shared<DHClientHelper>(&env);
         r.preservePointer(dhClientHelper);
-        r.preservePointer(dhClientHelperMutex);
 
         auto dhHeartbeatHook = VerifyAndDecHookFactoryComponent<transport::HeartbeatMessage>(
             "testkey", calculate_server_public_key
@@ -245,14 +238,11 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 , {
                     "dh_server_facility", "facility"
                 }
-                , [&env,dhClientHelper,dhClientHelperMutex]() -> DHHelperCommand {
+                , [&env,dhClientHelper]() -> DHHelperCommand {
                     env.log(infra::LogLevel::Info, "Creating DH client command");
-                    std::lock_guard<std::mutex> _(*dhClientHelperMutex);
-                    dhClientHelper->reset(); //this forces a regeneration of key
-                    return dhClientHelper->buildCommand();
+                    return dhClientHelper->resetAndBuildCommand(); //this forces a regeneration of key
                 }
-                , [dhClientHelper,dhClientHelperMutex](DHHelperCommand const &, DHHelperReply const &data) -> bool {
-                    std::lock_guard<std::mutex> _(*dhClientHelperMutex);
+                , [dhClientHelper](DHHelperCommand const &, DHHelperReply const &data) -> bool {
                     dhClientHelper->process(data);
                     return true;
                 }

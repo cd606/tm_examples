@@ -160,11 +160,7 @@ int main(int argc, char **argv) {
         r, facility, "redis://localhost:6379:::test_queue", "wrapper/"
     );
 
-    auto dh = std::make_shared<DHServerHelper>(
-        [&env](FacilityKeyPairForIdentity const &keyPair) {
-            env.set_encdec_keys(keyPair);
-        }
-    );
+    auto dh = std::make_shared<DHServerHelper>(&env);
     r.preservePointer(dh);
 
     auto dhFacility = M::template liftPureOnOrderFacility<std::tuple<std::string, DHHelperCommand>>(

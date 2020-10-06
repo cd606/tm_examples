@@ -6,6 +6,8 @@
 #include <functional>
 #include <tm_kit/basic/ByteData.hpp>
 
+#include "simple_demo/security_logic/SignatureAndEncBasedIdentityCheckerComponent.hpp"
+
 struct DHHelperCommand {
     dev::cd606::tm::basic::ByteData clientPub;
     void SerializeToString(std::string *s) const {
@@ -27,23 +29,13 @@ struct DHHelperReply {
     }
 };
 
-struct FacilityKeyPair {
-    std::array<unsigned char, 32> outgoingKey;
-    std::array<unsigned char, 32> incomingKey;
-};
-struct FacilityKeyPairForIdentity {
-    std::string identity;
-    std::array<unsigned char, 32> outgoingKey;
-    std::array<unsigned char, 32> incomingKey;
-};
-
 class DHServerHelperImpl;
 
 class DHServerHelper {
 private:
     std::unique_ptr<DHServerHelperImpl> impl_;
 public:
-    DHServerHelper(std::function<void(FacilityKeyPairForIdentity const &)> localRegistryUpdater);
+    DHServerHelper(ServerSideSignatureAndEncBasedIdentityCheckerComponentBase *);
     ~DHServerHelper();
     
     DHHelperReply process(std::tuple<std::string, DHHelperCommand> &&input);
@@ -55,11 +47,10 @@ class DHClientHelper {
 private:
     std::unique_ptr<DHClientHelperImpl> impl_;
 public:
-    DHClientHelper(std::function<void(FacilityKeyPair const &)> localKeyUpdater);
+    DHClientHelper(ClientSideSignatureAndEncBasedIdentityAttacherComponentBase *);
     ~DHClientHelper();
     
-    void reset();
-    DHHelperCommand buildCommand();
+    DHHelperCommand resetAndBuildCommand();
     void process(DHHelperReply const &input);
 };
 

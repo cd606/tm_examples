@@ -3,19 +3,36 @@
 
 #include <tm_kit/transport/AbstractIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/security/SignatureHelper.hpp>
-#include "simple_demo/security_logic/EncHook.hpp"
-#include "simple_demo/security_logic/DHHelper.hpp"
+#include "simple_demo/security_logic/EncHelper.hpp"
 
 #include <unordered_map>
 #include <mutex>
 
+struct FacilityKeyPair {
+    std::array<unsigned char, 32> outgoingKey;
+    std::array<unsigned char, 32> incomingKey;
+};
+struct FacilityKeyPairForIdentity {
+    std::string identity;
+    std::array<unsigned char, 32> outgoingKey;
+    std::array<unsigned char, 32> incomingKey;
+};
+
+class ClientSideSignatureAndEncBasedIdentityAttacherComponentBase
+{
+public:
+    virtual ~ClientSideSignatureAndEncBasedIdentityAttacherComponentBase() {}
+    virtual void set_encdec_keys(FacilityKeyPair const &keys) = 0;
+};
+
 template <class Req>
 class ClientSideSignatureAndEncBasedIdentityAttacherComponent 
     : public dev::cd606::tm::transport::ClientSideAbstractIdentityAttacherComponent<std::string, Req>
+    , public ClientSideSignatureAndEncBasedIdentityAttacherComponentBase
 {
 private:
     dev::cd606::tm::transport::security::SignatureHelper::Signer signer_;
-    EncHook outgoing_, incoming_;
+    EncHelper outgoing_, incoming_;
 public:
     ClientSideSignatureAndEncBasedIdentityAttacherComponent() : signer_(), outgoing_(), incoming_() {}
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(std::array<unsigned char, 64> const &privateKey) : signer_(privateKey), outgoing_(), incoming_() {}
@@ -23,8 +40,8 @@ public:
     ClientSideSignatureAndEncBasedIdentityAttacherComponent &operator=(ClientSideSignatureAndEncBasedIdentityAttacherComponent const &) = delete;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent(ClientSideSignatureAndEncBasedIdentityAttacherComponent &&) = default;
     ClientSideSignatureAndEncBasedIdentityAttacherComponent &operator=(ClientSideSignatureAndEncBasedIdentityAttacherComponent &&) = default;
-    ~ClientSideSignatureAndEncBasedIdentityAttacherComponent() = default;
-    void set_encdec_keys(FacilityKeyPair const &keys) {
+    virtual ~ClientSideSignatureAndEncBasedIdentityAttacherComponent() = default;
+    void set_encdec_keys(FacilityKeyPair const &keys) override final {
         outgoing_.setKey(keys.outgoingKey);
         incoming_.setKey(keys.incomingKey);
     }
@@ -36,14 +53,21 @@ public:
     }
 };
 
+class ServerSideSignatureAndEncBasedIdentityCheckerComponentBase {
+public:
+    virtual ~ServerSideSignatureAndEncBasedIdentityCheckerComponentBase() {}
+    virtual void set_encdec_keys(FacilityKeyPairForIdentity const &keys)  = 0;
+};
+
 template <class Req>
 class ServerSideSignatureAndEncBasedIdentityCheckerComponent 
     : public dev::cd606::tm::transport::ServerSideAbstractIdentityCheckerComponent<std::string, Req>
+    , public ServerSideSignatureAndEncBasedIdentityCheckerComponentBase
 {
 private:
     struct EncDec {
-        EncHook outgoing;
-        EncHook incoming;
+        EncHelper outgoing;
+        EncHelper incoming;
     };
     dev::cd606::tm::transport::security::SignatureHelper::Verifier verifier_;
     std::unordered_map<std::string, std::unique_ptr<EncDec>> encDecs_;
@@ -54,11 +78,11 @@ public:
     ServerSideSignatureAndEncBasedIdentityCheckerComponent &operator=(ServerSideSignatureAndEncBasedIdentityCheckerComponent const &) = delete;
     ServerSideSignatureAndEncBasedIdentityCheckerComponent(ServerSideSignatureAndEncBasedIdentityCheckerComponent &&) = default;
     ServerSideSignatureAndEncBasedIdentityCheckerComponent &operator=(ServerSideSignatureAndEncBasedIdentityCheckerComponent &&) = default;
-    ~ServerSideSignatureAndEncBasedIdentityCheckerComponent() = default;
+    virtual ~ServerSideSignatureAndEncBasedIdentityCheckerComponent() = default;
     void add_identity_and_key(std::string const &name, std::array<unsigned char, 32> const &publicKey) {
         verifier_.addKey(name, publicKey);
     }
-    void set_encdec_keys(FacilityKeyPairForIdentity const &keys) {
+    void set_encdec_keys(FacilityKeyPairForIdentity const &keys) override final {
         std::lock_guard<std::mutex> _(mutex_);
         auto iter = encDecs_.find(keys.identity);
         if (iter == encDecs_.end()) {

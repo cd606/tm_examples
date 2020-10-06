@@ -3,7 +3,7 @@
 
 #include <tm_kit/transport/AbstractHookFactoryComponent.hpp>
 #include <tm_kit/transport/security/SignatureHelper.hpp>
-#include "simple_demo/security_logic/EncHook.hpp"
+#include "simple_demo/security_logic/EncHelper.hpp"
 
 template <class T>
 class EncAndSignHookFactoryComponent : public dev::cd606::tm::transport::AbstractOutgoingHookFactoryComponent<T> {
@@ -16,12 +16,12 @@ public:
         : encKey_(encKey), signKey_(signKey) {}
     virtual ~EncAndSignHookFactoryComponent() {}
     virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
-        auto encHook = std::make_shared<EncHook>();
-        encHook->setKey(EncHook::keyFromString(encKey_));
+        auto encHelper = std::make_shared<EncHelper>();
+        encHelper->setKey(EncHelper::keyFromString(encKey_));
         auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(signKey_);
         return dev::cd606::tm::transport::composeUserToWireHook(
-            { [encHook](dev::cd606::tm::basic::ByteData &&d) {
-                return encHook->encode(std::move(d));
+            { [encHelper](dev::cd606::tm::basic::ByteData &&d) {
+                return encHelper->encode(std::move(d));
             } }
             , { [signer](dev::cd606::tm::basic::ByteData &&d) {
                 return signer->sign(std::move(d));
@@ -41,8 +41,8 @@ public:
         : decKey_(decKey), verifyKey_(verifyKey) {}
     virtual ~VerifyAndDecHookFactoryComponent() {}
     virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
-        auto decHook = std::make_shared<EncHook>();
-        decHook->setKey(EncHook::keyFromString(decKey_));
+        auto decHelper = std::make_shared<EncHelper>();
+        decHelper->setKey(EncHelper::keyFromString(decKey_));
         auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
         verifier->addKey("", verifyKey_);
         return dev::cd606::tm::transport::composeWireToUserHook(
@@ -54,8 +54,8 @@ public:
                     return std::nullopt;
                 }
             } }
-            , { [decHook](dev::cd606::tm::basic::ByteData &&d) {
-                return decHook->decode(std::move(d));
+            , { [decHelper](dev::cd606::tm::basic::ByteData &&d) {
+                return decHelper->decode(std::move(d));
             } }
         );
     }
@@ -72,11 +72,11 @@ public:
         : encKey_(encKey) {}
     virtual ~EncHookFactoryComponent() {}
     virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
-        auto encHook = std::make_shared<EncHook>();
-        encHook->setKey(EncHook::keyFromString(encKey_));
+        auto encHelper = std::make_shared<EncHelper>();
+        encHelper->setKey(EncHelper::keyFromString(encKey_));
         return dev::cd606::tm::transport::UserToWireHook { 
-            [encHook](dev::cd606::tm::basic::ByteData &&d) {
-                return encHook->encode(std::move(d));
+            [encHelper](dev::cd606::tm::basic::ByteData &&d) {
+                return encHelper->encode(std::move(d));
             } 
         };
     }
@@ -95,11 +95,11 @@ public:
         decKey_ = k;
     }
     virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
-        auto decHook = std::make_shared<EncHook>();
-        decHook->setKey(EncHook::keyFromString(decKey_));
+        auto decHelper = std::make_shared<EncHelper>();
+        decHelper->setKey(EncHelper::keyFromString(decKey_));
         return dev::cd606::tm::transport::WireToUserHook { 
-            [decHook](dev::cd606::tm::basic::ByteData &&d) {
-                return decHook->decode(std::move(d));
+            [decHelper](dev::cd606::tm::basic::ByteData &&d) {
+                return decHelper->decode(std::move(d));
             } 
         };
     }
