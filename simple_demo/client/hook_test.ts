@@ -46,7 +46,7 @@ function verifyAndDecrypt(data : Buffer) : Buffer {
     )) {
         return ret;
     } else {
-        return Buffer.from([]);
+        return null;
     }
 }
 
