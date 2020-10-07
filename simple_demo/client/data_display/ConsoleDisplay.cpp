@@ -26,13 +26,13 @@ int main(int argc, char **argv) {
         [](simple_demo::InputData &&d) {
             static bool firstTime = true;
             std::ostringstream oss;
-            oss << std::fixed << std::setprecision(6) << d.value();
+            oss << std::fixed << std::setprecision(6) << std::setw(10) << std::setfill(' ') << d.value();
             if (firstTime) {
                 firstTime = false;
             } else {
-                std::cout << "\x1b[A";
+                std::cout << "\x1b[G";
             }
-            std::cout << "Value: " << oss.str() << "\n" << std::flush;
+            std::cout << "Value: " << oss.str() << std::flush;
         }
     );
     r.registerExporter("dataPrinter", dataPrinter);

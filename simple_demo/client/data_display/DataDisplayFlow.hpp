@@ -44,7 +44,7 @@ void dataDisplayFlow(
         r 
         , heartbeatListener
         , std::regex("simple_demo DataSource")
-        , "input data source"
+        , "input data publisher"
         , "input.data"
         , "inputDataSourceComponents"
     );
