@@ -1,8 +1,9 @@
 import * as blessed from 'blessed'
-import {MultiTransportListener,MultiTransportFacilityClient} from '../../../tm_transport/node_lib/TMTransport'
+import {MultiTransportListener,MultiTransportFacilityClient, FacilityOutput} from '../../../tm_transport/node_lib/TMTransport'
 import * as cbor from 'cbor'
 import * as proto from 'protobufjs'
 import * as Stream from 'stream'
+import * as util from 'util'
 
 proto.load('../proto/defs.proto').then(function(root) {
     let inputT = root.lookupType('simple_demo.ConfigureCommand');
@@ -89,6 +90,22 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
 
     let cfgChannelInfo : string = null;
     let cfgStreams : [Stream.Writable, Stream.Readable] = null;
+    let keyify = MultiTransportFacilityClient.keyify();
+    let callbackStream = new Stream.Writable({
+        write : function(chunk : FacilityOutput, _encoding, callback) {
+            let parsed = outputT.decode(chunk.output);
+            if (parsed.hasOwnProperty("enabled") && parsed["enabled"]) {
+                label.content = 'Enabled';
+                label.style.fg = 'green';
+            } else {
+                label.content = 'Disabled';
+                label.style.fg = 'red';
+            }
+            screen.render();
+            callback();
+        }
+        , objectMode : true
+    });
     function setupCfgChannel() {
         (async () => {
             cfgStreams = await MultiTransportFacilityClient.facilityStream({
@@ -97,20 +114,16 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
                     return cbor.encode(["ConsoleEnabler.ts", data]);
                 }
             });
+            keyify.pipe(cfgStreams[0]);
+            cfgStreams[1].pipe(callbackStream);
         })();
     }
 
     enable.on('press', () => {
-        let keyify = MultiTransportFacilityClient.keyify();
-        keyify.pipe(cfgStreams[0]);
         keyify.write(inputT.encode({enabled : true}).finish());
-        keyify.destroy();
     });
     disable.on('press', () => {
-        let keyify = MultiTransportFacilityClient.keyify();
-        keyify.pipe(cfgStreams[0]);
         keyify.write(inputT.encode({enabled : false}).finish());
-        keyify.destroy();
     })
 
     let heartbeatStream = MultiTransportListener.inputStream(
