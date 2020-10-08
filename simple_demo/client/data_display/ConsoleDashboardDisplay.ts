@@ -109,7 +109,7 @@ function start(parser : proto.Type) {
             "simple_demo.secure_executables.data_source.heartbeat"
             :"simple_demo.plain_executables.data_source.heartbeat")
     );
-    let printStream = new Stream.Writable({
+    let heartbeatHandlingStream = new Stream.Writable({
         write: function(chunk : [string, Buffer], _encoding, callback) {
             let x = cbor.decode(chunk[1]);
             if (x.hasOwnProperty("sender_description")) {
@@ -127,5 +127,5 @@ function start(parser : proto.Type) {
         }
         , objectMode : true
     });
-    heartbeatStream.pipe(printStream);
+    heartbeatStream.pipe(heartbeatHandlingStream);
 }
