@@ -3,7 +3,6 @@ import {MultiTransportListener,MultiTransportFacilityClient, FacilityOutput} fro
 import * as cbor from 'cbor'
 import * as proto from 'protobufjs'
 import * as Stream from 'stream'
-import * as util from 'util'
 
 proto.load('../proto/defs.proto').then(function(root) {
     let inputT = root.lookupType('simple_demo.ConfigureCommand');
