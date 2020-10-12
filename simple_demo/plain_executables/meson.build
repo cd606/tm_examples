@@ -41,7 +41,7 @@ plain_gui_library = static_library(
 
 executable(
     'fltk_enabler'
-    , ['FltkEnablerGUI.cpp']
+    , ['FltkEnablerGUI.cpp', test_gen_out]
     , include_directories: inc
     , link_with: [tm_simple_demo_proto_lib, plain_gui_library]
     , dependencies: [common_deps, dependency('fltk')]
@@ -56,9 +56,17 @@ endif
 
 executable(
     'wx_enabler'
-    , ['WxEnablerGUI.cpp']
+    , ['WxEnablerGUI.cpp', test_gen_out]
     , include_directories: inc
     , link_with: [tm_simple_demo_proto_lib, plain_gui_library]
     , dependencies: [common_deps, wx]
     , gui_app: true
 )
+
+#executable(
+#    'ftxui_enabler'
+#    , ['FtxUIEnablerGUI.cpp', test_gen_out]
+#    , include_directories: inc
+#    , link_with: [tm_simple_demo_proto_lib, plain_gui_library]
+#    , dependencies: [common_deps, dependency('ftxui')]
+#)
