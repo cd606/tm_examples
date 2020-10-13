@@ -63,10 +63,13 @@ executable(
     , gui_app: true
 )
 
-#executable(
-#    'ftxui_enabler'
-#    , ['FtxUIEnablerGUI.cpp', test_gen_out]
-#    , include_directories: inc
-#    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
-#    , dependencies: [common_deps, dependency('ftxui')]
-#)
+#FTXUI library is from https://github.com/ArthurSonzogni/FTXUI
+#it can easily be built with cmake
+
+executable(
+    'ftxui_enabler'
+    , ['FtxUIEnablerGUI.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
+    , dependencies: [common_deps, dependency('ftxui')]
+)
