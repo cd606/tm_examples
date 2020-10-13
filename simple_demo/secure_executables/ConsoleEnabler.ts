@@ -149,7 +149,7 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
                 address : cfgChannelInfo
                 , identityAttacher : function(data : Buffer) {
                     let signature = signature_key.sign(data);
-                    return cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data});
+                    return Buffer.from(cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data}));
                 }
             });
             keyify.pipe(cfgStreams[0]);

@@ -110,7 +110,7 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
             cfgStreams = await MultiTransportFacilityClient.facilityStream({
                 address : cfgChannelInfo
                 , identityAttacher : function(data : Buffer) {
-                    return cbor.encode(["ConsoleEnabler.ts", data]);
+                    return Buffer.from(cbor.encode(["ConsoleEnabler.ts", data]));
                 }
             });
             keyify.pipe(cfgStreams[0]);

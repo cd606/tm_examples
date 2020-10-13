@@ -35,12 +35,12 @@ switch (mode) {
         let signature_key = new EDDSA("ed25519").keyFromSecret(signature_key_bytes);
         attacher = function(data : Buffer) {
             let signature = signature_key.sign(data);
-            return cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data});
+            return Buffer.from(cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data}));
         }
         break;
     case Mode.Plain:
         attacher = function(data : Buffer) {
-            return cbor.encode(["simple_demo_client.ts", data]);
+            return Buffer.from(cbor.encode(["simple_demo_client.ts", data]));
         }
         break;
     default:
