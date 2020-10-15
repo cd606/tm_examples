@@ -1,11 +1,11 @@
-import {MultiTransportListener} from '../../../tm_transport/node_lib/TMTransport'
+import * as TMInfra from '../../../tm_infra/node_lib/TMInfra'
+import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
+import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'
 import * as proto from 'protobufjs'
 import * as dateFormat from 'dateformat'
-import * as fs from 'fs'
-import * as Stream from 'stream'
 
 yargs
     .scriptName("listener")
@@ -20,7 +20,8 @@ yargs
         describe: 'topic to subscribe'
         , type: 'string'
         , nargs: 1
-        , demand: true
+        , demand: false
+        , default: null
     })
     .option('--printMode', {
         describe: 'length|string|cbor|none|bytes|protobuf:FILE_NAME:TYPE_NAME'
@@ -118,46 +119,42 @@ if (yargs.argv.captureFile !== undefined) {
 }
 
 let count = 0;
-let printStream = new Stream.Writable({
-    write: function(chunk : [string, Buffer], _encoding, callback) {
+let printExporter = TMInfra.RealTimeApp.Utils.pureExporter<any, TMBasic.ByteDataWithTopic>(
+    (d : TMBasic.ByteDataWithTopic) => {
         ++count;
-        printer(chunk[0], chunk[1]);
-        callback();
+        printer(d.topic, d.content);
     }
-    , objectMode : true
-});
+);
+let importer = TMTransport.RemoteComponents.createImporter<any>(
+    address, topic
+);
 
-let encoder = new Stream.Transform({
-    transform : function(chunk : [string, Buffer], _encoding, callback) {
-        let buffer = Buffer.alloc(4+8+4+chunk[0].length+4+chunk[1].length+1);
-        buffer[0] = 0x76;
-        buffer[1] = 0x54;
-        buffer[2] = 0x32;
-        buffer[3] = 0x10;
-        buffer.writeBigInt64LE(BigInt(new Date().getTime())*BigInt(1000), 4);
-        buffer.writeUInt32LE(chunk[0].length, 12);
-        buffer.write(chunk[0], 16);
-        buffer.writeUInt32LE(chunk[1].length, 16+chunk[0].length);
-        chunk[1].copy(buffer, 20+chunk[0].length);
-        buffer[buffer.length-1] = 0x0;
+let r = new TMInfra.RealTimeApp.Runner<TMBasic.ClockEnv>(new TMBasic.ClockEnv());
+let src = r.importItem(importer);
 
-        this.push(buffer);
-        callback();
-    }
-    , objectMode : true
-});
-
-let s = MultiTransportListener.inputStream(address, topic);
-s.pipe(printStream);
+r.exportItem(printExporter, src);
 
 if (captureFile !== "") {
-    let fsOutput = fs.createWriteStream(captureFile);
-    fsOutput.write(Buffer.from([0x01, 0x23, 0x45, 0x67]));
-    s.pipe(encoder).pipe(fsOutput);
+    let fileExporter = TMBasic.Files.byteDataWithTopicOutput<TMBasic.ClockEnv>(
+        captureFile, Buffer.from([0x01, 0x23, 0x45, 0x67]), Buffer.from([0x76, 0x54, 0x32, 0x10])
+    );
+    r.exportItem(fileExporter, src);
 }
 
 if (summaryPeriod !== 0) {
-    setInterval(function() {
-        console.log(`${dateFormat(new Date(), dateFormatStr)}: Received ${count} messages so far`);
-    }, summaryPeriod*1000);
+    let now = r.environment().now();
+    let timerImporter = TMBasic.ClockImporter.createRecurringConstClockImporter<TMBasic.ClockEnv,number>(
+        now
+        , new Date(now.getTime()+24*3600*1000)
+        , summaryPeriod*1000
+        , 0
+    );
+    let summaryExporter = TMInfra.RealTimeApp.Utils.pureExporter<TMBasic.ClockEnv,number>(
+        (_x : number) => {
+            r.environment().log(TMInfra.LogLevel.Info, `Received ${count} messages so far`);
+        }
+    );
+   r.exportItem(summaryExporter, r.importItem(timerImporter));
 }
+
+r.finalize();
