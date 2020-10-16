@@ -1,8 +1,9 @@
 import * as blessed from 'blessed'
-import {MultiTransportListener,MultiTransportFacilityClient, FacilityOutput} from '../../../tm_transport/node_lib/TMTransport'
+import * as TMInfra from '../../../tm_infra/node_lib/TMInfra'
+import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
+import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as cbor from 'cbor'
 import * as proto from 'protobufjs'
-import * as Stream from 'stream'
 
 proto.load('../proto/defs.proto').then(function(root) {
     let inputT = root.lookupType('simple_demo.ConfigureCommand');
@@ -87,13 +88,42 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
     });
     screen.render();
 
-    let cfgChannelInfo : string = null;
-    let cfgStreams : [Stream.Writable, Stream.Readable] = null;
-    let keyify = MultiTransportFacilityClient.keyify();
-    let callbackStream = new Stream.Writable({
-        write : function(chunk : FacilityOutput, _encoding, callback) {
-            let parsed = outputT.decode(chunk.output);
-            if (parsed.hasOwnProperty("enabled") && parsed["enabled"]) {
+    type E = TMBasic.ClockEnv;
+    let heartbeatImporter = TMTransport.RemoteComponents.createTypedImporter<E,TMTransport.RemoteComponents.Heartbeat>(
+        (d : Buffer) => cbor.decode(d)
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , "simple_demo.plain_executables.#.heartbeat"
+    );
+    type ConfigureCommand = {enabled : boolean};
+    type ConfigureResult = {enabled? : boolean};
+    let facility = new TMTransport.RemoteComponents.DynamicFacilityProxy<E,ConfigureCommand,ConfigureResult>(
+        (t : ConfigureCommand) => Buffer.from(inputT.encode(t).finish())
+        , (d : Buffer) => outputT.decode(d) as ConfigureResult
+        , {
+            address : null
+            , identityAttacher : function(data : Buffer) {
+                return Buffer.from(cbor.encode(["ConsoleEnabler.ts", data]));
+            }
+        }
+    );
+    let heartbeatAction = TMInfra.RealTimeApp.Utils.liftMaybe<E,TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>,boolean>(
+        (h : TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>) => {
+            if (h.content.sender_description == "simple_demo plain MainLogic") {
+                if (h.content.facility_channels.hasOwnProperty("cfgFacility")) {
+                    let channelInfoFromHeartbeat = h.content.facility_channels["cfgFacility"];
+                    facility.changeAddress(channelInfoFromHeartbeat);
+                }
+                let status = h.content.details.calculation_status.info as string;
+                return (status == 'enabled');
+            } else {
+                return null;
+            }
+        }
+    );
+    let configureImporter = new TMInfra.RealTimeApp.Utils.TriggerImporter<E,TMInfra.Key<ConfigureCommand>>();
+    let statusExporter = TMInfra.RealTimeApp.Utils.pureExporter<E,boolean>(
+        (enabled : boolean) => {
+            if (enabled) {
                 label.content = 'Enabled';
                 label.style.fg = 'green';
             } else {
@@ -101,60 +131,28 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
                 label.style.fg = 'red';
             }
             screen.render();
-            callback();
         }
-        , objectMode : true
-    });
-    function setupCfgChannel() {
-        (async () => {
-            cfgStreams = await MultiTransportFacilityClient.facilityStream({
-                address : cfgChannelInfo
-                , identityAttacher : function(data : Buffer) {
-                    return Buffer.from(cbor.encode(["ConsoleEnabler.ts", data]));
-                }
-            });
-            keyify.pipe(cfgStreams[0]);
-            cfgStreams[1].pipe(callbackStream);
-        })();
-    }
+    );
+    let configureResultAction = TMInfra.RealTimeApp.Utils.liftPure<E,TMInfra.KeyedData<ConfigureCommand,ConfigureResult>,boolean>(
+        (d : TMInfra.KeyedData<ConfigureCommand,ConfigureResult>) => {
+            if (d.data.enabled === null || d.data.enabled === undefined) {
+                return false;
+            } else {
+                return d.data.enabled;
+            }
+        }
+    )
 
     enable.on('press', () => {
-        keyify.write(inputT.encode({enabled : true}).finish());
+        configureImporter.trigger(TMInfra.keyify({enabled: true}));
     });
     disable.on('press', () => {
-        keyify.write(inputT.encode({enabled : false}).finish());
-    })
-
-    let heartbeatStream = MultiTransportListener.inputStream(
-        "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-        , "simple_demo.plain_executables.#.heartbeat"
-    );
-    let heartbeatHandler = new Stream.Writable({
-        write: function(chunk : [string, Buffer], _encoding, callback) {
-            let x = cbor.decode(chunk[1]);
-            if (x.hasOwnProperty("sender_description")) {
-                if (x.sender_description == "simple_demo plain MainLogic") {
-                    if (x.hasOwnProperty("facility_channels") && x.facility_channels.hasOwnProperty("cfgFacility")) {
-                        let channelInfoFromHeartbeat = x.facility_channels["cfgFacility"];
-                        if (cfgChannelInfo == null) {
-                            cfgChannelInfo = channelInfoFromHeartbeat;
-                            setupCfgChannel();
-                        }
-                    }
-                    let status = x.details.calculation_status.info as string;
-                    if (status == 'enabled') {
-                        label.content = 'Enabled';
-                        label.style.fg = 'green';
-                    } else {
-                        label.content = 'Disabled';
-                        label.style.fg = 'red';
-                    }
-                    screen.render();
-                }
-            }
-            callback();
-        }
-        , objectMode : true
+        configureImporter.trigger(TMInfra.keyify({enabled: false}));
     });
-    heartbeatStream.pipe(heartbeatHandler);
+
+    let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv());
+    r.exportItem(statusExporter, r.execute(heartbeatAction, r.importItem(heartbeatImporter)));
+    r.placeOrderWithFacility(r.importItem(configureImporter), facility, r.actionAsSink(configureResultAction));
+    r.exportItem(statusExporter, r.actionAsSource(configureResultAction));
+    r.finalize();
 }
