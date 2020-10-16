@@ -241,14 +241,14 @@ function setup() {
     });
     blessed.text({
         parent: form
-        , left: '3%'
+        , left: '6%'
         , height: 3
         , content: 'Name:' 
         , valign : 'middle'
     });
     let nameInput = blessed.textbox({
         parent: form
-        , left: '10%'
+        , left: '13%'
         , width: '20%'
         , height: 3
         , border: {
@@ -266,14 +266,14 @@ function setup() {
     });
     blessed.text({
         parent: form
-        , left: '33%'
+        , left: '36%'
         , height: 3
         , content: 'Amount:' 
         , valign : 'middle'
     });
     let amtInput = blessed.textbox({
         parent: form
-        , left: '40%'
+        , left: '43%'
         , width: '20%'
         , height: 3
         , content: 'Enable'
@@ -292,14 +292,14 @@ function setup() {
     });
     blessed.text({
         parent: form
-        , left: '63%'
+        , left: '66%'
         , height: 3
         , content: 'Stat:' 
         , valign : 'middle'
     });
     let statInput = blessed.textbox({
         parent: form
-        , left: '70%'
+        , left: '73%'
         , width: '20%'
         , height: 3
         , content: 'Enable'
