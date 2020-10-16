@@ -101,9 +101,7 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
         , (d : Buffer) => outputT.decode(d) as ConfigureResult
         , {
             address : null
-            , identityAttacher : function(data : Buffer) {
-                return Buffer.from(cbor.encode(["ConsoleEnabler.ts", data]));
-            }
+            , identityAttacher : TMTransport.RemoteComponents.Security.simpleIdentityAttacher("ConsoleEnabler.ts")
         }
     );
     let heartbeatAction = TMInfra.RealTimeApp.Utils.liftMaybe<E,TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>,boolean>(

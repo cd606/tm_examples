@@ -5,7 +5,6 @@ import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as cbor from 'cbor'
 import * as proto from 'protobufjs'
 import * as sodium from 'sodium-native'
-import {eddsa as EDDSA} from "elliptic"
 
 const serverPublicKey = Buffer.from([
     0xDA,0xA0,0x15,0xD4,0x33,0xE8,0x92,0xC9,0xF2,0x96,0xA1,0xF8,0x1F,0x79,0xBC,0xF4,
@@ -19,7 +18,6 @@ const signature_key_bytes = Buffer.from([
     0x89,0xD9,0xE6,0xED,0x17,0xD6,0x7B,0x30,0xE6,0x16,0xAC,0xB4,0xE6,0xD0,0xAD,0x47,
     0xD5,0x0C,0x6E,0x5F,0x11,0xDF,0xB1,0x9F,0xFE,0x4D,0x23,0x2A,0x0D,0x45,0x84,0x8E
 ]);
-const signature_key = new EDDSA("ed25519").keyFromSecret(signature_key_bytes);
 
 function verifyAndDecrypt(data : Buffer) : Buffer {
     let cborDecoded = cbor.decode(data);
@@ -140,10 +138,7 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
         , (d : Buffer) => outputT.decode(d) as ConfigureResult
         , {
             address : null
-            , identityAttacher : function(data : Buffer) {
-                let signature = signature_key.sign(data);
-                return Buffer.from(cbor.encode({"signature" : Buffer.from(signature.toBytes()), "data" : data}));
-            }
+            , identityAttacher : TMTransport.RemoteComponents.Security.signatureIdentityAttacher(signature_key_bytes)
         }
     );
     let heartbeatAction = TMInfra.RealTimeApp.Utils.liftMaybe<E,TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>,boolean>(
