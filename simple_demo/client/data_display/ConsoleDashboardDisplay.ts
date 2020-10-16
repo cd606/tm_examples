@@ -1,11 +1,12 @@
 import * as blessed from 'blessed'
 import * as bcontrib from 'blessed-contrib'
-import {MultiTransportListener} from '../../../../tm_transport/node_lib/TMTransport'
+import * as TMInfra from '../../../../tm_infra/node_lib/TMInfra'
+import * as TMBasic from '../../../../tm_basic/node_lib/TMBasic'
+import * as TMTransport from '../../../../tm_transport/node_lib/TMTransport'
 
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as proto from 'protobufjs'
-import * as Stream from 'stream'
 import * as sodium from 'sodium-native'
 
 const printf = require('printf'); //this module cannot be "import"ed in Typescript
@@ -21,7 +22,6 @@ yargs
     });
 
 let secure = yargs.argv.secure as boolean;
-let dataChannel : string = undefined;
 
 let decryptKey = Buffer.alloc(sodium.crypto_generichash_BYTES);
 sodium.crypto_generichash(decryptKey, Buffer.from("input_data_key"));
@@ -75,11 +75,35 @@ function start(parser : proto.Type) {
             return null;
         }
     }
+
+    type E = TMBasic.ClockEnv;
+    interface InputData {
+        value : number;
+    }
     
-    let dataHandlingStream = new Stream.Writable({
-        write: function(chunk : [string, Buffer], _encoding, callback) {
-            let x = parser.decode(chunk[1]);
-            let v = x["value"];
+    let heartbeatImporter = TMTransport.RemoteComponents.createTypedImporter<E,TMTransport.RemoteComponents.Heartbeat>(
+        (d : Buffer) => cbor.decode(d) as TMTransport.RemoteComponents.Heartbeat
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , (secure?
+            "simple_demo.secure_executables.data_source.heartbeat"
+            :"simple_demo.plain_executables.data_source.heartbeat")
+    );
+    let dataImporter = new TMTransport.RemoteComponents.DynamicTypedImporter<E,InputData>(
+        (d : Buffer) => (parser.decode(d) as unknown) as InputData
+        , null
+        , null
+        , (secure?secureDataHook:undefined)
+    );
+    let heartbeatHandler = TMInfra.RealTimeApp.Utils.pureExporter<E,TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>>(
+        (x : TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>) => {
+            if (x.content.sender_description == (secure?"simple_demo secure DataSource":"simple_demo DataSource")) {
+                dataImporter.addSubscription(x.content.broadcast_channels["input data publisher"][0], "input.data");
+            }
+        }
+    );
+    let dataHandler = TMInfra.RealTimeApp.Utils.pureExporter<E,TMBasic.TypedDataWithTopic<InputData>>(
+        (x : TMBasic.TypedDataWithTopic<InputData>) => {
+            let v = x.content.value;
             lineData.y.push(v);
             if (lineData.y.length > 100) {
                 lineData.y.shift();
@@ -89,43 +113,11 @@ function start(parser : proto.Type) {
             lineData.title = ('Value: '+printf("%.6lf", v));
             line.setData([lineData]);
             screen.render();
-            callback();
         }
-        , objectMode : true
-    })
-    
-    function subscribeToData(channel : string) : void {
-        let dataStream = MultiTransportListener.inputStream(
-            channel 
-            , "input.data"
-            , (secure?secureDataHook:undefined)
-        );
-        dataStream.pipe(dataHandlingStream);
-    }
-    
-    let heartbeatStream = MultiTransportListener.inputStream(
-        "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-        , (secure?
-            "simple_demo.secure_executables.data_source.heartbeat"
-            :"simple_demo.plain_executables.data_source.heartbeat")
     );
-    let heartbeatHandlingStream = new Stream.Writable({
-        write: function(chunk : [string, Buffer], _encoding, callback) {
-            let x = cbor.decode(chunk[1]);
-            if (x.hasOwnProperty("sender_description")) {
-                if (x.sender_description == (secure?"simple_demo secure DataSource":"simple_demo DataSource")) {
-                    if (x.hasOwnProperty("broadcast_channels") && x.broadcast_channels.hasOwnProperty("input data publisher")) {
-                        let channelInfoFromHeartbeat = x.broadcast_channels["input data publisher"][0];
-                        if (dataChannel != channelInfoFromHeartbeat) {
-                            dataChannel = channelInfoFromHeartbeat;
-                            subscribeToData(dataChannel);
-                        }
-                    }
-                }
-            }
-            callback();
-        }
-        , objectMode : true
-    });
-    heartbeatStream.pipe(heartbeatHandlingStream);
+
+    let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv());
+    r.exportItem(heartbeatHandler, r.importItem(heartbeatImporter));
+    r.exportItem(dataHandler, r.importItem(dataImporter));
+    r.finalize();
 }
