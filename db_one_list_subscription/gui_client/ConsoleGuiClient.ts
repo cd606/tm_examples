@@ -46,7 +46,6 @@ interface LogicInput {
     unsubscribeConfirmedHandler : (d : TMInfra.TimedDataWithEnvironment<E,UnsubscribeConfirmed>) => void;
 }
 interface LogicOutput {
-    dataCopy : LocalData
     tiInputFeeder : (x : TMInfra.Key<TIInput>) => void;
     guiExitEventFeeder : (x : GuiExitEvent) => void;
 }
@@ -191,8 +190,7 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
     r.finalize();
 
     return {
-        dataCopy : localData
-        , tiInputFeeder : (x : TMInfra.Key<TIInput>) => {
+        tiInputFeeder : (x : TMInfra.Key<TIInput>) => {
             tiImporter.trigger(x);
         }
         , guiExitEventFeeder : (_x : GuiExitEvent) => {
@@ -359,10 +357,15 @@ function setup() {
         , align: 'center'
     });
 
+    let dataCopy : LocalData = {
+        version : undefined
+        , data : null
+    };
     let o : LogicOutput = tmLogic({
         dataHandler : (d : TMInfra.TimedDataWithEnvironment<E,LocalData>) => {
+            dataCopy = d.timedData.value;
             let rows : string[][] = [["Name", "Amount", "Stat"]];
-            for (let r of d.timedData.value.data.entries()) {
+            for (let r of dataCopy.data.entries()) {
                 rows.push([r[0], ''+r[1][0], ''+r[1][1]]);
             }
             table.setRows(rows);
@@ -378,13 +381,13 @@ function setup() {
         o.guiExitEventFeeder({});
     });
     insertBtn.on('press', () => {
-        if (o.dataCopy.version != undefined) {
+        if (dataCopy.version != undefined) {
             o.tiInputFeeder(TMInfra.keyify([
                 TMBasic.Transaction.TransactionInterface.TransactionSubtypes.UpdateAction
                 , {
                     key : theKey
-                    , oldVersionSlice : [o.dataCopy.version]
-                    , oldDataSummary : [o.dataCopy.data.size]
+                    , oldVersionSlice : [dataCopy.version]
+                    , oldDataSummary : [dataCopy.data.size]
                     , dataDelta : {
                         deletes: {keys: []}
                         , inserts_updates : {
@@ -399,13 +402,13 @@ function setup() {
         }
     });
     deleteBtn.on('press', () => {
-        if (o.dataCopy.version != undefined) {
+        if (dataCopy.version != undefined) {
             o.tiInputFeeder(TMInfra.keyify([
                 TMBasic.Transaction.TransactionInterface.TransactionSubtypes.UpdateAction
                 , {
                     key : theKey
-                    , oldVersionSlice : [o.dataCopy.version]
-                    , oldDataSummary : [o.dataCopy.data.size]
+                    , oldVersionSlice : [dataCopy.version]
+                    , oldDataSummary : [dataCopy.data.size]
                     , dataDelta : {
                         deletes: {keys: [[nameInput.getValue().trim()]]}
                         , inserts_updates : {
