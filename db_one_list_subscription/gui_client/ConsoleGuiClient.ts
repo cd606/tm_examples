@@ -3,6 +3,7 @@ import * as TMInfra from '../../../tm_infra/node_lib/TMInfra'
 import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
 import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as cbor from 'cbor'
+import * as util from 'util'
 
 //for C++ struct CBOR types that are serialized with field names, we use interfaces
 //, for those that are serialized without field names, we use types
@@ -53,7 +54,7 @@ interface LogicOutput {
 const theKey : TMBasic.VoidStruct = 0;
 
 function tmLogic(logicInput : LogicInput) : LogicOutput {
-    let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv());
+    let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv(null, "console_gui_client.log"));
 
     let gsFacility = TMTransport.RemoteComponents.createFacilityProxy<
         E, GSInput, GSOutput
@@ -191,9 +192,11 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
 
     return {
         tiInputFeeder : (x : TMInfra.Key<TIInput>) => {
+            r.environment().log(TMInfra.LogLevel.Info, `Sending command ${util.inspect(x.key, {depth: null})}`);
             tiImporter.trigger(x);
         }
         , guiExitEventFeeder : (_x : GuiExitEvent) => {
+            r.environment().log(TMInfra.LogLevel.Info, "Exiting from GUI");
             guiExitImporter.trigger();
         }
     }
@@ -204,7 +207,7 @@ function setup() {
         smartCSR: true
         , title: 'Console DB One List Client'
     });
-    let table = blessed.table({
+    let table = blessed.listtable({
         parent: screen
         , top: '10%'
         , left: 'center'
@@ -221,6 +224,7 @@ function setup() {
             }
         }
         , align: 'center'
+        , scrollable : true
     });
     table.setRows([["Name", "Amount", "Stat"]]);
     let form = blessed.form({
@@ -372,6 +376,7 @@ function setup() {
             screen.render();
         }
         , unsubscribeConfirmedHandler : (d : TMInfra.TimedDataWithEnvironment<E,UnsubscribeConfirmed>) => {
+            d.environment.log(TMInfra.LogLevel.Info, "Unsubscription confirmed, exiting");
             d.environment.exit();
         }
     });
