@@ -1,7 +1,7 @@
-import {MultiTransportListener, MultiTransportPublisher} from '../../../tm_transport/node_lib/TMTransport'
+import * as TMInfra from '../../../tm_infra/node_lib/TMInfra'
+import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
+import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as yargs from 'yargs'
-import * as dateFormat from 'dateformat'
-import * as Stream from 'stream'
 import * as cbor from 'cbor'
 import * as microtime from 'microtime'
 
@@ -75,33 +75,59 @@ if (mode == Mode.Sender) {
 }
 
 async function runSender(address : string, interval : number, bytes : number, summaryPeriod : number) {
-    let dateFormatStr = "yyyy-mm-dd HH:MM:ss.l";
+    type E = TMBasic.ClockEnv;
+    let env = new TMBasic.ClockEnv();
+    let publisher = TMTransport.RemoteComponents.createTypedExporter<E,[number,number,Buffer]>(
+        (x : [number,number,Buffer]) => Buffer.from(cbor.encode(x))
+        , address
+    );
     let counter = 0;
-    let sourceStream = new Stream.Readable({
-        read : function(_size : number) {}
-        , objectMode : true
-    });
-    let publisher = await MultiTransportPublisher.outputStream(address);
-    sourceStream.pipe(publisher);
     let dataToSend = Buffer.alloc(bytes, ' ');
-    setInterval(function() {
-        let data = [
-            ++counter
-            , microtime.now()
-            , dataToSend
-        ];
-        sourceStream.push(['test.data', cbor.encode(data)]);
-    }, interval);
+    let source = TMBasic.ClockImporter.createRecurringClockImporter<E,TMBasic.TypedDataWithTopic<[number,number,Buffer]>>(
+        env.now()
+        , new Date(env.now().getTime()+24*3600*1000)
+        , interval
+        , function (_d : Date) {
+            return {
+                topic : 'test.data'
+                , content : [
+                    ++counter
+                    , microtime.now()
+                    , dataToSend
+                ]
+            };
+        } 
+    );
+
+    let r = new TMInfra.RealTimeApp.Runner<E>(env);
+    r.exportItem(publisher, r.importItem(source));
     if (summaryPeriod > 0) {
-        setInterval(function() {
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: Sent ${counter} messages`);
-        }, summaryPeriod*1000);
+        let summarySource = TMBasic.ClockImporter.createRecurringClockImporter<E,string>(
+            env.now()
+            , new Date(env.now().getTime()+24*3600*1000)
+            , summaryPeriod*1000
+            , function (_d : Date) {
+                return `Sent ${counter} messages`;
+            } 
+        );
+        let summaryExporter = TMInfra.RealTimeApp.Utils.pureExporter<E,string>(
+            (x : string) => {
+                env.log(TMInfra.LogLevel.Info, x);
+            }
+        );
+        r.exportItem(summaryExporter, r.importItem(summarySource));
     }
+    r.finalize();
 }
 
 async function runReceiver(address : string, summaryPeriod : number) {
-    let dateFormatStr = "yyyy-mm-dd HH:MM:ss.l";
-    let incomingStream = MultiTransportListener.inputStream(address, 'test.data');
+    type E = TMBasic.ClockEnv;
+    let env = new TMBasic.ClockEnv();
+    let source = TMTransport.RemoteComponents.createTypedImporter<E,[number,number,Buffer]>(
+        (d : Buffer) => cbor.decode(d)
+        , address
+        , 'test.data'
+    );
     let stats = {
         count : 0
         , totalDelay : 0.0
@@ -111,14 +137,11 @@ async function runReceiver(address : string, summaryPeriod : number) {
         , minDelay : -1000000
         , maxDelay : 0
     }
-    let statCalc = new Stream.Writable({
-        write : function(chunk : [string, Buffer], _encoding, callback) {
-            let [_topic, data] = chunk;
-            let parsed = cbor.decodeFirstSync(data);
+    let statCalc = TMInfra.RealTimeApp.Utils.pureExporter<E,TMBasic.TypedDataWithTopic<[number,number,Buffer]>>(
+        (x : TMBasic.TypedDataWithTopic<[number,number,Buffer]>) => {
             let now = microtime.now();
-            let delay = now-parsed[1];
-            //console.log(`parsed=${parsed},now=${now}`);
-            let id = parsed[0];
+            let delay = now-x.content[1];
+            let id = x.content[0];
             ++stats.count;
             stats.totalDelay += 1.0*delay;
             stats.totalDelaySq += 1.0*delay*delay;
@@ -134,26 +157,36 @@ async function runReceiver(address : string, summaryPeriod : number) {
             if (stats.maxDelay < delay) {
                 stats.maxDelay = delay;
             }
-            callback();
         }
-        , objectMode : true 
-    });
-    incomingStream.pipe(statCalc);
+    );
+    let r = new TMInfra.RealTimeApp.Runner<E>(env);
+    r.exportItem(statCalc, r.importItem(source));
+
     if (summaryPeriod > 0) {
-        setInterval(function() {
-            let mean = 0.0;
-            let sd = 0.0;
-            let missed = 0;
-            if (stats.count > 0) {
-                mean = stats.totalDelay/stats.count;
-                missed = stats.maxID-stats.minID+1-stats.count;
+        let summarySource = TMBasic.ClockImporter.createRecurringConstClockImporter<E,TMBasic.VoidStruct>(
+            env.now()
+            , new Date(env.now().getTime()+24*3600*1000)
+            , summaryPeriod*1000
+            , 0 
+        );
+        let summaryExporter = TMInfra.RealTimeApp.Utils.pureExporter<E,TMBasic.VoidStruct>(
+            (_x : TMBasic.VoidStruct) => {
+                let mean = 0.0;
+                let sd = 0.0;
+                let missed = 0;
+                if (stats.count > 0) {
+                    mean = stats.totalDelay/stats.count;
+                    missed = stats.maxID-stats.minID+1-stats.count;
+                }
+                if (stats.count > 1) {
+                    sd = Math.sqrt((stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1));
+                }
+                env.log(TMInfra.LogLevel.Info, `Got ${stats.count} messages, mean delay ${mean} micros, std delay ${sd} micros, missed ${missed} messages, min delay ${stats.minDelay} micros, max delay ${stats.maxDelay} micros`);
             }
-            if (stats.count > 1) {
-                sd = Math.sqrt((stats.totalDelaySq-mean*mean*stats.count)/(stats.count-1));
-            }
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: Got ${stats.count} messages, mean delay ${mean} micros, std delay ${sd} micros, missed ${missed} messages, min delay ${stats.minDelay} micros, max delay ${stats.maxDelay} micros`);
-        }, summaryPeriod*1000);
+        );
+        r.exportItem(summaryExporter, r.importItem(summarySource));
     }
+    r.finalize();
 }
 
 if (mode == Mode.Sender) {
