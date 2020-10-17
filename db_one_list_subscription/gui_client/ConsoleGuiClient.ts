@@ -73,54 +73,38 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
             , {keys : [theKey]} as TMBasic.Transaction.GeneralSubscriber.Subscription<Key>
         ]
     );
-    let gsInputPipe = TMInfra.RealTimeApp.Utils.kleisli<E,TMInfra.Key<GSInput>,TMInfra.Key<GSInput>>(
-        TMBasic.CommonFlowUtils.idFunc<E,TMInfra.Key<GSInput>>()
-    );
-    let gsOutputPipe = TMInfra.RealTimeApp.Utils.kleisli<E,TMInfra.KeyedData<GSInput,GSOutput>,TMInfra.KeyedData<GSInput,GSOutput>>(
-        TMBasic.CommonFlowUtils.idFunc<E,TMInfra.KeyedData<GSInput,GSOutput>>()
-    );
     let localData : LocalData = {
         version : undefined
         , data : new Map<string, DBData>()
     }
-    let updateExtractor = TMInfra.RealTimeApp.Utils.liftMaybe<E,TMInfra.KeyedData<GSInput,GSOutput>,Update>(
-        (x : TMInfra.KeyedData<GSInput,GSOutput>) => {
-            if (x.data[0] == TMBasic.Transaction.GeneralSubscriber.OutputSubtypes.SubscriptionUpdate) {
-                return (x.data[1] as Update);
-            } else {
-                return null;
+    let gsComboOutput = TMBasic.Transaction.Helpers.clientGSCombo<
+        E, LocalData, number, Key, number, Data, number, DataDelta
+    >(
+        r
+        , gsFacility
+        , localData
+        , (ld : LocalData, delta : TMBasic.Transaction.DataStreamInterface.OneDeltaUpdateItem<Key,number,DataDelta>) => {
+            if (ld.version == undefined || localData.version < delta[1]) {
+                let d = delta[2];
+                for (let k of d.deletes.keys) {
+                    ld.data.delete(k[0]);
+                }
+                for (let iu of d.inserts_updates.items) {
+                    ld.data.set(iu.key[0], iu.data);
+                }
+                ld.version = delta[1];
             }
         }
-    );
-    let updateApplier = TMInfra.RealTimeApp.Utils.liftPure<E,Update,LocalData>(
-        (x : Update) => {
-            for (let u of x.data) {
-                if (u[0] == TMBasic.Transaction.DataStreamInterface.OneUpdateItemSubtypes.OneDeltaUpdateItem) {
-                    let delta = u[1] as TMBasic.Transaction.DataStreamInterface.OneDeltaUpdateItem<Key,number,DataDelta>;
-                    if (localData.version == undefined || localData.version < delta[1]) {
-                        let d = delta[2];
-                        for (let k of d.deletes.keys) {
-                            localData.data.delete(k[0]);
-                        }
-                        for (let iu of d.inserts_updates.items) {
-                            localData.data.set(iu.key[0], iu.data);
-                        }
-                        localData.version = delta[1];
-                    }
-                } else {
-                    let full = u[1] as TMBasic.Transaction.DataStreamInterface.OneFullUpdateItem<Key,number,Data>;
-                    if (localData.version == undefined || localData.version < full.version) {
-                        localData.version = full.version;
-                        localData.data.clear();
-                        if (full.data.length != 0) {
-                            for (let item of full.data[0].entries()) {
-                                localData.data.set(item[0][0], item[1]);
-                            }
-                        }
+        , (ld : LocalData, full : TMBasic.Transaction.DataStreamInterface.OneFullUpdateItem<Key,number,Data>) => {
+            if (ld.version == undefined || localData.version < full.version) {
+                ld.version = full.version;
+                ld.data.clear();
+                if (full.data.length != 0) {
+                    for (let item of full.data[0].entries()) {
+                        ld.data.set(item[0][0], item[1]);
                     }
                 }
             }
-            return localData;
         }
     );
     let localDataExporter = TMInfra.RealTimeApp.Utils.simpleExporter<
@@ -181,12 +165,11 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
     );
     let tiImporter = new TMInfra.RealTimeApp.Utils.TriggerImporter<E,TMInfra.Key<TIInput>>();
 
-    r.execute(gsInputPipe, r.importItem(subscribeImporter));
-    r.execute(gsInputPipe, r.execute(guiExitHandler, r.importItem(guiExitImporter)));
-    r.placeOrderWithFacility(r.actionAsSource(gsInputPipe), gsFacility, r.actionAsSink(gsOutputPipe));
-    r.exportItem(subscriptionIDSaver, r.actionAsSource(gsOutputPipe));
-    r.exportItem(localDataExporter, r.execute(updateApplier, r.execute(updateExtractor, r.actionAsSource(gsOutputPipe))));
-    r.exportItem(unsubscribeHandler, r.execute(unsubscribeDetector, r.actionAsSource(gsOutputPipe)));
+    r.connect(r.importItem(subscribeImporter), gsComboOutput.gsInputSink);
+    r.connect(r.execute(guiExitHandler, r.importItem(guiExitImporter)), gsComboOutput.gsInputSink);
+    r.exportItem(subscriptionIDSaver, gsComboOutput.gsOutputSource);
+    r.exportItem(localDataExporter, gsComboOutput.localDataSource);
+    r.exportItem(unsubscribeHandler, r.execute(unsubscribeDetector, gsComboOutput.gsOutputSource));
     r.placeOrderWithFacilityAndForget(r.importItem(tiImporter),tiFacility);
     r.finalize();
 
