@@ -400,7 +400,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     );
     r.registerImporter("readerClockImporter", readerClockImporter);
 
-    auto readerAction = A::template liftMaybe<basic::VoidStruct>(basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment>>(env, chain));
+    auto readerAction = basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment>>::action(env, chain);
     r.registerAction("readerAction", readerAction);
 
     auto printState = A::template pureExporter<State>(
