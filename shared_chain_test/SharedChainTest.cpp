@@ -41,24 +41,16 @@ TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(Process);
 //then there will be some issue using it as data flow object type in our applicatives
 using DataOnChain = basic::CBOR<std::variant<TransferRequest, Process>>;
 
-using IDStorageType = std::array<char,37>;
-inline IDStorageType idForStorage(std::string const &id) {
-    IDStorageType ret;
-    std::memset(ret.data(), 0, 37);
-    std::memcpy(ret.data(), id.c_str(), std::min<std::size_t>(36, id.length()));
-    return ret;
-}
-
 #define StateFields \
     ((uint32_t, a)) \
     ((uint32_t, b)) \
     ((int32_t, a_pending)) \
     ((int32_t, b_pending)) \
     ((uint16_t, pendingRequestCount)) \
-    ((IDStorageType, lastSeenID))
+    ((typename Chain::StorageIDType, lastSeenID))
 
-TM_BASIC_CBOR_CAPABLE_STRUCT(State, StateFields);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(State, StateFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Chain)), State, StateFields);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE(((typename, Chain)), State, StateFields);
 
 template <class Chain>
 struct EnvValues {
@@ -69,70 +61,35 @@ struct EnvValues {
     EnvValues(Chain *p, std::string const &s, bool d) : chain(p), todayStr(s), dontLog(d) {}
 };
 
-template <class Env>
+template <class Env, class Chain>
 class StateFolder {
 private:
     Env *env_;
 public:
-    using ResultType = State;
-    State initialize(Env *env) {
+    using ResultType = State<Chain>;
+    State<Chain> initialize(Env *env, Chain *chain) {
         env_ = env;
-        if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::etcd_shared_chain::InMemoryChain<DataOnChain> *>) {
-            return State {1000, 1000, 0, 0, 0, idForStorage("")};
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::etcd_shared_chain::EtcdChain<DataOnChain> *>) {
-            auto val = env->value().chain->template loadExtraData<State>(
+        if constexpr (Chain::SupportsExtraData) {
+            auto val = chain->template loadExtraData<State<Chain>>(
                 env->value().todayStr+"-state"
             );
             if (val) {
                 return *val;
             } else {
-                return State {1000, 1000, 0, 0, 0, idForStorage("")};
-            }
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::redis_shared_chain::RedisChain<DataOnChain> *>) {
-            auto val = env->value().chain->template loadExtraData<State>(
-                env->value().todayStr+"-state"
-            );
-            if (val) {
-                return *val;
-            } else {
-                return State {1000, 1000, 0, 0, 0, idForStorage("")};
-            }
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *>) {
-            return State {1000, 1000, 0, 0, 0, idForStorage("")};
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByName> *>) {
-            auto val = env->value().chain->template loadExtraData<State>(
-                env->value().todayStr+"-state"
-            );
-            if (val) {
-                return *val;
-            } else {
-                return State {1000, 1000, 0, 0, 0, idForStorage("")};
-            }
-        } else if constexpr (std::is_convertible_v<decltype(env->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset> *>) {
-            auto val = env->value().chain->template loadExtraData<State>(
-                env->value().todayStr+"-state"
-            );
-            if (val) {
-                return *val;
-            } else {
-                return State {1000, 1000, 0, 0, 0, idForStorage("")};
+                return State<Chain> {1000, 1000, 0, 0, 0, typename Chain::StorageIDType {}};
             }
         } else {
-            throw std::string("StateFolder initialization error, environment is not recognized");
+            return State<Chain> {1000, 1000, 0, 0, 0, typename Chain::StorageIDType {}};
         }
     }
-    static std::string chainIDForValue(State const &s) {
-        if constexpr (std::is_convertible_v<decltype(env_->value().chain), transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChainBase<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset> *>) {
-            return std::string(s.lastSeenID.data(), sizeof(std::ptrdiff_t));
-        } else {
-            return std::string(s.lastSeenID.data());
-        }
+    static typename Chain::StorageIDType const &chainIDForState(State<Chain> const &s) {
+        return s.lastSeenID;
     }
-    std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
-        return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
+    std::optional<State<Chain>> fold(State<Chain> const &lastState, DataOnChain const &newInfo) {
+        return std::visit([this,&lastState](auto const &x) -> std::optional<State<Chain>> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
-                State newState = lastState;
+                State<Chain> newState = lastState;
                 if (std::strcmp(x.from.data(), "a") == 0) {
                     newState.a_pending -= x.amount;
                 } else if (std::strcmp(x.from.data(), "b") == 0) {
@@ -150,7 +107,7 @@ public:
                 env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else if constexpr (std::is_same_v<T, Process>) {
-                State newState = lastState;
+                State<Chain> newState = lastState;
                 newState.a += newState.a_pending;
                 newState.a_pending = 0;
                 newState.b += newState.b_pending;
@@ -166,121 +123,13 @@ public:
             }
         }, newInfo.value);
     }
-    State fold(State const &lastState, transport::etcd_shared_chain::ChainItem<DataOnChain> const &newInfo) {
-        auto newState = fold(lastState, newInfo.data);
+    State<Chain> fold(State<Chain> const &lastState, typename Chain::ItemType const &newInfo) {
+        auto newState = fold(lastState, *Chain::extractData(newInfo));
         if (newState) {
-            newState->lastSeenID = idForStorage(newInfo.id);
+            newState->lastSeenID = Chain::extractStorageID(newInfo);
             return *newState;
         } else {
             return lastState;
-        }
-    }
-    State fold(State const &lastState, transport::redis_shared_chain::ChainItem<DataOnChain> const &newInfo) {
-        auto newState = fold(lastState, newInfo.data);
-        if (newState) {
-            newState->lastSeenID = idForStorage(newInfo.id);
-            return *newState;
-        } else {
-            return lastState;
-        }
-    }
-    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> const &newInfo) {
-        auto newState = fold(lastState, newInfo->data);
-        if (newState) {
-            newState->lastSeenID = idForStorage(newInfo->id);
-            return *newState;
-        } else {
-            return lastState;
-        }
-    }
-    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByName> const &newInfo) {
-        auto newState = fold(lastState, *(newInfo.actualData()));
-        if (newState) {
-            std::memcpy(newState->lastSeenID.data(), newInfo.ptr->id, 36);
-            newState->lastSeenID[36] = '\0';
-            return *newState;
-        } else {
-            return lastState;
-        }
-    }
-    State fold(State const &lastState, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset> const &newInfo) {
-        auto newState = fold(lastState, *(newInfo.actualData()));
-        if (newState) {
-            std::memcpy(newState->lastSeenID.data(), &(newInfo.offset), sizeof(std::ptrdiff_t));
-            return *newState;
-        } else {
-            return lastState;
-        }
-    }
-};
-
-template <class Chain>
-struct ChainItemFormer {
-    inline static typename Chain::ItemType formChainItem(Chain *, std::string const &, DataOnChain &&);
-};
-template <>
-struct ChainItemFormer<transport::etcd_shared_chain::EtcdChain<DataOnChain>> {
-    inline static transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem(transport::etcd_shared_chain::EtcdChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
-        return {0, id, std::move(d), ""};
-    }
-};
-template <>
-struct ChainItemFormer<transport::etcd_shared_chain::InMemoryChain<DataOnChain>> {
-    inline static transport::etcd_shared_chain::ChainItem<DataOnChain> formChainItem(transport::etcd_shared_chain::InMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
-        return {0, id, std::move(d), ""};
-    }
-};
-template <>
-struct ChainItemFormer<transport::redis_shared_chain::RedisChain<DataOnChain>> {
-    inline static transport::redis_shared_chain::ChainItem<DataOnChain> formChainItem(transport::redis_shared_chain::RedisChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
-        return {id, std::move(d), ""};
-    }
-};
-template <>
-struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>> {
-    inline static transport::lock_free_in_memory_shared_chain::ChainItem<DataOnChain> formChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *chain, std::string const &id, DataOnChain &&d) {
-        return new transport::lock_free_in_memory_shared_chain::StorageItem<DataOnChain> {id, std::move(d), nullptr};
-    }
-};
-template <
-    transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport FRS
-    , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
->
-struct ChainItemFormer<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, FRS, EDPS>> {
-    inline static transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainItem<DataOnChain, FRS> formChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain, FRS, EDPS> *chain, std::string const &id, DataOnChain &&d) {
-        return chain->createItemFromData(id, std::move(d));
-    }
-};
-
-template <class Chain>
-struct ChainItemDiscarder {
-    inline static void discardChainItem(Chain *, typename Chain::ItemType &) {}
-};
-template <>
-struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>> {
-    inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> *, transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain>::ItemType &item) {
-        if (item) {
-            delete item;
-        }
-    }
-};
-template <
-    transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
->
-struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByName,EDPS>> {
-    inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByName,EDPS> *chain, typename transport::lock_free_in_memory_shared_chain::template LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByName,EDPS>::ItemType &item) {
-        if (item.ptr) {
-            chain->destroyItem(item);
-        }
-    }
-};
-template <
-    transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy EDPS
->
-struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset,EDPS>> {
-    inline static void discardChainItem(transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset,EDPS> *chain, typename transport::lock_free_in_memory_shared_chain::template LockFreeInBoostSharedMemoryChain<DataOnChain,transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset,EDPS>::ItemType &item) {
-        if (item.ptr) {
-            chain->destroyItem(item);
         }
     }
 };
@@ -288,17 +137,15 @@ struct ChainItemDiscarder<transport::lock_free_in_memory_shared_chain::LockFreeI
 template <class App, class Chain>
 class RequestHandler {
 private:
-    typename App::EnvironmentType *env_;
-    bool dontLog_;
+    bool dontLog_ = false;
 public:
     using ResponseType = bool;
     using InputType = DataOnChain;
     using Env = typename App::EnvironmentType;
-    void initialize(Env *env) {
-        env_ = env;
+    void initialize(Env *env, Chain *chain) {
         dontLog_ = env->value().dontLog;
     }
-    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State<Chain> const &currentState) {
         auto idStr = Env::id_to_string(input.value.id());
         return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<DataOnChain>> {
             using T = std::decay_t<decltype(x)>;
@@ -349,17 +196,20 @@ public:
             }
         }, std::move(input.value.key().value));
     }
-    std::tuple<ResponseType, std::optional<typename Chain::ItemType>> handleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<std::tuple<typename Chain::StorageIDType, typename Chain::DataType>>> handleInput(Env *env, Chain *chain, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State<Chain> const &currentState) {
         auto idStr = App::EnvironmentType::id_to_string(input.value.id());
         auto resp = basicHandleInput(env, std::move(input), currentState);
         if (std::get<1>(resp)) {
-            return {std::get<0>(resp), ChainItemFormer<Chain>::formChainItem(env_->value().chain, idStr, std::move(*std::get<1>(resp)))};
+            return {
+                std::get<0>(resp)
+                , std::tuple<typename Chain::StorageIDType, typename Chain::DataType> {
+                    Chain::newStorageIDFromStringInput(idStr)
+                    , std::move(*std::get<1>(resp))
+                }
+            };
         } else {
             return {std::get<0>(resp), std::nullopt};
         }
-    }
-    void discardUnattachedChainItem(typename Chain::ItemType &item) {
-        ChainItemDiscarder<Chain>::discardChainItem(env_->value().chain, item);
     }
 };
 
@@ -382,11 +232,11 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     );
     r.registerImporter("readerClockImporter", readerClockImporter);
 
-    auto readerAction = basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment>>::action(env, chain);
+    auto readerAction = basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment,Chain>>::action(env, chain);
     r.registerAction("readerAction", readerAction);
 
-    auto printState = A::template pureExporter<State>(
-        [env](State &&s) {
+    auto printState = A::template pureExporter<State<Chain>>(
+        [env](State<Chain> &&s) {
             if (!env->value().dontLog) {
                 std::ostringstream oss;
                 oss << "Current state: " << s;
@@ -397,14 +247,16 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     r.registerExporter("printState", printState);
     r.exportItem(printState, r.execute(readerAction, r.importItem(readerClockImporter)));
 
-    if (part == "" || part == "process") {
-        auto saveState = A::template pureExporter<State>(
-            [env,chain](State &&s) {
-                chain->saveExtraData(env->value().todayStr+"-state", s);
-            }
-        );
-        r.registerExporter("saveState", saveState);
-        r.exportItem(saveState, r.actionAsSource(readerAction));
+    if constexpr (Chain::SupportsExtraData) {
+        if (part == "" || part == "process") {
+            auto saveState = A::template pureExporter<State<Chain>>(
+                [env,chain](State<Chain> &&s) {
+                    chain->saveExtraData(env->value().todayStr+"-state", s);
+                }
+            );
+            r.registerExporter("saveState", saveState);
+            r.exportItem(saveState, r.actionAsSource(readerAction));
+        }
     }
     
     auto keyify = A::template kleisli<DataOnChain>(basic::CommonFlowUtilComponents<A>::template keyify<DataOnChain>());
@@ -459,7 +311,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(processImporter));
     }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment>, RequestHandler<A,Chain>>(chain));
+    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment,Chain>, RequestHandler<A,Chain>>(chain));
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
