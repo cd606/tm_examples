@@ -15,6 +15,9 @@ namespace simple_demo_chain_version { namespace main_program_logic {
     
     template <class Env, class Chain>
     class MainProgramFacilityInputHandler {
+    private:
+        int64_t lastSaveTime_ = 0;
+        Env *env_ = nullptr;
     public:
         using InputType = double;
         using ResponseType = std::optional<PlaceRequest>;
@@ -23,7 +26,9 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             typename infra::RealTimeApp<Env>::template Key<InputType>
         >;
 
-        static void initialize(Env *env, Chain *chain) {}
+        void initialize(Env *env, Chain *chain) {
+            env_ = env;
+        }
 
         static std::tuple<
             ResponseType
@@ -48,6 +53,19 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                     std::nullopt
                     , std::nullopt
                 };
+            }
+        }
+
+        void idleCallback(Chain *chain, MainProgramState<Chain> const &state) {
+            int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env_->now());
+            if (now > lastSaveTime_+10000) {
+                //save state at most every 10 seconds
+                std::thread([chain,state]() {
+                    chain->template saveExtraData<MainProgramState<Chain>>(
+                        "main_program_state", state
+                    );
+                }).detach();
+                lastSaveTime_ = now;
             }
         }
     };
