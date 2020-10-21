@@ -49,7 +49,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                             oss << "[ProgressReporterImpl::reportProgress] Received response to request with id "
                                 << update.id
                                 << ": response value=" << update.response
-                                << ", this " << (update.isFinalResponse?"is ":"is not ") << " the final response"
+                                << ", this " << (update.isFinalResponse?"is ":"is not ") << "the final response"
                             ;
                             ret.push_back(oss.str());
                         }

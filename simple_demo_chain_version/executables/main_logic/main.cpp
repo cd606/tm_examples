@@ -37,6 +37,8 @@ int main(int argc, char **argv) {
     TheEnvironment env;
     R r(&env);
 
+    env.setLogFilePrefix("simple_demo_chain_version_main_logic_");
+
     //setting up the heartbeat
 
     transport::initializeHeartbeatAndAlertComponent

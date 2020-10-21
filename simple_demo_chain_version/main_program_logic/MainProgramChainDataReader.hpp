@@ -8,7 +8,7 @@
 
 namespace simple_demo_chain_version { namespace main_program_logic {
     template <class Env, class Chain>
-    class TrivialChainDataFolder {
+    class TrivialChainDataFolder : public basic::simple_shared_chain::FolderUsingPartialHistoryInformation {
     public:
         using ResultType = ChainData;
         static ResultType initialize(Env *env, Chain *chain) {

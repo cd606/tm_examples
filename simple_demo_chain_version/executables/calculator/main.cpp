@@ -30,6 +30,8 @@ int main(int argc, char **argv) {
     TheEnvironment env;
     infra::AppRunner<M> r(&env);
 
+    env.setLogFilePrefix("simple_demo_chain_version_calculator_");
+
     //setting up the heartbeat
 
     transport::initializeHeartbeatAndAlertComponent
