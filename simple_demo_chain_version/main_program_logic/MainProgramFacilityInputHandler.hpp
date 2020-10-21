@@ -17,7 +17,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
     class MainProgramFacilityInputHandler {
     public:
         using InputType = double;
-        using ResponseType = std::optional<ChainData>;
+        using ResponseType = std::optional<PlaceRequest>;
 
         using RealInput = typename infra::RealTimeApp<Env>::template TimedDataType<
             typename infra::RealTimeApp<Env>::template Key<InputType>
@@ -31,18 +31,15 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         > handleInput(Env *env, Chain *chain, RealInput &&input, MainProgramState<Chain> const &state) {
             if (state.outstandingIDs.size() < 2) {
                 int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
-                ChainData d {
-                    now
-                    , PlaceRequest {
-                        state.max_id_sofar+1
-                        , input.value.key()
-                    }
+                PlaceRequest r {
+                    state.max_id_sofar+1
+                    , input.value.key()
                 };
                 return {
-                    d
+                    r
                     , std::tuple<typename Chain::StorageIDType, ChainData> {
                         Chain::template newStorageID<Env>()
-                        , d
+                        , ChainData {now, r}
                     }
                 };
             } else {

@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     );
 
     //main logic 
-    auto mainLogicRes = main_program_logic::mainProgramLogicMain(
+    main_program_logic::mainProgramLogicMain(
         r
         , &theChain
         , inputDataSource.clone()
@@ -89,19 +89,6 @@ int main(int argc, char **argv) {
         )
         , "main_program"
     );
-
-    //print the chain commands
-    auto printExporter = M::pureExporter<std::optional<ChainData>>(
-        [&env](std::optional<ChainData> &&chainData) {
-            if (chainData) {
-                std::ostringstream oss;
-                oss << "Created chain action " << *chainData;
-                env.log(infra::LogLevel::Info, oss.str());
-            }
-        }
-    );
-    r.registerExporter("printExporter", printExporter);
-    r.exportItem(printExporter, mainLogicRes.chainDataGeneratedFromMainProgram.clone());
 
     //write execution graph and start
 

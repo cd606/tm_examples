@@ -6,7 +6,7 @@ test_gen_out = test_gen.process(
 )
 tm_simple_demo_chain_version_main_program_logic_lib = static_library(
     'tm_simple_demo_chain_version_main_program_logic'
-    , ['OperationLogic.cpp', test_gen_out]
+    , ['OperationLogic.cpp', 'ProgressReporter.cpp', test_gen_out]
     , include_directories: [inc]
     , dependencies: [common_deps]
 )

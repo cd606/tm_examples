@@ -21,7 +21,7 @@ namespace simple_demo_chain_version {
     //memory block for chain storage, and if the enum is serialized as
     //string, there will be waste of storage)
 
-    std::ostream &operator<<(std::ostream &os, RequestCompletedFashion x) {
+    inline std::ostream &operator<<(std::ostream &os, RequestCompletedFashion x) {
         switch (x) {
         case RequestCompletedFashion::Fulfilled:
             os << "Fulfilled(0)";

@@ -4,6 +4,8 @@
 #include "simple_demo_chain_version/main_program_logic/MainProgramStateFolder.hpp"
 #include "simple_demo_chain_version/main_program_logic/MainProgramFacilityInputHandler.hpp"
 #include "simple_demo_chain_version/main_program_logic/OperationLogic.hpp"
+#include "simple_demo_chain_version/main_program_logic/ProgressReporter.hpp"
+#include "simple_demo_chain_version/main_program_logic/MainProgramChainDataReader.hpp"
 
 #include <tm_kit/basic/simple_shared_chain/ChainWriter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
@@ -17,13 +19,8 @@
 
 namespace simple_demo_chain_version { namespace main_program_logic {
 
-    template <class R>
-    struct MainProgramLogicProviderResult {
-        typename R::template Source<std::optional<ChainData>> chainDataGeneratedFromMainProgram;
-    };
-
     template <class R, class Chain>
-    MainProgramLogicProviderResult<R> mainProgramLogicMain(
+    void mainProgramLogicMain(
         R &r 
         , Chain *chain
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
@@ -118,7 +115,10 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             basic::CommonFlowUtilComponents<M>::template keyify<double>()
         );
         auto extractFacilityOutput = infra::KleisliUtils<M>::action(
-            basic::CommonFlowUtilComponents<M>::template extractDataFromKeyedData<double,std::optional<ChainData>>()
+            basic::CommonFlowUtilComponents<M>::template extractDataFromKeyedData<
+                typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::InputType
+                , typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::ResponseType
+            >()
         );
         r.registerOnOrderFacility(graphPrefix+"/write_to_chain", chainFacility);
         r.registerAction(graphPrefix+"/keyify", keyify);
@@ -142,9 +142,29 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             r.markStateSharing(cfgFacility, logic, "enabled");
         }
 
-        return {
-            r.actionAsSource(extractFacilityOutput)
-        };
+        auto progressReporterPtr = std::make_shared<ProgressReporter>();
+        r.preservePointer(progressReporterPtr);
+        auto progressReporter = M::template liftMulti2<
+            typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::ResponseType
+            , ChainData
+        >(
+            boost::hana::curry<4>(std::mem_fn(&ProgressReporter::reportProgress))(progressReporterPtr.get())
+        );
+        r.registerAction(graphPrefix+"/progressReporter", progressReporter);
+
+        r.execute(progressReporter, r.actionAsSource(extractFacilityOutput));
+
+        auto chainDataReader = MainProgramChainDataReader<M,Chain>::importer(chain);
+        r.registerImporter(graphPrefix+"/chainDataReader", chainDataReader);
+        r.execute(progressReporter, r.importItem(chainDataReader));
+        
+        auto printExporter = M::template pureExporter<std::string>(
+            [env](std::string &&s) {
+                env->log(infra::LogLevel::Info, s);
+            }
+        );
+        r.registerExporter(graphPrefix+"/printExporter", printExporter);
+        r.exportItem(printExporter, r.actionAsSource(progressReporter));
     }
 
 } }
