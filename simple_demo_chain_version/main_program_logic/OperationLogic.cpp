@@ -62,6 +62,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             if (enabled_) {
                 return input;
             } else {
+                logger_(std::string("The logic is disabled, therefore not sending any command"));
                 return std::nullopt;
             }
         }
