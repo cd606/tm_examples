@@ -311,7 +311,7 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
         r.execute(keyify, r.importItem(processImporter));
     }
 
-    auto reqHandler = A::template fromAbstractOnOrderFacility<DataOnChain, bool>(new basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment,Chain>, RequestHandler<A,Chain>>(chain));
+    auto reqHandler = basic::simple_shared_chain::ChainWriter<A, Chain, StateFolder<TheEnvironment,Chain>, RequestHandler<A,Chain>>::onOrderFacility(chain);
     r.registerOnOrderFacility("reqHandler", reqHandler);
 
     r.placeOrderWithFacilityAndForget(r.actionAsSource(keyify), reqHandler);
