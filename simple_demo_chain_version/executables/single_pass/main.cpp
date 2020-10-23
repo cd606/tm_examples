@@ -26,6 +26,7 @@ using TheEnvironment = infra::Environment<
     infra::TrivialExitControlComponent,
     basic::TimeComponentEnhancedWithSpdLogging<
         basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
+        , false //don't log thread ID
     >,
     transport::CrossGuidComponent
 >;
@@ -83,16 +84,11 @@ void run(std::string const &inputFile) {
         , "calculator"
     );
 
-    //add a printer for the results
-    auto printExporter = M::pureExporter<ChainData>(
-        [&env](ChainData &&chainData) {
-            std::ostringstream oss;
-            oss << "Created chain action " << chainData;
-            env.log(infra::LogLevel::Info, oss.str());
-        }
-    );
-    r.registerExporter("printExporter", printExporter);
-    r.exportItem(printExporter, calculatorLogicMainRes.chainDataGeneratedFromCalculator.clone());
+    //we don't need to print the calculator's results (since the main
+    //logic already prints the updates, so we just discard them)
+    auto discardCalculatorChainDataInfo = M::trivialExporter<ChainData>();
+    r.registerExporter("discard", discardCalculatorChainDataInfo);
+    r.exportItem(discardCalculatorChainDataInfo, calculatorLogicMainRes.chainDataGeneratedFromCalculator.clone());
     
     r.finalize();
 }

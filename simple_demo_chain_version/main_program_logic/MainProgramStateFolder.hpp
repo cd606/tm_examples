@@ -32,13 +32,13 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                     return *val;
                 } else {
                     ResultType res;
-                    res.max_id_sofar = -1;
+                    res.max_id_sofar = 0;
                     res.updateTimestamp = 0;
                     return res;
                 }
             } else {
                 ResultType res;
-                res.max_id_sofar = -1;
+                res.max_id_sofar = 0;
                 res.updateTimestamp = 0;
                 return res;
             }
