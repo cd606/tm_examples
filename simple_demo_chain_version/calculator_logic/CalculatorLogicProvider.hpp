@@ -82,6 +82,12 @@ namespace simple_demo_chain_version { namespace calculator_logic {
 
         //now we create the main chain worker and add the facility connectors
 
+        //If very high throughput is required, then we need to use the busy-loop no-yield polling 
+        //policy which will occupy full CPU (in real-time mode). If default polling policy is used
+        //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
+        //the polling, so the throughput will be degraded. In single-pass mode, the polling policy
+        //is ignored since it is single-threaded and always uses busy polling.
+        //auto chainFacility = Writer::onOrderFacilityWithExternalEffects(chain, basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true));
         auto chainFacility = Writer::onOrderFacilityWithExternalEffects(chain);
         r.registerOnOrderFacilityWithExternalEffects(graphPrefix+"/chainFacility", chainFacility);
 
