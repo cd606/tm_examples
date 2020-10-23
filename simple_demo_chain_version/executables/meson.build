@@ -1,3 +1,4 @@
 subdir('data_source')
 subdir('calculator')
 subdir('main_logic')
+subdir('single_pass')

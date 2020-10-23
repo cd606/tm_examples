@@ -1,4 +1,6 @@
 #include "simple_demo_chain_version/calculator_logic/CalculatorLogicProvider.hpp"
+#include "simple_demo_chain_version/calculator_logic/ExternalCalculatorWrappedAsFacility.hpp"
+#include "simple_demo_chain_version/calculator_logic/MockExternalCalculator.hpp"
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
@@ -6,6 +8,7 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
+#include <tm_kit/basic/real_time_clock/ClockOnOrderFacility.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
@@ -26,9 +29,10 @@ int main(int argc, char **argv) {
         transport::HeartbeatAndAlertComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
 
     TheEnvironment env;
-    infra::AppRunner<M> r(&env);
+    R r(&env);
 
     env.setLogFilePrefix("simple_demo_chain_version_calculator_");
 
@@ -39,8 +43,7 @@ int main(int argc, char **argv) {
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.calculator.heartbeat", std::chrono::seconds(1));
 
-    //setting up the main logic
-    ExternalCalculator calc;
+    //setting up the chain
 
     using Chain = transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
         ChainData
@@ -51,8 +54,19 @@ int main(int argc, char **argv) {
     auto chainName = today+"-simple-demo-chain";
     Chain theChain(chainName, 100*1024*1024);
 
+    auto wrappedExternalFacility = M::fromAbstractOnOrderFacility(new calculator_logic::ExternalCalculatorWrappedAsFacility<TheEnvironment>());
+    r.registerOnOrderFacility("wrappedExternalFacility", wrappedExternalFacility);
+    /*
+    auto mockExternalFacility = calculator_logic::MockExternalCalculator<
+        R, basic::real_time_clock::ClockOnOrderFacility<TheEnvironment>
+    >::connector("mockExternalFacility");
+    */
     auto calculatorLogicMainRes = calculator_logic::calculatorLogicMain(
-        r, &calc, &theChain, "calculator"
+        r
+        , &theChain
+        , R::facilityConnector(wrappedExternalFacility)
+        //, mockExternalFacility
+        , "calculator"
     );
 
     //add a printer for the results

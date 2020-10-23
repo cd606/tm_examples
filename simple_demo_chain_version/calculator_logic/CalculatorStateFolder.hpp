@@ -50,6 +50,8 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                 } else {
                     return ResultType();
                 }
+            } else {
+                return ResultType();
             }
         }
         static typename Chain::StorageIDType chainIDForValue(ResultType const &r) {

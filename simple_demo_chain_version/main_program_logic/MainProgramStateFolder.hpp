@@ -33,8 +33,14 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                 } else {
                     ResultType res;
                     res.max_id_sofar = -1;
+                    res.updateTimestamp = 0;
                     return res;
                 }
+            } else {
+                ResultType res;
+                res.max_id_sofar = -1;
+                res.updateTimestamp = 0;
+                return res;
             }
         }
         static typename Chain::StorageIDType chainIDForValue(ResultType const &r) {

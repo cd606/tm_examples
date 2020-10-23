@@ -21,37 +21,13 @@ namespace simple_demo_chain_version { namespace calculator_logic {
     template <class R, class Chain>
     CalculatorLogicProviderResult<R> calculatorLogicMain(
         R &r 
-        , ExternalCalculator *externalCalc 
         , Chain *chain
+        , typename R:: template FacilitioidConnector<ExternalCalculatorInput,ExternalCalculatorOutput> wrappedExternalCalculator
         , std::string const &graphPrefix
     ) {
         using TheEnvironment = typename R::EnvironmentType;
         using M = typename R::AppType;
         auto *env = r.environment();
-
-        //we use a trigger importer to bring the external calculator's output 
-        //into the graph
-        
-        class ExternalCallback : public CalculateResultListener {
-        private:
-            std::function<void(ExternalCalculatorOutput &&)> callback_;
-        public:
-            ExternalCallback(std::function<void(ExternalCalculatorOutput &&)> callback) : callback_(callback) {}
-            virtual ~ExternalCallback() {}
-            virtual void onCalculateResult(ExternalCalculatorOutput const &o) override final {
-                ExternalCalculatorOutput copy = o;
-                callback_(std::move(copy));
-            }
-        };
-
-        auto calculateResultImporterPair = M::template triggerImporter<ExternalCalculatorOutput>();
-        r.registerImporter(graphPrefix+"/calculateResultImporter", std::get<0>(calculateResultImporterPair));
-        //Since the callback is created inside this function call, we need to 
-        //preserve its pointer inside the runner
-        auto cb = std::make_shared<ExternalCallback>(std::get<1>(calculateResultImporterPair));
-        r.preservePointer(cb);
-
-        externalCalc->start(cb.get());
 
         //Now we define the chain worker
 
@@ -64,53 +40,71 @@ namespace simple_demo_chain_version { namespace calculator_logic {
 
         //inputs to the external calculator (requests) are coming from the chain
         //(through the importer part of the ChainWriter), so we feed it to the 
-        //external calculator through an exporter
+        //external calculator through an action
 
         using U = typename CalculatorIdleWorker<TheEnvironment,Chain>::OffChainUpdateType;
 
-        auto sendCommandExporter = M::template pureExporter<U>(
-            [externalCalc,env](U &&u) {
-                std::visit([externalCalc,env,&u](auto &&update) {
+        auto sendCommandAction = M::template liftMulti<U>(
+            [env](U &&u) -> std::vector<ExternalCalculatorInput> {
+                std::vector<ExternalCalculatorInput> ret;
+                std::visit([env,&u,&ret](auto &&update) {
                     using T = std::decay_t<decltype(update)>;
                     if constexpr (std::is_same_v<T, ConfirmRequestReceipt>) {
                         for (auto const &item : u.valueRef) {
                             ExternalCalculatorInput c {item.first, item.second};
-                            externalCalc->request(c);
                             std::ostringstream oss;
                             oss << "Sent external request {id=" << c.id << ", input=" << c.input << "}";
                             env->log(infra::LogLevel::Info, oss.str());
+                            ret.push_back(std::move(c));
                         }
                     }
                 }, std::move(u.action.update));
+                return ret;
             }
         );
-        r.registerExporter(graphPrefix+"/sendCommandExporter", sendCommandExporter);
+        r.registerAction(graphPrefix+"/sendCommand", sendCommandAction);
+
+        auto keyifyForExternalCalcFacility = infra::KleisliUtils<M>::action(
+            basic::CommonFlowUtilComponents<M>::template keyify<ExternalCalculatorInput>()
+        );
+        r.registerAction(graphPrefix+"/keyifyForExternalCalcFacility", keyifyForExternalCalcFacility);
+
+        auto extractFacilityOutputFromExternalCalcFacility = infra::KleisliUtils<M>::action(
+            basic::CommonFlowUtilComponents<M>::template extractDataFromKeyedData<ExternalCalculatorInput,ExternalCalculatorOutput>()
+        );
+        r.registerAction(graphPrefix+"/extractFacilityOutputFromExternalCalcFacility", extractFacilityOutputFromExternalCalcFacility);
+
+        wrappedExternalCalculator(
+            r
+            , r.execute(keyifyForExternalCalcFacility, r.actionAsSource(sendCommandAction))
+            , r.actionAsSink(extractFacilityOutputFromExternalCalcFacility)
+        );
 
         //now we create the main chain worker and add the facility connectors
 
-        auto facility = Writer::onOrderFacilityWithExternalEffects(chain);
-        r.registerOnOrderFacilityWithExternalEffects(graphPrefix+"/chainFacility", facility);
+        auto chainFacility = Writer::onOrderFacilityWithExternalEffects(chain);
+        r.registerOnOrderFacilityWithExternalEffects(graphPrefix+"/chainFacility", chainFacility);
 
-        auto keyify = infra::KleisliUtils<M>::action(
+        auto keyifyForChainFacility = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template keyify<ExternalCalculatorOutput>()
         );
-        r.registerAction(graphPrefix+"/keyify", keyify);
+        r.registerAction(graphPrefix+"/keyifyForChainFacility", keyifyForChainFacility);
 
-        auto extractFacilityOutput = infra::KleisliUtils<M>::action(
+        auto extractFacilityOutputFromChainFacility = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template extractDataFromKeyedData<ExternalCalculatorOutput,ChainData>()
         );
-        r.registerAction(graphPrefix+"/extractFacilityOutput", extractFacilityOutput);
+        r.registerAction(graphPrefix+"/extractFacilityOutputFromChainFacility", extractFacilityOutputFromChainFacility);
 
         r.placeOrderWithFacilityWithExternalEffects(
-            r.actionAsSource(keyify)
-            , facility
-            , r.actionAsSink(extractFacilityOutput)
+            r.actionAsSource(keyifyForChainFacility)
+            , chainFacility
+            , r.actionAsSink(extractFacilityOutputFromChainFacility)
         );
 
-        //now we connect the importers and exporters to the main chain worker
+        //now we connect the facilities together
 
-        r.execute(keyify, r.importItem(std::get<0>(calculateResultImporterPair)));
-        r.exportItem(sendCommandExporter, r.facilityWithExternalEffectsAsSource(facility));
+        r.execute(keyifyForChainFacility, r.actionAsSource(extractFacilityOutputFromExternalCalcFacility));
+        r.execute(sendCommandAction, r.facilityWithExternalEffectsAsSource(chainFacility));
 
         //now we create a combiner to combine the two ChainData outputs
         auto combiner = infra::KleisliUtils<M>::action(
@@ -123,8 +117,8 @@ namespace simple_demo_chain_version { namespace calculator_logic {
             }
         );
         r.registerAction(graphPrefix+"/takeChainDataForPrint", takeChainDataForPrint);
-        r.execute(combiner, r.execute(takeChainDataForPrint, r.facilityWithExternalEffectsAsSource(facility)));
-        r.execute(combiner, r.actionAsSource(extractFacilityOutput));
+        r.execute(combiner, r.actionAsSource(extractFacilityOutputFromChainFacility));
+        r.execute(combiner, r.execute(takeChainDataForPrint, r.facilityWithExternalEffectsAsSource(chainFacility)));
 
         //return the combiner output
 

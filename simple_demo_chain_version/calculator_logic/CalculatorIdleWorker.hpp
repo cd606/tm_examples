@@ -29,14 +29,16 @@ namespace simple_demo_chain_version { namespace calculator_logic {
             , std::optional<std::tuple<typename Chain::StorageIDType, simple_demo_chain_version::ChainData>>
         > work(Env *env, Chain *chain, CalculatorState<Chain> const &state) {
             int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
-            if (now > lastSaveTime+10000) {
-                //save state every 10 seconds
-                std::thread([chain,state]() {
-                    chain->template saveExtraData<CalculatorState<Chain>>(
-                        "calculator_state", state
-                    );
-                }).detach();
-                lastSaveTime = now;
+            if constexpr (Chain::SupportsExtraData) {
+                if (now > lastSaveTime+10000) {
+                    //save state every 10 seconds
+                    std::thread([chain,state]() {
+                        chain->template saveExtraData<CalculatorState<Chain>>(
+                            "calculator_state", state
+                        );
+                    }).detach();
+                    lastSaveTime = now;
+                }
             }
             std::unordered_map<int, double> valueRef;
             if (!state.newlyPlacedRequests.empty()) {
