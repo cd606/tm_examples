@@ -25,7 +25,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
             env_ = env;
             calc_.start(this);
         }
-        virtual void handle(typename infra::RealTimeApp<Env>::InnerData<
+        virtual void handle(typename infra::RealTimeApp<Env>::template InnerData<
             typename infra::RealTimeApp<Env>::template Key<ExternalCalculatorInput>
         > &&input) override final {
             {
