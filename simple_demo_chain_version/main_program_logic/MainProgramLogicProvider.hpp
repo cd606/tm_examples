@@ -156,7 +156,11 @@ namespace simple_demo_chain_version { namespace main_program_logic {
 
         auto chainDataReader = MainProgramChainDataReader<M,Chain>::importer(chain);
         r.registerImporter(graphPrefix+"/chainDataReader", chainDataReader);
-        r.execute(progressReporter, r.importItem(chainDataReader));
+        auto simpleFilter = infra::KleisliUtils<M>::action(
+            basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()
+        );
+        r.registerAction(graphPrefix+"/simpleFilter", simpleFilter);
+        r.execute(progressReporter, r.execute(simpleFilter, r.importItem(chainDataReader)));
         
         auto printExporter = M::template pureExporter<std::string>(
             [env](std::string &&s) {

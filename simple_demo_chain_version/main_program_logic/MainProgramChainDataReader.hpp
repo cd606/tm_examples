@@ -7,29 +7,22 @@
 #include <tm_kit/basic/simple_shared_chain/ChainReader.hpp>
 
 namespace simple_demo_chain_version { namespace main_program_logic {
-    template <class Env, class Chain>
-    class TrivialChainDataFolder : public basic::simple_shared_chain::FolderUsingPartialHistoryInformation {
+    template <class Chain>
+    class TrivialChainDataFolder : public basic::simple_shared_chain::TrivialChainDataFetchingFolder<Chain> {
     public:
-        using ResultType = ChainData;
-        static ResultType initialize(Env *env, Chain *chain) {
-            return ChainData {};
-        }
-        static ResultType fold(ResultType const &state, typename Chain::ItemType const &item) {
+        static std::chrono::system_clock::time_point extractTime(std::optional<typename Chain::DataType> const &st) {
             static_assert(std::is_same_v<typename Chain::DataType, ChainData>);
-            ChainData const *p = Chain::extractData(item);
-            if (!p) {
-                return state;
+            if (st) {
+                return infra::withtime_utils::epochDurationToTime<std::chrono::milliseconds>((*st).timestamp);
+            } else {
+                return infra::withtime_utils::epochDurationToTime<std::chrono::milliseconds>(0);
             }
-            return *p;
-        }
-        static std::chrono::system_clock::time_point extractTime(ResultType const &st) {
-            return infra::withtime_utils::epochDurationToTime<std::chrono::milliseconds>(st.timestamp);
         }
     };
 
     template <class M, class Chain>
     using MainProgramChainDataReader = basic::simple_shared_chain::ChainReader<
-        M, Chain, TrivialChainDataFolder<typename M::EnvironmentType, Chain>, void
+        M, Chain, TrivialChainDataFolder<Chain>, void
     >;
 } }
 
