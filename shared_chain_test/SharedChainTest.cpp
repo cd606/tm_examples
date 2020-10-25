@@ -41,16 +41,29 @@ TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(Process);
 //then there will be some issue using it as data flow object type in our applicatives
 using DataOnChain = basic::CBOR<std::variant<TransferRequest, Process>>;
 
+//The reason we use this instead of a std::string to hold lastSeenID is to
+//facilitate printing as well as to make it trivially copiable. 
+#ifdef _MSC_VER 
+    #define LastSeenIDTypeFields \
+        ((std::size_t, len)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<char,40>), id))
+#else
+    #define LastSeenIDTypeFields \
+        ((std::size_t, len)) \
+        (((std::array<char,40>), id))
+#endif
 #define StateFields \
     ((uint32_t, a)) \
     ((uint32_t, b)) \
     ((int32_t, a_pending)) \
     ((int32_t, b_pending)) \
     ((uint16_t, pendingRequestCount)) \
-    ((typename Chain::StorageIDType, lastSeenID))
+    ((LastSeenIDType, lastSeenID))
 
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Chain)), State, StateFields);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE(((typename, Chain)), State, StateFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(LastSeenIDType, LastSeenIDTypeFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(State, StateFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(LastSeenIDType, LastSeenIDTypeFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(State, StateFields);
 
 template <class Chain>
 struct EnvValues {
@@ -66,30 +79,30 @@ class StateFolder {
 private:
     Env *env_;
 public:
-    using ResultType = State<Chain>;
-    State<Chain> initialize(Env *env, Chain *chain) {
+    using ResultType = State;
+    State initialize(Env *env, Chain *chain) {
         env_ = env;
         if constexpr (Chain::SupportsExtraData) {
-            auto val = chain->template loadExtraData<State<Chain>>(
+            auto val = chain->template loadExtraData<State>(
                 env->value().todayStr+"-state"
             );
             if (val) {
                 return *val;
             } else {
-                return State<Chain> {1000, 1000, 0, 0, 0, typename Chain::StorageIDType {}};
+                return State {1000, 1000, 0, 0, 0, {0, ""}};
             }
         } else {
-            return State<Chain> {1000, 1000, 0, 0, 0, typename Chain::StorageIDType {}};
+            return State {1000, 1000, 0, 0, 0, {0, ""}};
         }
     }
-    static typename Chain::StorageIDType const &chainIDForState(State<Chain> const &s) {
-        return s.lastSeenID;
+    static typename std::string chainIDForState(State const &s) {
+        return std::string {s.lastSeenID.id.data(), s.lastSeenID.len};
     }
-    std::optional<State<Chain>> fold(State<Chain> const &lastState, DataOnChain const &newInfo) {
-        return std::visit([this,&lastState](auto const &x) -> std::optional<State<Chain>> {
+    std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
+        return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
-                State<Chain> newState = lastState;
+                State newState = lastState;
                 if (std::strcmp(x.from.data(), "a") == 0) {
                     newState.a_pending -= x.amount;
                 } else if (std::strcmp(x.from.data(), "b") == 0) {
@@ -107,7 +120,7 @@ public:
                 env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else if constexpr (std::is_same_v<T, Process>) {
-                State<Chain> newState = lastState;
+                State newState = lastState;
                 newState.a += newState.a_pending;
                 newState.a_pending = 0;
                 newState.b += newState.b_pending;
@@ -123,11 +136,17 @@ public:
             }
         }, newInfo.value);
     }
-    State<Chain> fold(State<Chain> const &lastState, typename Chain::ItemType const &newInfo) {
-        auto newState = fold(lastState, *Chain::extractData(newInfo));
-        if (newState) {
-            newState->lastSeenID = Chain::extractStorageID(newInfo);
-            return *newState;
+    State fold(State const &lastState, std::string_view const &storageIDView, typename Chain::DataType const *newInfo) {
+        if (newInfo) {
+            auto newState = fold(lastState, *newInfo);
+            if (newState) {
+                newState->lastSeenID.len = storageIDView.length();
+                std::memset(newState->lastSeenID.id.data(), 0, 40);
+                std::memcpy(newState->lastSeenID.id.data(), storageIDView.data(), storageIDView.length());
+                return *newState;
+            } else {
+                return lastState;
+            }
         } else {
             return lastState;
         }
@@ -145,7 +164,7 @@ public:
     void initialize(Env *env, Chain *chain) {
         dontLog_ = env->value().dontLog;
     }
-    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State<Chain> const &currentState) {
+    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
         auto idStr = Env::id_to_string(input.value.id());
         return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<DataOnChain>> {
             using T = std::decay_t<decltype(x)>;
@@ -196,14 +215,14 @@ public:
             }
         }, std::move(input.value.key().value));
     }
-    std::tuple<ResponseType, std::optional<std::tuple<typename Chain::StorageIDType, typename Chain::DataType>>> handleInput(Env *env, Chain *chain, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State<Chain> const &currentState) {
+    std::tuple<ResponseType, std::optional<std::tuple<std::string, typename Chain::DataType>>> handleInput(Env *env, Chain *chain, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
         auto idStr = App::EnvironmentType::id_to_string(input.value.id());
         auto resp = basicHandleInput(env, std::move(input), currentState);
         if (std::get<1>(resp)) {
             return {
                 std::get<0>(resp)
-                , std::tuple<typename Chain::StorageIDType, typename Chain::DataType> {
-                    Chain::newStorageIDFromStringInput(idStr)
+                , std::tuple<std::string, typename Chain::DataType> {
+                    idStr
                     , std::move(*std::get<1>(resp))
                 }
             };
@@ -235,8 +254,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
     auto readerAction = basic::simple_shared_chain::ChainReader<A, Chain, StateFolder<TheEnvironment,Chain>>::action(env, chain);
     r.registerAction("readerAction", readerAction);
 
-    auto printState = A::template pureExporter<State<Chain>>(
-        [env](State<Chain> &&s) {
+    auto printState = A::template pureExporter<State>(
+        [env](State &&s) {
             if (!env->value().dontLog) {
                 std::ostringstream oss;
                 oss << "Current state: " << s;
@@ -249,8 +268,8 @@ void run(typename A::EnvironmentType *env, Chain *chain, std::string const &part
 
     if constexpr (Chain::SupportsExtraData) {
         if (part == "" || part == "process") {
-            auto saveState = A::template pureExporter<State<Chain>>(
-                [env,chain](State<Chain> &&s) {
+            auto saveState = A::template pureExporter<State>(
+                [env,chain](State &&s) {
                     chain->saveExtraData(env->value().todayStr+"-state", s);
                 }
             );

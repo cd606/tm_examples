@@ -18,31 +18,26 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         typename R::template Source<ChainData> chainDataGeneratedFromCalculator;
     };
 
-    template <class R, class Chain>
+    template <class R>
     CalculatorLogicProviderResult<R> calculatorLogicMain(
         R &r 
-        , Chain *chain
-        , typename R:: template FacilitioidConnector<ExternalCalculatorInput,ExternalCalculatorOutput> wrappedExternalCalculator
+        , basic::simple_shared_chain::ChainWriterOnOrderFacilityWithExternalEffectsFactory<
+            typename R::AppType 
+            , CalculatorStateFolder
+            , CalculatorFacilityInputHandler
+            , CalculatorIdleWorker
+        > chainFacilityFactory
+        , typename R::template FacilitioidConnector<ExternalCalculatorInput,ExternalCalculatorOutput> wrappedExternalCalculator
         , std::string const &graphPrefix
     ) {
-        using TheEnvironment = typename R::EnvironmentType;
         using M = typename R::AppType;
         auto *env = r.environment();
-
-        //Now we define the chain worker
-
-        using Writer = basic::simple_shared_chain::ChainWriter<
-            M, Chain
-            , CalculatorStateFolder<TheEnvironment,Chain>
-            , CalculatorFacilityInputHandler<TheEnvironment,Chain>
-            , CalculatorIdleWorker<TheEnvironment,Chain>
-        >;
 
         //inputs to the external calculator (requests) are coming from the chain
         //(through the importer part of the ChainWriter), so we feed it to the 
         //external calculator through an action
 
-        using U = typename CalculatorIdleWorker<TheEnvironment,Chain>::OffChainUpdateType;
+        using U = CalculatorIdleWorker::OffChainUpdateType;
 
         auto sendCommandAction = M::template liftMulti<U>(
             [env](U &&u) -> std::vector<ExternalCalculatorInput> {
@@ -81,14 +76,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         );
 
         //now we create the main chain worker and add the facility connectors
-
-        //If very high throughput is required, then we need to use the busy-loop no-yield polling 
-        //policy which will occupy full CPU (in real-time mode). If default polling policy is used
-        //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
-        //the polling, so the throughput will be degraded. In single-pass mode, the polling policy
-        //is ignored since it is single-threaded and always uses busy polling.
-        //auto chainFacility = Writer::onOrderFacilityWithExternalEffects(chain, basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true));
-        auto chainFacility = Writer::onOrderFacilityWithExternalEffects(chain);
+        auto chainFacility = chainFacilityFactory();
         r.registerOnOrderFacilityWithExternalEffects(graphPrefix+"/chainFacility", chainFacility);
 
         auto keyifyForChainFacility = infra::KleisliUtils<M>::action(

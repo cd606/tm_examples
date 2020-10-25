@@ -13,7 +13,7 @@
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
+#include <tm_kit/transport/SharedChainCreator.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -30,9 +30,6 @@ using TheEnvironment = infra::Environment<
     >,
     transport::CrossGuidComponent
 >;
-using Chain = transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<
-    ChainData
->;
 using M = infra::SinglePassIterationApp<TheEnvironment>;
 using R = infra::AppRunner<M>;
 
@@ -40,7 +37,6 @@ void run(std::string const &inputFile) {
     TheEnvironment env;
     R r(&env);
     std::ifstream ifs(inputFile.c_str());
-    Chain theChain;
 
     auto byteDataImporter = basic::ByteDataWithTopicRecordFileImporterExporter<M>::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
         ifs
@@ -55,9 +51,28 @@ void run(std::string const &inputFile) {
 
     auto inputDataSource = r.execute(removeTopic, r.execute(parser, r.importItem(byteDataImporter)));
 
+    std::string chainLocatorStr = "in_memory_lock_free://::::";
+    transport::SharedChainCreator<M> sharedChainCreator;
+
+    auto mainLogicChainFacilityFactory = sharedChainCreator.writerFactory<
+        ChainData
+        , main_program_logic::MainProgramStateFolder
+        , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
+    >(
+        chainLocatorStr
+    );
+    auto mainLogicChainDataImporterFactory = sharedChainCreator.readerFactory<
+        ChainData
+        , main_program_logic::TrivialChainDataFolder
+    >(
+        &env
+        , chainLocatorStr
+    );
+
     main_program_logic::mainProgramLogicMain(
         r
-        , &theChain
+        , mainLogicChainFacilityFactory
+        , mainLogicChainDataImporterFactory
         , inputDataSource.clone()
         , std::nullopt
         , "main_program"
@@ -77,9 +92,17 @@ void run(std::string const &inputFile) {
     auto mockExternalFacility = calculator_logic::MockExternalCalculator<
         R, basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
     >::connector("mockExternalFacility");
+    auto calculatorChainFacilityFactory = sharedChainCreator.writerFactory<
+        ChainData
+        , calculator_logic::CalculatorStateFolder
+        , calculator_logic::CalculatorFacilityInputHandler
+        , calculator_logic::CalculatorIdleWorker
+    >(
+        chainLocatorStr
+    );
     auto calculatorLogicMainRes = calculator_logic::calculatorLogicMain(
         r
-        , &theChain
+        , calculatorChainFacilityFactory
         , mockExternalFacility
         , "calculator"
     );

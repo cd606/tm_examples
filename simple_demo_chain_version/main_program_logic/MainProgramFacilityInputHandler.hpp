@@ -13,7 +13,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
 
     //This worker simply puts request on the chain
     
-    template <class Env, class Chain>
+    template <class Env>
     class MainProgramFacilityInputHandler {
     private:
         int64_t lastSaveTime_ = 0;
@@ -26,14 +26,14 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             typename infra::RealTimeApp<Env>::template Key<InputType>
         >;
 
-        void initialize(Env *env, Chain *chain) {
+        void initialize(Env *env, void *chain) {
             env_ = env;
         }
 
         static std::tuple<
             ResponseType
-            , std::optional<std::tuple<typename Chain::StorageIDType, ChainData>>
-        > handleInput(Env *env, Chain *chain, RealInput &&input, MainProgramState<Chain> const &state) {
+            , std::optional<std::tuple<std::string, ChainData>>
+        > handleInput(Env *env, void *chain, RealInput &&input, MainProgramState const &state) {
             if (state.outstandingIDs.size() < 2) {
                 int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
                 PlaceRequest r {
@@ -42,8 +42,8 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                 };
                 return {
                     r
-                    , std::tuple<typename Chain::StorageIDType, ChainData> {
-                        Chain::template newStorageID<Env>()
+                    , std::tuple<std::string, ChainData> {
+                        ""
                         , ChainData {now, r}
                     }
                 };
@@ -56,16 +56,19 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             }
         }
 
-        void idleCallback(Chain *chain, MainProgramState<Chain> const &state) {
-            int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env_->now());
-            if (now > lastSaveTime_+10000) {
-                //save state at most every 10 seconds
-                std::thread([chain,state]() {
-                    chain->template saveExtraData<MainProgramState<Chain>>(
-                        "main_program_state", state
-                    );
-                }).detach();
-                lastSaveTime_ = now;
+        template <class Chain>
+        void idleCallback(Chain *chain, MainProgramState const &state) {
+            if constexpr (Chain::SupportsExtraData) {
+                int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env_->now());
+                if (now > lastSaveTime_+10000) {
+                    //save state at most every 10 seconds
+                    std::thread([chain,state]() {
+                        chain->template saveExtraData<MainProgramState>(
+                            "main_program_state", state
+                        );
+                    }).detach();
+                    lastSaveTime_ = now;
+                }
             }
         }
     };

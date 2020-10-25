@@ -13,7 +13,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
-#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
+#include <tm_kit/transport/SharedChainCreator.hpp>
 
 using namespace simple_demo_chain_version;
 
@@ -26,7 +26,8 @@ int main(int argc, char **argv) {
         >,
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
-        transport::HeartbeatAndAlertComponent
+        transport::HeartbeatAndAlertComponent,
+        transport::lock_free_in_memory_shared_chain::SharedMemoryChainComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -45,14 +46,27 @@ int main(int argc, char **argv) {
 
     //setting up the chain
 
-    using Chain = transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
-        ChainData
-        , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset
-        , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
-    >;
     std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
-    auto chainName = today+"-simple-demo-chain";
-    Chain theChain(chainName, 100*1024*1024);
+    std::ostringstream chainLocatorOss;
+    chainLocatorOss << "in_shared_memory://::::" << today << "-simple-demo-chain[size=" << (100*1024*1024) << "]";
+
+    //Please note that this object should not be allowed to go out of scope
+    transport::SharedChainCreator<M> sharedChainCreator;
+
+    auto chainFacilityFactory = sharedChainCreator.writerFactory<
+        ChainData
+        , calculator_logic::CalculatorStateFolder
+        , calculator_logic::CalculatorFacilityInputHandler
+        , calculator_logic::CalculatorIdleWorker
+    >(
+        chainLocatorOss.str()
+        //If very high throughput is required, then we need to use the busy-loop no-yield polling 
+        //policy which will occupy full CPU (in real-time mode). If default polling policy is used
+        //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
+        //the polling, so the throughput will be degraded. In single-pass mode, the polling policy
+        //is ignored since it is single-threaded and always uses busy polling.
+        //, basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true)
+    );
 
     auto wrappedExternalFacility = M::fromAbstractOnOrderFacility(new calculator_logic::ExternalCalculatorWrappedAsFacility<TheEnvironment>());
     r.registerOnOrderFacility("wrappedExternalFacility", wrappedExternalFacility);
@@ -63,7 +77,7 @@ int main(int argc, char **argv) {
     */
     auto calculatorLogicMainRes = calculator_logic::calculatorLogicMain(
         r
-        , &theChain
+        , chainFacilityFactory
         , R::facilityConnector(wrappedExternalFacility)
         //, mockExternalFacility
         , "calculator"

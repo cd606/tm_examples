@@ -11,10 +11,10 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
-#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
+#include <tm_kit/transport/SharedChainCreator.hpp>
 
 using namespace simple_demo_chain_version;
 
@@ -29,7 +29,8 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::rabbitmq::RabbitMQComponent,
         transport::zeromq::ZeroMQComponent,
-        transport::HeartbeatAndAlertComponent
+        transport::HeartbeatAndAlertComponent,
+        transport::lock_free_in_memory_shared_chain::SharedMemoryChainComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -47,14 +48,28 @@ int main(int argc, char **argv) {
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.main_logic.heartbeat", std::chrono::seconds(1));
 
     //setting up chain
-    using Chain = transport::lock_free_in_memory_shared_chain::LockFreeInBoostSharedMemoryChain<
-        ChainData
-        , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainFastRecoverSupport::ByOffset
-        , transport::lock_free_in_memory_shared_chain::BoostSharedMemoryChainExtraDataProtectionStrategy::MutexProtected
-    >;
     std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
-    auto chainName = today+"-simple-demo-chain";
-    Chain theChain(chainName, 100*1024*1024);
+    std::ostringstream chainLocatorOss;
+    chainLocatorOss << "in_shared_memory://::::" << today << "-simple-demo-chain[size=" << (100*1024*1024) << "]";
+    std::string chainLocatorStr = chainLocatorOss.str();
+
+    //Please note that this object should not be allowed to go out of scope
+    transport::SharedChainCreator<M> sharedChainCreator;
+
+    auto chainFacilityFactory = sharedChainCreator.writerFactory<
+        ChainData
+        , main_program_logic::MainProgramStateFolder
+        , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
+    >(
+        chainLocatorStr
+    );
+    auto chainDataImporterFactory = sharedChainCreator.readerFactory<
+        ChainData
+        , main_program_logic::TrivialChainDataFolder
+    >(
+        &env
+        , chainLocatorStr
+    );
 
     //get the input data
     auto heartbeatSource = 
@@ -82,7 +97,8 @@ int main(int argc, char **argv) {
     //main logic 
     main_program_logic::mainProgramLogicMain(
         r
-        , &theChain
+        , chainFacilityFactory
+        , chainDataImporterFactory
         , inputDataSource.clone()
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(

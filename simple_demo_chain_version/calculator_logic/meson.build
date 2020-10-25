@@ -4,9 +4,9 @@ test_gen = generator(protoc, \
 test_gen_out = test_gen.process(
     '../proto/defs.proto'
 )
-tm_simple_demo_chain_version_main_program_logic_lib = static_library(
-    'tm_simple_demo_chain_version_main_program_logic'
-    , ['MainProgramStateFolder.cpp', 'OperationLogic.cpp', 'ProgressReporter.cpp', test_gen_out]
+tm_simple_demo_chain_version_calculator_logic_lib = static_library(
+    'tm_simple_demo_chain_version_calculator_logic'
+    , ['CalculatorStateFolder.cpp', 'CalculatorIdleWorker.cpp', test_gen_out]
     , include_directories: [inc]
     , dependencies: [common_deps]
 )

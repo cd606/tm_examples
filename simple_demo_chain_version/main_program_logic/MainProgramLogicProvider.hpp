@@ -19,10 +19,18 @@
 
 namespace simple_demo_chain_version { namespace main_program_logic {
 
-    template <class R, class Chain>
+    template <class R>
     void mainProgramLogicMain(
         R &r 
-        , Chain *chain
+        , basic::simple_shared_chain::ChainWriterOnOrderFacilityFactory<
+            typename R::AppType
+            , MainProgramStateFolder
+            , MainProgramFacilityInputHandler<typename R::EnvironmentType>
+        > chainFacilityFactory
+        , basic::simple_shared_chain::ChainReaderImporterFactory<
+            typename R::AppType
+            , TrivialChainDataFolder
+        > chainDataImporterFactory
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
         , typename R::template FacilityWrapper<std::tuple<std::string, ConfigureCommand>, ConfigureResult> cfgFacilityWrapper
         , std::string const &graphPrefix
@@ -105,19 +113,14 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         r.registerAction(graphPrefix+"/preprocess", upToOperationLogicInput);
         r.registerAction(graphPrefix+"/operation_logic", logic);
 
-        using Writer = basic::simple_shared_chain::ChainWriter<
-            M, Chain
-            , MainProgramStateFolder<TheEnvironment,Chain>
-            , MainProgramFacilityInputHandler<TheEnvironment,Chain>
-        >;
-        auto chainFacility = Writer::onOrderFacility(chain);
+        auto chainFacility = chainFacilityFactory();
         auto keyify = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template keyify<double>()
         );
         auto extractFacilityOutput = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template extractDataFromKeyedData<
-                typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::InputType
-                , typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::ResponseType
+                typename MainProgramFacilityInputHandler<TheEnvironment>::InputType
+                , typename MainProgramFacilityInputHandler<TheEnvironment>::ResponseType
             >()
         );
         r.registerOnOrderFacility(graphPrefix+"/write_to_chain", chainFacility);
@@ -145,7 +148,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         auto progressReporterPtr = std::make_shared<ProgressReporter>();
         r.preservePointer(progressReporterPtr);
         auto progressReporter = M::template liftMulti2<
-            typename MainProgramFacilityInputHandler<TheEnvironment,Chain>::ResponseType
+            typename MainProgramFacilityInputHandler<TheEnvironment>::ResponseType
             , ChainData
         >(
             boost::hana::curry<4>(std::mem_fn(&ProgressReporter::reportProgress))(progressReporterPtr.get())
@@ -154,7 +157,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
 
         r.execute(progressReporter, r.actionAsSource(extractFacilityOutput));
 
-        auto chainDataReader = MainProgramChainDataReader<M,Chain>::importer(chain);
+        auto chainDataReader = chainDataImporterFactory();
         r.registerImporter(graphPrefix+"/chainDataReader", chainDataReader);
         auto simpleFilter = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()

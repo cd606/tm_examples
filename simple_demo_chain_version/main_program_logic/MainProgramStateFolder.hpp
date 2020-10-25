@@ -14,16 +14,16 @@ namespace simple_demo_chain_version { namespace main_program_logic {
     #define MainProgramStateFields \
         ((int, max_id_sofar)) \
         ((std::unordered_set<int>, outstandingIDs)) \
-        ((typename Chain::StorageIDType, latestID)) \
+        ((std::string, latestID)) \
         ((int64_t, updateTimestamp))
 
-    TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Chain)), MainProgramState, MainProgramStateFields);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(MainProgramState, MainProgramStateFields);
 
-    template <class Env, class Chain>
     class MainProgramStateFolder {
     public:
-        using ResultType = MainProgramState<Chain>;
-        static ResultType initialize(Env *env, Chain *chain) {
+        using ResultType = MainProgramState;
+        template <class Chain>
+        static ResultType initialize(void *env, Chain *chain) {
             if constexpr (Chain::SupportsExtraData) {
                 auto val = chain->template loadExtraData<ResultType>(
                     "main_program_state"
@@ -43,30 +43,10 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                 return res;
             }
         }
-        static typename Chain::StorageIDType chainIDForValue(ResultType const &r) {
+        static std::string const &chainIDForValue(ResultType const &r) {
             return r.latestID;
         }
-        static void foldInPlace(ResultType &state, typename Chain::ItemType const &item) {
-            static_assert(std::is_same_v<typename Chain::DataType, simple_demo_chain_version::ChainData>);
-
-            state.latestID = Chain::extractStorageID(item);
-            ChainData const *p = Chain::extractData(item);
-            if (!p) {
-                return;
-            }
-            state.updateTimestamp = p->timestamp;
-            std::visit([&state](auto const &content) {
-                using T = std::decay_t<decltype(content)>;
-                if constexpr (std::is_same_v<T, simple_demo_chain_version::PlaceRequest>) {
-                    if (state.max_id_sofar < content.id) {
-                        state.max_id_sofar = content.id;
-                    }
-                    state.outstandingIDs.insert(content.id);
-                } else if constexpr (std::is_same_v<T, simple_demo_chain_version::RequestCompleted>) {
-                    state.outstandingIDs.erase(content.id);
-                }
-            }, p->update);
-        }
+        static void foldInPlace(ResultType &state, std::string_view const &id, ChainData const *item);
         static std::chrono::system_clock::time_point extractTime(ResultType const &st) {
             return infra::withtime_utils::epochDurationToTime<std::chrono::milliseconds>(st.updateTimestamp);
         }
@@ -74,6 +54,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
 
 } }
 
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE_NO_FIELD_NAMES(((typename, Chain)), simple_demo_chain_version::main_program_logic::MainProgramState, MainProgramStateFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(simple_demo_chain_version::main_program_logic::MainProgramState, MainProgramStateFields);
 
 #endif

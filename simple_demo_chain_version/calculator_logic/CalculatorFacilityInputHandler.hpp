@@ -14,22 +14,24 @@ namespace simple_demo_chain_version { namespace calculator_logic {
 
     //This worker simply puts the result of external calculation on the chain
     
-    template <class Env, class Chain>
     class CalculatorFacilityInputHandler {
     public:
         using InputType = ExternalCalculatorOutput;
         using ResponseType = simple_demo_chain_version::ChainData;
 
+        template <class Env>
         using RealInput = typename infra::RealTimeApp<Env>::template TimedDataType<
             typename infra::RealTimeApp<Env>::template Key<InputType>
         >;
 
+        template <class Env, class Chain>
         static void initialize(Env *env, Chain *chain) {}
 
+        template <class Env, class Chain>
         static std::tuple<
             ResponseType
-            , std::optional<std::tuple<typename Chain::StorageIDType, simple_demo_chain_version::ChainData>>
-        > handleInput(Env *env, Chain *chain, RealInput &&input, CalculatorState<Chain> const &state) {
+            , std::optional<std::tuple<std::string, simple_demo_chain_version::ChainData>>
+        > handleInput(Env *env, Chain *chain, RealInput<Env> &&input, CalculatorState const &state) {
             int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
             simple_demo_chain_version::ChainData d {
                 now
@@ -41,8 +43,8 @@ namespace simple_demo_chain_version { namespace calculator_logic {
             };
             return {
                 d
-                , std::tuple<typename Chain::StorageIDType, simple_demo_chain_version::ChainData> {
-                    Chain::template newStorageID<Env>()
+                , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                    ""
                     , d
                 }
             };
