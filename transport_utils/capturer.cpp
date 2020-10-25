@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     TheEnvironment env;
     R r(&env);
 
-    std::ofstream ofs(vm["output"].as<std::string>());
+    std::ofstream ofs(vm["output"].as<std::string>(), std::ios::binary);
 
     {
         auto dataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>

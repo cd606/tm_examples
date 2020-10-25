@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
         std::cerr << "Usage: clock_logic_test [real_time|single_pass_iteration]\n";
         return 1;
     }   
-    std::ofstream ofs(argv[1]);
+    std::ofstream ofs(argv[1], std::ios::binary);
     if (mode == "real_time") {
         real_time_run(ofs);
     } else {
