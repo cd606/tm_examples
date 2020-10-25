@@ -304,7 +304,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
     using M = infra::SinglePassIterationApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
 
-    std::ifstream ifs(inputFile);
+    std::ifstream ifs(inputFile, std::ios::binary);
 
     TheEnvironment env;
     //env.setLogFilePrefix("simple_demo_secure_main", true);

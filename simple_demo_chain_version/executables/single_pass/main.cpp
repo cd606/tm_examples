@@ -36,7 +36,7 @@ using R = infra::AppRunner<M>;
 void run(std::string const &inputFile) {
     TheEnvironment env;
     R r(&env);
-    std::ifstream ifs(inputFile.c_str());
+    std::ifstream ifs(inputFile.c_str(), std::ios::binary);
 
     auto byteDataImporter = basic::ByteDataWithTopicRecordFileImporterExporter<M>::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
         ifs

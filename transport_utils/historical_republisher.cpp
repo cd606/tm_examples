@@ -53,7 +53,7 @@ std::chrono::system_clock::time_point fetchFirstTimePoint(ReplayParameter &&para
     TheEnvironment env;
     infra::AppRunner<App> r(&env);
 
-    std::ifstream ifs(param.inputFile);    
+    std::ifstream ifs(param.inputFile, std::ios::binary);    
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
         ifs, 
         {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
@@ -123,7 +123,7 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     using R = infra::AppRunner<App>;
     R r(&env);
     
-    std::ifstream ifs(param.inputFile);
+    std::ifstream ifs(param.inputFile, std::ios::binary);
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
         ifs, 
         {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
