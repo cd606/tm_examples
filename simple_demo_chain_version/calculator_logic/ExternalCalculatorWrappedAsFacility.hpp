@@ -21,7 +21,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
     public:
         ExternalCalculatorWrappedAsFacility() : env_(nullptr), calc_() {}
         virtual ~ExternalCalculatorWrappedAsFacility() {}
-        virtual void start(Env *env) {
+        virtual void start(Env *env) override final {
             env_ = env;
             calc_.start(this);
         }

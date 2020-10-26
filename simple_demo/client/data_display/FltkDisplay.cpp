@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
   R r(&env);
   env.setLogFilePrefix("fltk_display", true);
   auto dataPrinter = M::pureExporter<simple_demo::InputData>(
-    [box,chart,&count,&chartData,DATA_SIZE](simple_demo::InputData &&d) {
+    [box,chart,&count,&chartData](simple_demo::InputData &&d) {
         std::ostringstream oss;
         oss << "Value: " << std::fixed << std::setprecision(6) << d.value();
         Fl::lock();
