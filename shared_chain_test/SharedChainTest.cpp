@@ -89,17 +89,17 @@ public:
             if (val) {
                 return *val;
             } else {
-                return State {1000, 1000, 0, 0, 0, {0, ""}};
+                return State {1000, 1000, 0, 0, 0, {0, {""}}};
             }
         } else {
-            return State {1000, 1000, 0, 0, 0, {0, ""}};
+            return State {1000, 1000, 0, 0, 0, {0, {""}}};
         }
     }
     static typename std::string chainIDForState(State const &s) {
         return std::string {s.lastSeenID.id.data(), s.lastSeenID.len};
     }
     std::optional<State> fold(State const &lastState, DataOnChain const &newInfo) {
-        return std::visit([this,&lastState](auto const &x) -> std::optional<State> {
+        return std::visit([&lastState](auto const &x) -> std::optional<State> {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, TransferRequest>) {
                 State newState = lastState;
@@ -114,10 +114,6 @@ public:
                     newState.b_pending += x.amount;
                 }
                 ++(newState.pendingRequestCount);
-                /*
-                std::ostringstream oss;
-                oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
-                env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else if constexpr (std::is_same_v<T, Process>) {
                 State newState = lastState;
@@ -126,10 +122,6 @@ public:
                 newState.b += newState.b_pending;
                 newState.b_pending = 0;
                 newState.pendingRequestCount = 0;
-                /*
-                std::ostringstream oss;
-                oss << "[StateFolder " << this << "] processing " << x << " ==> " << newState;
-                env_->log(infra::LogLevel::Info, oss.str());*/
                 return newState;
             } else {
                 return std::nullopt;
