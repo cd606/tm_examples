@@ -44,8 +44,8 @@ async function run() {
         },
         objectMode : true
     });
-    //let serviceAddr = "rabbitmq://127.0.0.1::guest:guest:test_queue";
-    let serviceAddr = "redis://127.0.0.1:6379:::test_queue";
+    let serviceAddr = "rabbitmq://127.0.0.1::guest:guest:test_queue";
+    //let serviceAddr = "redis://127.0.0.1:6379:::test_queue";
     let serviceStream = await MultiTransportFacilityServer.facilityStream({
         address : serviceAddr
         , identityResolver : function(data : Buffer) {
@@ -76,9 +76,9 @@ async function run() {
                     , host : os.hostname()
                     , pid : process.pid
                     , sender_description: 'simple_demo plain Calculator'
-                    , broadcast_channels: []
+		    , broadcast_channels: {}
                     , facility_channels : {
-                        'facility' : serviceAddr
+                        'calculator facility' : serviceAddr
                     }
                     , details : {
                         'program' : {
