@@ -97,8 +97,8 @@ namespace mock_calculator_dotnet
             var broadcastChannels = new Dictionary<string, List<string>>();
             var facilityChannels = new Dictionary<string, string>();
             facilityChannels.Add("calculator facility", serviceAddr);
-            var details = new Dictionary<string, (string, string)>();
-            details.Add("program", ("Good", ""));
+            var details = new Dictionary<string, Heartbeat.DetailedStatus>();
+            details.Add("program", new Heartbeat.DetailedStatus {status="Good", info=""});
             var timerImporter = ClockImporter<ClockEnv>.createRecurringClockImporter<TypedDataWithTopic<Heartbeat>>(
                 start : env.now()
                 , end : env.now().AddDays(1)
