@@ -124,23 +124,26 @@ namespace listener
                     topic = topicOption.Value();
                 }
                 var printMode = PrintMode.Length;
-                switch (printModeOption.Value())
+                if (printModeOption.HasValue())
                 {
-                    case "length":
-                        printMode = PrintMode.Length;
-                        break;
-                    case "string":
-                        printMode = PrintMode.String;
-                        break;
-                    case "cbor":
-                        printMode = PrintMode.Cbor;
-                        break;
-                    case "none":
-                        printMode = PrintMode.None;
-                        break;
-                    default:
-                        Console.Error.WriteLine("Unknown print mode");
-                        return 1;
+                    switch (printModeOption.Value())
+                    {
+                        case "length":
+                            printMode = PrintMode.Length;
+                            break;
+                        case "string":
+                            printMode = PrintMode.String;
+                            break;
+                        case "cbor":
+                            printMode = PrintMode.Cbor;
+                            break;
+                        case "none":
+                            printMode = PrintMode.None;
+                            break;
+                        default:
+                            Console.Error.WriteLine("Unknown print mode");
+                            return 1;
+                    }
                 }
                 var summaryPeriod = 1;
                 if (summaryPeriodOption.HasValue())
