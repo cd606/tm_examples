@@ -50,7 +50,7 @@ proto.load('../proto/defs.proto').then(function(root) {
 function run(inputT : proto.Type, outputT : proto.Type) : void {
     let screen = blessed.screen({
         smartCSR: true
-        , title: 'Plain Console Enabler'
+        , title: 'Secure Console Enabler'
     });
     let label = blessed.box({
         parent: screen
