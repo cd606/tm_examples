@@ -88,7 +88,7 @@ namespace mock_calculator_dotnet
             );
             var heartbeatAddr = "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]";
             var heartbeatPublisher = MultiTransportExporter<ClockEnv>.CreateTypedExporter<Heartbeat>(
-                encoder : (h) => h.asCborObject().EncodeToBytes()
+                encoder : (h) => CborEncoder<Heartbeat>.Encode(h).EncodeToBytes()
                 , address : heartbeatAddr
             );
             var heartbeatID = Guid.NewGuid().ToString();

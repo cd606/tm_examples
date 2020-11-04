@@ -104,7 +104,7 @@ namespace console_enabler_dotnet
                 , identityAttacher : ClientSideIdentityAttacher.SignatureBasedIdentityAttacher(signatureSecretKey)
             );
             var heartbeatSource = MultiTransportImporter<ClockEnv>.CreateTypedImporter<Heartbeat>(
-                decoder : (x) => new Heartbeat().fromCborObject(CBORObject.DecodeFromBytes(x))
+                decoder : (x) => CborDecoder<Heartbeat>.Decode(CBORObject.DecodeFromBytes(x))
                 , address : "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
                 , topicStr : "simple_demo.secure_executables.#.heartbeat"
                 , hook : new WireToUserHook(this.verifyAndDecode)
