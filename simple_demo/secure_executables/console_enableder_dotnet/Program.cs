@@ -70,7 +70,7 @@ namespace console_enabler_dotnet
             var top = Application.Top;
 
             var window = new Window() {
-                X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(), Title = "Console Enabler (Plain)"
+                X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill(), Title = "Console Enabler (Secure)"
             };
             top.Add(window);
 
