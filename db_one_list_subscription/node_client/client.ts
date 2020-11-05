@@ -29,7 +29,7 @@ function sendCommand(stream : Stream.Writable, cmd : any) {
 }
 
 function attachMyIdentity(data : Buffer) : Buffer {
-    return cbor.encode(["node_client", data]);
+    return Buffer.from(cbor.encode(["node_client", data]));
 }
 
 async function run(args : Args) {
@@ -69,17 +69,17 @@ async function run(args : Args) {
             sendCommand(keyify, [
                 1
                 , {
-                    key: 0
-                    , old_version_slice: [args.old_version]
-                    , old_data_summary: [args.old_count]
-                    , data_delta: {
+                    key : 0
+                    , oldVersionSlice : [args.old_version]
+                    , oldDataSummary : [args.old_count]
+                    , dataDelta : {
                         deletes: {keys: []}
-                        , inserts_updates: {items: [
-                            {
-                                key: {name: args.name}
-                                , data: {amount: args.amount, stat: args.stat}
-                            }
-                        ]}
+                        , inserts_updates : {
+                            items: [{
+                                key : [args.name]
+                                , data : [args.amount, args.stat]
+                            }]
+                        }
                     }
                 }
             ]);
@@ -90,12 +90,14 @@ async function run(args : Args) {
             sendCommand(keyify, [
                 1
                 , {
-                    key: 0
-                    , old_version_slice: [args.old_version]
-                    , old_data_summary: [args.old_count]
-                    , data_delta: {
-                        deletes: {keys: [{name: args.name}]}
-                        , inserts_updates: {items: []}
+                    key : 0
+                    , oldVersionSlice : [args.old_version]
+                    , oldDataSummary : [args.old_count]
+                    , dataDelta : {
+                        deletes: {keys: [[args.name]]}
+                        , inserts_updates : {
+                            items: []
+                        }
                     }
                 }
             ]);
@@ -107,13 +109,13 @@ async function run(args : Args) {
                 sendCommand(keyify, [
                     1
                     , {
-                        original_subscription_id: args.id
+                        originalSubscriptionID: args.id
                     }
                 ]);
             } else {
                 sendCommand(keyify, [
                     3
-                    , 0
+                    , {}
                 ]);
             }
             break;
@@ -122,7 +124,7 @@ async function run(args : Args) {
             subscriptionStream[1].pipe(resultHandlingStream);
             sendCommand(keyify, [
                 2
-                , 0
+                , {}
             ]);
             break;
         case Command.Snapshot:
