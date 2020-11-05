@@ -1,11 +1,55 @@
 ﻿using System;
+using System.Collections.Generic;
 using PeterO.Cbor;
+using Dev.CD606.TM.Infra.RealTimeApp;
+using Dev.CD606.TM.Infra;
+using Dev.CD606.TM.Basic;
+using Dev.CD606.TM.Transport;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Microsoft.Extensions.CommandLineUtils;
 
 namespace dotnet_client
 {
+    [CborWithoutFieldNames]
+    class DBKey
+    {
+        public string name {get; set;}
+    }
+    [CborWithoutFieldNames]
+    class DBData
+    {
+        public Int32 amount {get; set;}
+        public double stat {get; set;}
+    }
+    [CborWithFieldNames]
+    class DBItem
+    {
+        public DBKey key {get; set;}
+        public DBData data {get; set;}
+    }
+    [CborWithFieldNames]
+    class DBDeltaDelete
+    {
+        public List<DBKey> keys {get; set;}
+    }
+    [CborWithFieldNames]
+    class DBDeltaInsertUpdate
+    {
+        public List<DBItem> items {get; set;}
+    }
+    [CborWithFieldNames]
+    class DBDelta
+    {
+        public DBDeltaDelete deletes {get; set;}
+        public DBDeltaInsertUpdate inserts_updates {get; set;}
+    }
+}
+
+namespace dotnet_client
+{
+    using GS = GeneralSubscriber<Int64, VoidStruct, Int64, Dictionary<DBKey,DBData>, Int64, DBDelta>;
+    using TI = TransactionInterface<Int64, VoidStruct, Int64, Dictionary<DBKey,DBData>, UInt32, Int64, DBDelta>;
     class Program
     {
         enum Command {
@@ -22,188 +66,180 @@ namespace dotnet_client
             public int amount;
             public double stat;
             public long old_version;
-            public int old_count;
+            public uint old_count;
             public string id;
         }
 
-        IConnection conn = null;
-        IModel chan = null;
-        string replyQueue = "";
-        EventingBasicConsumer consumer = null;
+        const string gsAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue";
+        const string tiAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue";
 
-        void Start() {
-            var factory = new ConnectionFactory {
-                HostName = "127.0.0.1"
-                , UserName = "guest"
-                , Password = "guest"
-            };
-            conn = factory.CreateConnection();
-            chan = conn.CreateModel();
-            replyQueue = chan.QueueDeclare().QueueName;
-            consumer = new EventingBasicConsumer(chan);
-
-            consumer.Received += (model, ea) => {
-                var body = ea.Body.ToArray();
-                var isFinal = false;
-                CBORObject cbor = null;
-                if (ea.BasicProperties.ContentEncoding.Equals("with_final")) {
-                    if (body.Length > 0) {
-                        isFinal = (body[body.Length-1] != 0);
-                        Array.Resize(ref body, body.Length-1);
-                        cbor = CBORObject.DecodeFromBytes(body);
+        void runGS(ClockEnv env, GS.Input input)
+        {
+            var facility = MultiTransportFacility<ClockEnv>.CreateFacility<GS.Input,GS.Output>(
+                encoder : (x) => CborEncoder<GS.Input>.Encode(x).EncodeToBytes()
+                , decoder : (o) => {
+                    return CborDecoder<GS.Output>.Decode(CBORObject.DecodeFromBytes(o));
+                }
+                , address : gsAddress
+                , identityAttacher: ClientSideIdentityAttacher.SimpleIdentityAttacher("dotnet_client")
+            );
+            var keyInput = RealTimeAppUtils<ClockEnv>.constFirstPushKeyImporter<GS.Input>(input);
+            var exporter = RealTimeAppUtils<ClockEnv>.simpleExporter<KeyedData<GS.Input,GS.Output>>(
+                (d) => {
+                    env.log(LogLevel.Info, $"Got GS Output: {d.timedData.value.data.asCborObject()}");
+                    if (d.timedData.finalFlag)
+                    {
+                        env.log(LogLevel.Info, "Got final GS output, exiting");
+                        env.exit();
                     }
-                } else {
-                    isFinal = false;
-                    cbor = CBORObject.DecodeFromBytes(body);
                 }
-                Console.Write("Got update: ");
-                Console.Write(cbor);
-                Console.Write($" (ID: {ea.BasicProperties.CorrelationId})");
-                Console.WriteLine($" (isFinal: {isFinal})");
-                if (isFinal) {
-                    Environment.Exit(0);
-                }
-            };
+                , false
+            );
+            var r = new Runner<ClockEnv>(env);
+            r.placeOrderWithFacility(r.importItem(keyInput), facility, r.exporterAsSink(exporter));
+            r.finalize();
+            RealTimeAppUtils<ClockEnv>.runForever(env);
         }
-        void SendCommand(string queue, CBORObject cmd) {
-            if (chan != null) {
-                var props = chan.CreateBasicProperties();
-                var id = Guid.NewGuid().ToString();
-                props.CorrelationId = id;
-                props.ReplyTo = replyQueue;
-                props.DeliveryMode = 1;
-                props.Expiration = "5000";
-                props.ContentEncoding = "with_final";
 
-                CBORObject withIdentity = CBORObject
-                                            .NewArray()
-                                            .Add("dotnet_client")
-                                            .Add(cmd.EncodeToBytes());
-                chan.BasicPublish(
-                    exchange: ""
-                    , routingKey: queue
-                    , basicProperties: props
-                    , body: withIdentity.EncodeToBytes()
-                );
-                chan.BasicConsume(
-                    consumer: consumer
-                    , queue: replyQueue
-                    , autoAck: true
-                );
-                while (true) {
-                    System.Threading.Thread.Sleep(1000);
+        void runTI(ClockEnv env, TI.Transaction input)
+        {
+            var facility = MultiTransportFacility<ClockEnv>.CreateFacility<TI.Transaction,TI.TransactionResponse>(
+                encoder : (x) => CborEncoder<TI.Transaction>.Encode(x).EncodeToBytes()
+                , decoder : (o) => {
+                    return CborDecoder<TI.TransactionResponse>.Decode(CBORObject.DecodeFromBytes(o));
                 }
-            }
-        }
-        void Subscribe() {
-            SendCommand(
-                "test_db_one_list_cmd_subscription_queue"
-                , CBORObject.NewArray()
-                    .Add(0) //subscribe
-                    .Add(CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(0))) //subscription object, 0 is the key (VoidStruct)
+                , address : tiAddress
+                , identityAttacher: ClientSideIdentityAttacher.SimpleIdentityAttacher("dotnet_client")
             );
+            var keyInput = RealTimeAppUtils<ClockEnv>.constFirstPushKeyImporter<TI.Transaction>(input);
+            var exporter = RealTimeAppUtils<ClockEnv>.simpleExporter<KeyedData<TI.Transaction,TI.TransactionResponse>>(
+                (d) => {
+                    env.log(LogLevel.Info, $"Got TI Output: {CborEncoder<TI.TransactionResponse>.Encode(d.timedData.value.data)}");
+                    if (d.timedData.finalFlag)
+                    {
+                        env.log(LogLevel.Info, "Got final TI output, exiting");
+                        env.exit();
+                    }
+                }
+                , false
+            );
+            var r = new Runner<ClockEnv>(env);
+            r.placeOrderWithFacility(r.importItem(keyInput), facility, r.exporterAsSink(exporter));
+            r.finalize();
+            RealTimeAppUtils<ClockEnv>.runForever(env);
         }
-        void Update(Data data) {
-            var updatedKey = CBORObject.NewMap().Add("name", data.name);
-            var updatedValue = CBORObject.NewMap().Add("amount", data.amount).Add("stat", data.stat);
-            var updatedData = 
-                CBORObject.NewArray()
-                    .Add(CBORObject.NewMap()
-                        .Add("key", updatedKey)
-                        .Add("data", updatedValue)
-                    );
-            var dataDelta = 
-                CBORObject.NewMap()
-                    .Add("deletes", CBORObject.NewMap().Add("keys", CBORObject.NewArray()))
-                    .Add("inserts_updates", CBORObject.NewMap().Add("items", updatedData));
-            SendCommand(
-                "test_db_one_list_cmd_transaction_queue"
-                , CBORObject.NewArray()
-                    .Add(1) //update
-                    .Add(
-                        CBORObject.NewMap()
-                            .Add("key", 0)
-                            .Add("old_version_slice", CBORObject.NewArray().Add(data.old_version))
-                            .Add("old_data_summary", CBORObject.NewArray().Add(data.old_count))
-                            .Add("data_delta", dataDelta)
+        void Subscribe(ClockEnv env) {
+            runGS(env, new GS.Input() {
+                data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
+                    .From1(
+                        new GS.Subscription() {
+                            keys = new List<VoidStruct>() {new VoidStruct()}
+                        }
                     )
-            );
+            });
         }
-        void Delete(Data data) {
-            var deletedKey = CBORObject.NewMap().Add("name", data.name);
-            var dataDelta = 
-                CBORObject.NewMap()
-                    .Add("deletes", CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(deletedKey)))
-                    .Add("inserts_updates", CBORObject.NewMap().Add("items", CBORObject.NewArray()));
-            SendCommand(
-                "test_db_one_list_cmd_transaction_queue"
-                , CBORObject.NewArray()
-                    .Add(1) //update
-                    .Add(
-                        CBORObject.NewMap()
-                            .Add("key", 0)
-                            .Add("old_version_slice", CBORObject.NewArray().Add(data.old_version))
-                            .Add("old_data_summary", CBORObject.NewArray().Add(data.old_count))
-                            .Add("data_delta", dataDelta)
-                    )
-            );
+        void Update(ClockEnv env, Data data) {
+            runTI(env, new TI.Transaction() {
+                data = Variant<TI.InsertAction, TI.UpdateAction, TI.DeleteAction>
+                    .From2(new TI.UpdateAction() {
+                        key = new VoidStruct()
+                        , oldVersionSlice = data.old_version
+                        , oldDataSummary = data.old_count
+                        , dataDelta = new DBDelta() {
+                            deletes = new DBDeltaDelete() { keys = new List<DBKey>() }
+                            , inserts_updates = new DBDeltaInsertUpdate() {
+                                items = new List<DBItem>() {
+                                    new DBItem() {
+                                        key = new DBKey() {name = data.name}
+                                        , data = new DBData() {
+                                            amount = data.amount 
+                                            , stat = data.stat
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
+            });
         }
-        void Unsubscribe(Data data) {
-            if (data.id == "" || data.id == "all") {
-                SendCommand(
-                    "test_db_one_list_cmd_subscription_queue"
-                    , CBORObject.NewArray()
-                        .Add(3) //unsubscribe all
-                        .Add(0) //0 means empty object (the UnsubscribeAll object)
-                );
-            } else {
-                SendCommand(
-                    "test_db_one_list_cmd_subscription_queue"
-                    , CBORObject.NewArray()
-                        .Add(1) //unsubscribe
-                        .Add(
-                            CBORObject.NewMap()
-                                .Add("original_subscription_id", data.id)
+        void Delete(ClockEnv env, Data data) {
+            runTI(env, new TI.Transaction() {
+                data = Variant<TI.InsertAction, TI.UpdateAction, TI.DeleteAction>
+                    .From2(new TI.UpdateAction() {
+                        key = new VoidStruct()
+                        , oldVersionSlice = data.old_version
+                        , oldDataSummary = data.old_count
+                        , dataDelta = new DBDelta() {
+                            deletes = new DBDeltaDelete() { 
+                                keys = new List<DBKey>() {
+                                    new DBKey() {name = data.name}
+                                } 
+                            }
+                            , inserts_updates = new DBDeltaInsertUpdate() {
+                                items = new List<DBItem>()
+                            }
+                        }
+                    })
+            });
+        }
+        void Unsubscribe(ClockEnv env, Data data) {
+            if (data.id == null || data.id.Equals("") || data.id.Equals("all")) {
+                runGS(env, new GS.Input() {
+                    data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
+                        .From4(
+                            new GS.UnsubscribeAll()
                         )
-                );
+                });
+            } else {
+                runGS(env, new GS.Input() {
+                    data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
+                        .From2(
+                            new GS.Unsubscription() {
+                                originalSubscriptionID = data.id
+                            }
+                        )
+                });
             }
         }
-        void List(Data data) {
-            SendCommand(
-                "test_db_one_list_cmd_subscription_queue"
-                , CBORObject.NewArray()
-                    .Add(2) //list
-                    .Add(0) //0 means empty object (the ListSubscriptions object)
-            );
+        void List(ClockEnv env, Data data) {
+            var input = new GS.Input() {
+                data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
+                    .From3(
+                        new GS.ListSubscriptions()
+                    )
+            }; 
+            runGS(env, input);
         }
-        void Snapshot() {
-            SendCommand(
-                "test_db_one_list_cmd_subscription_queue"
-                , CBORObject.NewArray()
-                    .Add(4) //snapshot
-                    .Add(CBORObject.NewMap().Add("keys", CBORObject.NewArray().Add(0))) //subscription object, 0 is the key (VoidStruct)
-            );
+        void Snapshot(ClockEnv env) {
+            var input = new GS.Input() {
+                data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
+                    .From5(
+                        new GS.SnapshotRequest() {
+                            keys = new List<VoidStruct>() {new VoidStruct()}
+                        }
+                    )
+            };
+            runGS(env, input);
         }
-        void Run(Command cmd, Data data) {
-            Start();
+        void Run(ClockEnv env, Command cmd, Data data) {
             switch (cmd) {
             case Command.Subscribe:
-                Subscribe();
+                Subscribe(env);
                 break;
             case Command.Update:
-                Update(data);
+                Update(env, data);
                 break;
             case Command.Delete:
-                Delete(data);
+                Delete(env, data);
                 break;
             case Command.Unsubscribe:
-                Unsubscribe(data);
+                Unsubscribe(env, data);
                 break;
             case Command.List:
-                List(data);
+                List(env, data);
                 break;
             case Command.Snapshot:
-                Snapshot();
+                Snapshot(env);
                 break;
             default:
                 break;
@@ -216,7 +252,7 @@ namespace dotnet_client
             );
             CommandOption cmdOption = app.Option(
                 "-c|--cmd <cmd>"
-                , "the command to send"
+                , "the command to send (subscribe|update|delete|unsubscribe|list|snapshot)"
                 , CommandOptionType.SingleValue
             );
             CommandOption nameOption = app.Option(
@@ -255,6 +291,7 @@ namespace dotnet_client
                     Console.Error.WriteLine("Please provide command");
                     return 1;
                 }
+                var env = new ClockEnv();
                 Data data = new Data();
                 if (nameOption.HasValue()) {
                     data.name = nameOption.Value();
@@ -269,31 +306,32 @@ namespace dotnet_client
                     data.old_version = long.Parse(oldVersionOption.Value());
                 }
                 if (oldCountOption.HasValue()) {
-                    data.old_count = int.Parse(oldCountOption.Value());
+                    data.old_count = uint.Parse(oldCountOption.Value());
                 }
                 if (idOption.HasValue()) {
                     data.id = idOption.Value();
                 }
                 switch (cmdOption.Value()) {
                 case "subscribe":
-                    new Program().Run(Command.Subscribe, data);
+                    new Program().Run(env, Command.Subscribe, data);
                     break;
                 case "update":
-                    new Program().Run(Command.Update, data);
+                    new Program().Run(env, Command.Update, data);
                     break;
                 case "delete":
-                    new Program().Run(Command.Delete, data);
+                    new Program().Run(env, Command.Delete, data);
                     break;
                 case "unsubscribe":
-                    new Program().Run(Command.Unsubscribe, data);
+                    new Program().Run(env, Command.Unsubscribe, data);
                     break;
                 case "list":
-                    new Program().Run(Command.List, data);
+                    new Program().Run(env, Command.List, data);
                     break;
                 case "snapshot":
-                    new Program().Run(Command.Snapshot, data);
+                    new Program().Run(env, Command.Snapshot, data);
                     break;
                 default:
+                    Console.Error.WriteLine($"Unknown command {cmdOption.Value()}");
                     break;
                 }
                 return 0;
