@@ -69,30 +69,30 @@ async def subscribe(qin : asyncio.Queue, qout : asyncio.Queue):
 async def unsubscribe(qin : asyncio.Queue, qout : asyncio.Queue, id : str):
     if id == 'all':
         await send(qin, qout, cbor2.dumps([
-            3, 0
+            3, {}
         ]))
     else:
         await send(qin, qout, cbor2.dumps([
-            1, {'original_subscription_id': id}
+            1, {'originalSubscriptionID': id}
         ]))
 
 async def list(qin : asyncio.Queue, qout : asyncio.Queue):
     await send(qin, qout, cbor2.dumps([
-        2, 0
+        2, {}
     ]))
 
 async def update(qin : asyncio.Queue, qout : asyncio.Queue, name : str, amount : int, stat : float, old_version: int, old_count : int):
     await send(qin, qout, cbor2.dumps([
         1, {
             "key": 0
-            , "old_version_slice": [old_version]
-            , "old_data_summary": [old_count]
-            , "data_delta": {
+            , "oldVersionSlice": [old_version]
+            , "oldDataSummary": [old_count]
+            , "dataDelta": {
                 "deletes": {"keys": []}
                 , "inserts_updates": {"items": [
                     {
-                        "key": {"name": name}
-                        , "data": {"amount": amount, "stat": stat}
+                        "key": [name]
+                        , "data": [amount, stat]
                     }
                 ]}
             }
@@ -103,10 +103,10 @@ async def delete(qin : asyncio.Queue, qout : asyncio.Queue, name : str, old_vers
     await send(qin, qout, cbor2.dumps([
         1, {
             "key": 0
-            , "old_version_slice": [old_version]
-            , "old_data_summary": [old_count]
-            , "data_delta": {
-                "deletes": {"keys": [{"name": name}]}
+            , "oldVersionSlice": [old_version]
+            , "oldDataSummary": [old_count]
+            , "dataDelta": {
+                "deletes": {"keys": [[name]]}
                 , "inserts_updates": {"items": []}
             }
         }
