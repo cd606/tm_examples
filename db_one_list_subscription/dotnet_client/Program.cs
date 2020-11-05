@@ -5,8 +5,6 @@ using Dev.CD606.TM.Infra.RealTimeApp;
 using Dev.CD606.TM.Infra;
 using Dev.CD606.TM.Basic;
 using Dev.CD606.TM.Transport;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using Microsoft.Extensions.CommandLineUtils;
 
 namespace dotnet_client
@@ -73,23 +71,21 @@ namespace dotnet_client
         const string gsAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue";
         const string tiAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue";
 
-        void runGS(ClockEnv env, GS.Input input)
+        void runFacility<InT,OutT>(ClockEnv env, InT input, string address)
         {
-            var facility = MultiTransportFacility<ClockEnv>.CreateFacility<GS.Input,GS.Output>(
-                encoder : (x) => CborEncoder<GS.Input>.Encode(x).EncodeToBytes()
-                , decoder : (o) => {
-                    return CborDecoder<GS.Output>.Decode(CBORObject.DecodeFromBytes(o));
-                }
-                , address : gsAddress
+            var facility = MultiTransportFacility<ClockEnv>.CreateFacility<InT,OutT>(
+                encoder : (x) => CborEncoder<InT>.Encode(x).EncodeToBytes()
+                , decoder : (o) => CborDecoder<OutT>.Decode(CBORObject.DecodeFromBytes(o))
+                , address : address
                 , identityAttacher: ClientSideIdentityAttacher.SimpleIdentityAttacher("dotnet_client")
             );
-            var keyInput = RealTimeAppUtils<ClockEnv>.constFirstPushKeyImporter<GS.Input>(input);
-            var exporter = RealTimeAppUtils<ClockEnv>.simpleExporter<KeyedData<GS.Input,GS.Output>>(
+            var keyInput = RealTimeAppUtils<ClockEnv>.constFirstPushKeyImporter<InT>(input);
+            var exporter = RealTimeAppUtils<ClockEnv>.simpleExporter<KeyedData<InT,OutT>>(
                 (d) => {
-                    env.log(LogLevel.Info, $"Got GS Output: {d.timedData.value.data.asCborObject()}");
+                    env.log(LogLevel.Info, $"Got output: {CborEncoder<OutT>.Encode(d.timedData.value.data)}");
                     if (d.timedData.finalFlag)
                     {
-                        env.log(LogLevel.Info, "Got final GS output, exiting");
+                        env.log(LogLevel.Info, "Got final output, exiting");
                         env.exit();
                     }
                 }
@@ -100,33 +96,14 @@ namespace dotnet_client
             r.finalize();
             RealTimeAppUtils<ClockEnv>.runForever(env);
         }
+        void runGS(ClockEnv env, GS.Input input)
+        {
+            runFacility<GS.Input,GS.Output>(env, input, gsAddress);
+        }
 
         void runTI(ClockEnv env, TI.Transaction input)
         {
-            var facility = MultiTransportFacility<ClockEnv>.CreateFacility<TI.Transaction,TI.TransactionResponse>(
-                encoder : (x) => CborEncoder<TI.Transaction>.Encode(x).EncodeToBytes()
-                , decoder : (o) => {
-                    return CborDecoder<TI.TransactionResponse>.Decode(CBORObject.DecodeFromBytes(o));
-                }
-                , address : tiAddress
-                , identityAttacher: ClientSideIdentityAttacher.SimpleIdentityAttacher("dotnet_client")
-            );
-            var keyInput = RealTimeAppUtils<ClockEnv>.constFirstPushKeyImporter<TI.Transaction>(input);
-            var exporter = RealTimeAppUtils<ClockEnv>.simpleExporter<KeyedData<TI.Transaction,TI.TransactionResponse>>(
-                (d) => {
-                    env.log(LogLevel.Info, $"Got TI Output: {CborEncoder<TI.TransactionResponse>.Encode(d.timedData.value.data)}");
-                    if (d.timedData.finalFlag)
-                    {
-                        env.log(LogLevel.Info, "Got final TI output, exiting");
-                        env.exit();
-                    }
-                }
-                , false
-            );
-            var r = new Runner<ClockEnv>(env);
-            r.placeOrderWithFacility(r.importItem(keyInput), facility, r.exporterAsSink(exporter));
-            r.finalize();
-            RealTimeAppUtils<ClockEnv>.runForever(env);
+            runFacility<TI.Transaction,TI.TransactionResponse>(env, input, tiAddress);
         }
         void Subscribe(ClockEnv env) {
             runGS(env, new GS.Input() {
@@ -202,24 +179,22 @@ namespace dotnet_client
             }
         }
         void List(ClockEnv env, Data data) {
-            var input = new GS.Input() {
+            runGS(env, new GS.Input() {
                 data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
                     .From3(
                         new GS.ListSubscriptions()
                     )
-            }; 
-            runGS(env, input);
+            }); 
         }
         void Snapshot(ClockEnv env) {
-            var input = new GS.Input() {
+            runGS(env, new GS.Input() {
                 data = Variant<GS.Subscription, GS.Unsubscription, GS.ListSubscriptions, GS.UnsubscribeAll, GS.SnapshotRequest>
                     .From5(
                         new GS.SnapshotRequest() {
                             keys = new List<VoidStruct>() {new VoidStruct()}
                         }
                     )
-            };
-            runGS(env, input);
+            });
         }
         void Run(ClockEnv env, Command cmd, Data data) {
             switch (cmd) {
@@ -251,7 +226,7 @@ namespace dotnet_client
                 throwOnUnexpectedArg: true
             );
             CommandOption cmdOption = app.Option(
-                "-c|--cmd <cmd>"
+                "-c|--command <cmd>"
                 , "the command to send (subscribe|update|delete|unsubscribe|list|snapshot)"
                 , CommandOptionType.SingleValue
             );
