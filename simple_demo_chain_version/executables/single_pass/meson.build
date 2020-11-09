@@ -8,7 +8,6 @@ my_link_args = ['-lrt']
 if build_machine.system() == 'windows'
   my_link_args += ['-lws2_32']
 endif
-
 executable(
     'single_pass'
     , ['main.cpp', test_gen_out]
