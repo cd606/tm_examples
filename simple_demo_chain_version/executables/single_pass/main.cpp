@@ -28,12 +28,13 @@ using TheEnvironment = infra::Environment<
         basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
         , false //don't log thread ID
     >,
-    transport::CrossGuidComponent
+    transport::CrossGuidComponent,
+    transport::AllChainComponents
 >;
 using M = infra::SinglePassIterationApp<TheEnvironment>;
 using R = infra::AppRunner<M>;
 
-void run(std::string const &inputFile) {
+void run(std::string const &inputFile, std::string const &chainLocatorStr) {
     TheEnvironment env;
     R r(&env);
     std::ifstream ifs(inputFile.c_str(), std::ios::binary);
@@ -51,7 +52,6 @@ void run(std::string const &inputFile) {
 
     auto inputDataSource = r.execute(removeTopic, r.execute(parser, r.importItem(byteDataImporter)));
 
-    std::string chainLocatorStr = "in_memory_lock_free://::::";
     transport::SharedChainCreator<M> sharedChainCreator;
 
     auto mainLogicChainFacilityFactory = sharedChainCreator.writerFactory<
@@ -117,11 +117,15 @@ void run(std::string const &inputFile) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        std::cerr << "Usage: single_pass FILE_NAME\n";
+    if (argc < 2) {
+        std::cerr << "Usage: single_pass FILE_NAME [CHAIN_LOCATOR]\n";
         return 1;
     }
     std::string dataSourceCaptureFileName = argv[1];
-    run(dataSourceCaptureFileName);
+    std::string chainLocatorStr = "in_memory_lock_free://::::";
+    if (argc >= 3) {
+        chainLocatorStr = argv[2];
+    }
+    run(dataSourceCaptureFileName, chainLocatorStr);
     return 0;
 }
