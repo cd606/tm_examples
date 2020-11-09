@@ -10,5 +10,5 @@ executable(
     , include_directories: [inc]
     , link_with: [tm_simple_demo_chain_version_proto_lib, tm_simple_demo_chain_version_main_program_logic_lib]
     , link_args : ['-lrt']
-    , dependencies: [common_deps]
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis')]
 )
