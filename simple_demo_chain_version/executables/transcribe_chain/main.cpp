@@ -38,23 +38,47 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
     R r(&env);
 
     transport::SharedChainCreator<M> sharedChainCreator;
-    auto chainDataImporter = sharedChainCreator.reader<
-        ChainData
-        , main_program_logic::TrivialChainDataFolder
-    >(
-        &env
-        , inputChainLocatorStr
-    );
-    r.registerImporter("chainDataImporter", chainDataImporter);
 
-    auto simpleFilter = infra::KleisliUtils<M>::action(
-        basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()
-    );
-    r.registerAction("simpleFilter", simpleFilter);
+    bool inputIsCaptureFile = (inputChainLocatorStr.find("://") == std::string::npos);
+    R::Sourceoid<ChainData> chainDataSource;
+
+    if (inputIsCaptureFile) {
+        auto ifs = std::make_shared<std::ifstream>(inputChainLocatorStr.c_str(), std::ios::binary);
+        r.preservePointer(ifs);
+        auto byteDataImporter = basic::ByteDataWithTopicRecordFileImporterExporter<M>::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
+            *ifs
+            , {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67}
+            , {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
+        );
+        auto parser = basic::SerializationActions<M>::deserialize<ChainData>();
+        auto removeTopic = basic::SerializationActions<M>::removeTopic<ChainData>();
+        chainDataSource = R::sourceAsSourceoid(
+            r.execute("removeTopic", removeTopic
+                , r.execute("parser", parser
+                    , r.importItem("byteDataImporter", byteDataImporter)))
+        );
+    } else {
+        auto chainDataImporter = sharedChainCreator.reader<
+            ChainData
+            , main_program_logic::TrivialChainDataFolder
+        >(
+            &env
+            , inputChainLocatorStr
+        );
+        auto simpleFilter = infra::KleisliUtils<M>::action(
+            basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()
+        );
+        chainDataSource = R::sourceAsSourceoid(
+            r.execute("simpleFilter", simpleFilter
+                , r.importItem("chainDataImporter", chainDataImporter))
+        );
+    }
+
     auto keyify = infra::KleisliUtils<M>::action(
         basic::CommonFlowUtilComponents<M>::template keyify<ChainData>()
     );
     r.registerAction("keyify", keyify);
+    r.connect(chainDataSource, r.actionAsSink(keyify));
 
     auto chainDataWriter = sharedChainCreator.writer<
         ChainData
@@ -68,7 +92,7 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
     r.registerExporter("trivialExporter", trivialExporter);
 
     r.placeOrderWithFacility(
-        r.execute(keyify, r.execute(simpleFilter, r.importItem(chainDataImporter)))
+        r.actionAsSource(keyify)
         , chainDataWriter
         , r.exporterAsSink(trivialExporter)
     );
@@ -77,7 +101,7 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
         ::setupExitTimer(
         r 
         , std::chrono::hours(24)
-        , r.importItem(chainDataImporter)
+        , r.actionAsSource(keyify)
         , [](TheEnvironment *env) {
             env->log(infra::LogLevel::Info, "Wrapping up!");
         }
@@ -89,6 +113,7 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
 int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "Usage: transcribe_chain INPUT_CHAIN_LOCATOR OUTPUT_CHAIN_LOCATOR\n";
+        std::cerr << "If INPUT_CHAIN_LOCATOR does not contain \"://\", it is treated as a capture file name\n";
         return 1;
     }
     std::string inputChainLocatorStr = argv[1];
