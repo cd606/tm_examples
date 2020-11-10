@@ -33,30 +33,6 @@ using TheEnvironment = infra::Environment<
 using M = infra::SinglePassIterationApp<TheEnvironment>;
 using R = infra::AppRunner<M>;
 
-class EmptyStateFolder {
-public:
-    using ResultType = basic::VoidStruct;
-    template <class Chain>
-    static ResultType initialize(TheEnvironment *, Chain *) {
-        return ResultType {};
-    }
-    static void foldInPlace(ResultType &res, std::string_view const &storageIDView, ChainData const *item) {
-    }
-};
-
-class TranscriptionInputHandler {
-public:
-    using InputType = ChainData;
-    using ResponseType = bool;
-    template <class Chain>
-    static void initialize(TheEnvironment *, Chain *) {}
-    template <class Chain>
-    static std::tuple<ResponseType, std::optional<std::tuple<std::string, ChainData>>>
-    handleInput(TheEnvironment *env, Chain *chain, M::TimedDataType<M::Key<ChainData>> &&input, basic::VoidStruct const &state) {
-        return {true, {{"", input.value.key()}}};
-    }
-};
-
 void run(std::string const &inputChainLocatorStr, std::string const &outputChainLocatorStr) {
     TheEnvironment env;
     R r(&env);
@@ -82,8 +58,8 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
 
     auto chainDataWriter = sharedChainCreator.writer<
         ChainData
-        , EmptyStateFolder
-        , TranscriptionInputHandler
+        , basic::simple_shared_chain::EmptyStateChainFolder
+        , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
     >(outputChainLocatorStr);
 
     r.registerOnOrderFacility("chainDataWriter", chainDataWriter);
