@@ -46,16 +46,16 @@ public:
         auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
         verifier->addKey("", verifyKey_);
         return dev::cd606::tm::transport::composeWireToUserHook(
-            { [verifier](dev::cd606::tm::basic::ByteData &&d) -> std::optional<dev::cd606::tm::basic::ByteData> {
-                auto res = verifier->verify(std::move(d));
+            { [verifier](dev::cd606::tm::basic::ByteDataView const &d) -> std::optional<dev::cd606::tm::basic::ByteData> {
+                auto res = verifier->verify(d);
                 if (res) {
                     return std::move(std::get<1>(*res));
                 } else {
                     return std::nullopt;
                 }
             } }
-            , { [decHelper](dev::cd606::tm::basic::ByteData &&d) {
-                return decHelper->decode(std::move(d));
+            , { [decHelper](dev::cd606::tm::basic::ByteDataView const &d) {
+                return decHelper->decode(d);
             } }
         );
     }
@@ -98,8 +98,8 @@ public:
         auto decHelper = std::make_shared<EncHelper>();
         decHelper->setKey(EncHelper::keyFromString(decKey_));
         return dev::cd606::tm::transport::WireToUserHook { 
-            [decHelper](dev::cd606::tm::basic::ByteData &&d) {
-                return decHelper->decode(std::move(d));
+            [decHelper](dev::cd606::tm::basic::ByteDataView const &d) {
+                return decHelper->decode(d);
             } 
         };
     }

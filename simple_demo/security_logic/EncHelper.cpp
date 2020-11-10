@@ -45,7 +45,7 @@ public:
             return dev::cd606::tm::basic::ByteData {};
         }
     }
-    std::optional<dev::cd606::tm::basic::ByteData> decode(dev::cd606::tm::basic::ByteData &&data) {
+    std::optional<dev::cd606::tm::basic::ByteData> decode(dev::cd606::tm::basic::ByteDataView const &data) {
         auto l = data.content.length();
         if (l < crypto_secretbox_NONCEBYTES+crypto_secretbox_MACBYTES) {
             return std::nullopt;
@@ -89,6 +89,6 @@ void EncHelper::setKey(std::array<unsigned char,EncHelper::KeyLength/8> const &k
 dev::cd606::tm::basic::ByteData EncHelper::encode(dev::cd606::tm::basic::ByteData &&data) {
     return impl_->encode(std::move(data));
 }
-std::optional<dev::cd606::tm::basic::ByteData> EncHelper::decode(dev::cd606::tm::basic::ByteData &&data) {
-    return impl_->decode(std::move(data));
+std::optional<dev::cd606::tm::basic::ByteData> EncHelper::decode(dev::cd606::tm::basic::ByteDataView const &data) {
+    return impl_->decode(data);
 }

@@ -61,7 +61,8 @@ int main(int argc, char **argv) {
         , main_program_logic::MainProgramStateFolder
         , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
     >(
-        chainLocatorStr
+        &env
+        , chainLocatorStr
     );
     auto chainDataImporterFactory = sharedChainCreator.readerFactory<
         ChainData

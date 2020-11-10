@@ -59,7 +59,8 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr) {
         , main_program_logic::MainProgramStateFolder
         , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
     >(
-        chainLocatorStr
+        &env
+        , chainLocatorStr
     );
     auto mainLogicChainDataImporterFactory = sharedChainCreator.readerFactory<
         ChainData
@@ -98,7 +99,8 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr) {
         , calculator_logic::CalculatorFacilityInputHandler
         , calculator_logic::CalculatorIdleWorker
     >(
-        chainLocatorStr
+        &env
+        , chainLocatorStr
     );
     auto calculatorLogicMainRes = calculator_logic::calculatorLogicMain(
         r

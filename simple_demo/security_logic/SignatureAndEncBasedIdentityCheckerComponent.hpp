@@ -49,7 +49,7 @@ public:
         return signer_.sign(outgoing_.encode(std::move(d)));
     }
     virtual std::optional<dev::cd606::tm::basic::ByteData> process_incoming_data(dev::cd606::tm::basic::ByteData &&d) override final {
-        return incoming_.decode(std::move(d));
+        return incoming_.decode(dev::cd606::tm::basic::byteDataView(d));
     }
 };
 
@@ -95,7 +95,7 @@ public:
         iter->second->incoming.setKey(keys.incomingKey);
     }
     virtual std::optional<std::tuple<std::string,dev::cd606::tm::basic::ByteData>> check_identity(dev::cd606::tm::basic::ByteData &&d) override final {
-        auto v = verifier_.verify(std::move(d));
+        auto v = verifier_.verify(dev::cd606::tm::basic::byteDataView(d));
         if (!v) {
             return std::nullopt;
         }
@@ -110,7 +110,7 @@ public:
             encDec = iter->second.get();
         }
         if (encDec) {
-            auto d = encDec->incoming.decode(std::move(std::get<1>(*v)));
+            auto d = encDec->incoming.decode(dev::cd606::tm::basic::byteDataView(std::get<1>(*v)));
             if (!d) {
                 return std::nullopt;
             }

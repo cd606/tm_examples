@@ -84,7 +84,7 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
         ChainData
         , basic::simple_shared_chain::EmptyStateChainFolder
         , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
-    >(outputChainLocatorStr);
+    >(&env, outputChainLocatorStr);
 
     r.registerOnOrderFacility("chainDataWriter", chainDataWriter);
 

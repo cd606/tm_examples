@@ -59,7 +59,8 @@ int main(int argc, char **argv) {
         , calculator_logic::CalculatorFacilityInputHandler
         , calculator_logic::CalculatorIdleWorker
     >(
-        chainLocatorOss.str()
+        &env
+        , chainLocatorOss.str()
         //If very high throughput is required, then we need to use the busy-loop no-yield polling 
         //policy which will occupy full CPU (in real-time mode). If default polling policy is used
         //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
