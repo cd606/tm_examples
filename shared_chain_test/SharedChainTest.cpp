@@ -128,17 +128,13 @@ public:
             }
         }, newInfo.value);
     }
-    State fold(State const &lastState, std::string_view const &storageIDView, typename Chain::DataType const *newInfo) {
-        if (newInfo) {
-            auto newState = fold(lastState, *newInfo);
-            if (newState) {
-                newState->lastSeenID.len = storageIDView.length();
-                std::memset(newState->lastSeenID.id.data(), 0, 40);
-                std::memcpy(newState->lastSeenID.id.data(), storageIDView.data(), storageIDView.length());
-                return *newState;
-            } else {
-                return lastState;
-            }
+    State fold(State const &lastState, std::string_view const &storageIDView, typename Chain::DataType const &newInfo) {
+        auto newState = fold(lastState, newInfo);
+        if (newState) {
+            newState->lastSeenID.len = storageIDView.length();
+            std::memset(newState->lastSeenID.id.data(), 0, 40);
+            std::memcpy(newState->lastSeenID.id.data(), storageIDView.data(), storageIDView.length());
+            return *newState;
         } else {
             return lastState;
         }

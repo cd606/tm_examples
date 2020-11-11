@@ -57,7 +57,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         static std::string const &chainIDForValue(ResultType const &r) {
             return r.latestID;
         }
-        static void foldInPlace(ResultType &state, std::string_view const &storageIDView, ChainData const *item);
+        static void foldInPlace(ResultType &state, std::string_view const &storageIDView, ChainData const &item);
         static std::chrono::system_clock::time_point extractTime(ResultType const &st) {
             return infra::withtime_utils::epochDurationToTime<std::chrono::milliseconds>(st.updateTimestamp);
         }

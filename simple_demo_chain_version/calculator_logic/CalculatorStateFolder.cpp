@@ -1,12 +1,9 @@
 #include "CalculatorStateFolder.hpp"
 
 namespace simple_demo_chain_version { namespace calculator_logic {
-    void CalculatorStateFolder::foldInPlace(ResultType &state, std::string_view const &storageIDView, ChainData const *item) {
+    void CalculatorStateFolder::foldInPlace(ResultType &state, std::string_view const &storageIDView, ChainData const &item) {
         state.latestID = storageIDView;
-        if (!item) {
-            return;
-        }
-        auto ts = item->timestamp;
+        auto ts = item.timestamp;
         state.updateTimestamp = ts;
         std::visit([ts,&state](auto const &content) {
             using T = std::decay_t<decltype(content)>;
@@ -40,6 +37,6 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                 state.requestsBeingHandled.erase(content.id);
                 state.newlyPlacedRequests.erase(content.id);
             }
-        }, item->update);
+        }, item.update);
     }
 } }
