@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
         //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
         //the polling, so the throughput will be degraded. In single-pass mode, the polling policy
         //is ignored since it is single-threaded and always uses busy polling.
-        , basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true)
+        //, basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true)
     );
 
     auto wrappedExternalFacility = M::fromAbstractOnOrderFacility(new calculator_logic::ExternalCalculatorWrappedAsFacility<TheEnvironment>());

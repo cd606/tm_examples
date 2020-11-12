@@ -29,3 +29,14 @@ tm_delay_measurer_exe = executable(
     , include_directories: inc
     , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
 )
+byte_data_chain_transcriber_link_args = ['-lrt']
+if build_machine.system() == 'windows'
+  byte_data_chain_transcriber_link_args += ['-lws2_32']
+endif
+tm_byte_data_chain_transcriber_exe = executable(
+    'tm_byte_data_chain_transcriber'
+    , ['byte_data_chain_transcriber.cpp']
+    , include_directories: [inc]
+    , link_args : byte_data_chain_transcriber_link_args
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), more_boost_dep]
+)
