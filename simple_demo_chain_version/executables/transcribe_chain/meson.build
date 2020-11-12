@@ -14,5 +14,5 @@ executable(
     , include_directories: [inc]
     , link_with: [tm_simple_demo_chain_version_proto_lib, tm_simple_demo_chain_version_main_program_logic_lib]
     , link_args : my_link_args
-    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('boost', modules: ['program_options'])]
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('boost', modules: ['program_options']), dependency('libsodium')]
 )
