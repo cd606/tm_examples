@@ -15,7 +15,7 @@ public:
     EncAndSignHookFactoryComponent(std::string const &encKey, std::array<unsigned char, 64> const &signKey)
         : encKey_(encKey), signKey_(signKey) {}
     virtual ~EncAndSignHookFactoryComponent() {}
-    virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
+    virtual std::optional<dev::cd606::tm::transport::UserToWireHook> defaultHook() override final {
         auto encHelper = std::make_shared<EncHelper>();
         encHelper->setKey(EncHelper::keyFromString(encKey_));
         auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(signKey_);
@@ -40,7 +40,7 @@ public:
     VerifyAndDecHookFactoryComponent(std::string const &decKey, std::array<unsigned char, 32> const &verifyKey)
         : decKey_(decKey), verifyKey_(verifyKey) {}
     virtual ~VerifyAndDecHookFactoryComponent() {}
-    virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
+    virtual std::optional<dev::cd606::tm::transport::WireToUserHook> defaultHook() override final {
         auto decHelper = std::make_shared<EncHelper>();
         decHelper->setKey(EncHelper::keyFromString(decKey_));
         auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
@@ -71,7 +71,7 @@ public:
     EncHookFactoryComponent(std::string const &encKey)
         : encKey_(encKey) {}
     virtual ~EncHookFactoryComponent() {}
-    virtual dev::cd606::tm::transport::UserToWireHook defaultHook() override final {
+    virtual std::optional<dev::cd606::tm::transport::UserToWireHook> defaultHook() override final {
         auto encHelper = std::make_shared<EncHelper>();
         encHelper->setKey(EncHelper::keyFromString(encKey_));
         return dev::cd606::tm::transport::UserToWireHook { 
@@ -94,7 +94,7 @@ public:
     void setDecKey(std::string const &k) {
         decKey_ = k;
     }
-    virtual dev::cd606::tm::transport::WireToUserHook defaultHook() override final {
+    virtual std::optional<dev::cd606::tm::transport::WireToUserHook> defaultHook() override final {
         auto decHelper = std::make_shared<EncHelper>();
         decHelper->setKey(EncHelper::keyFromString(decKey_));
         return dev::cd606::tm::transport::WireToUserHook { 
