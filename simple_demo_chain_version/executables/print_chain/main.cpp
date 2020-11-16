@@ -9,6 +9,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
+#include <tm_kit/basic/simple_shared_chain/ChainDataImporterExporter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
@@ -33,30 +34,30 @@ void run(Env *env, std::string const &chainLocatorStr, std::string const &output
     R r(env);
 
     transport::SharedChainCreator<M> sharedChainCreator;
-    auto chainDataImporter = sharedChainCreator.template reader<
-        ChainData
-        , main_program_logic::TrivialChainDataFolder
+    auto chainDataSource = basic::simple_shared_chain::createChainDataSource<
+        R, ChainData
     >(
-        env
-        , chainLocatorStr
+        r 
+        , sharedChainCreator.template readerFactory<
+            ChainData
+            , main_program_logic::TrivialChainDataFolder
+        >(
+            env
+            , chainLocatorStr
+        )
+        , "input_chain"
     );
-    r.registerImporter("chainDataImporter", chainDataImporter);
 
     basic::AppRunnerUtilComponents<R>
         ::setupExitTimer(
         r 
         , std::chrono::hours(24)
-        , r.importItem(chainDataImporter)
+        , chainDataSource.clone()
         , [](Env *env) {
             env->log(infra::LogLevel::Info, "Wrapping up!");
         }
         , "exitTimerPart"
     );
-
-    auto simpleFilter = infra::KleisliUtils<M>::action(
-        basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()
-    );
-    r.registerAction("simpleFilter", simpleFilter);
 
     if (outputFile != "") {
         std::ofstream ofs(outputFile.c_str(), std::ios::binary);
@@ -76,7 +77,7 @@ void run(Env *env, std::string const &chainLocatorStr, std::string const &output
             }
         );
         r.registerAction("encoder", encoder);
-        r.exportItem(fileWriter, r.execute(encoder, r.execute(simpleFilter, r.importItem(chainDataImporter))));
+        r.exportItem(fileWriter, r.execute(encoder, chainDataSource.clone()));
         r.finalize();
     } else {
         auto printer = M::template pureExporter<ChainData>(
@@ -87,7 +88,7 @@ void run(Env *env, std::string const &chainLocatorStr, std::string const &output
             }
         );
         r.registerExporter("printer", printer);
-        r.exportItem(printer, r.execute(simpleFilter, r.importItem(chainDataImporter)));
+        r.exportItem(printer, chainDataSource.clone());
         r.finalize();
     }
 }

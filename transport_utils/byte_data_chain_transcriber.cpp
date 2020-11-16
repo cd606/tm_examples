@@ -7,6 +7,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
+#include <tm_kit/basic/simple_shared_chain/ChainDataImporterExporter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
@@ -66,21 +67,21 @@ auto transcribe(R &r, std::string const &inputChainLocatorStr, std::string const
             r.execute("removeTopic", removeTopic
                 , r.importItem("byteDataImporter", byteDataImporter));
     } else {
-        auto chainDataImporter = sharedChainCreator->template reader<
-            basic::ByteData
-            , TrivialByteDataChainFolder
-            , void //no trigger type
-            , true //force separate data storage if possible
+        chainDataSource = basic::simple_shared_chain::createChainDataSource<
+            R, basic::ByteData
         >(
-            env
-            , inputChainLocatorStr
+            r 
+            , sharedChainCreator->template readerFactory<
+                basic::ByteData
+                , TrivialByteDataChainFolder
+                , void //no trigger type
+                , true //force separate data storage if possible
+            >(
+                env
+                , inputChainLocatorStr
+            )
+            , "input_chain"
         );
-        auto simpleFilter = infra::KleisliUtils<M>::action(
-            basic::CommonFlowUtilComponents<M>::template filterOnOptional<basic::ByteData>()
-        );
-        chainDataSource = 
-            r.execute("simpleFilter", simpleFilter
-                , r.importItem("chainDataImporter", chainDataImporter));
     }
 
     if (outputIsFile) {
@@ -104,30 +105,20 @@ auto transcribe(R &r, std::string const &inputChainLocatorStr, std::string const
         r.registerAction("addTopic", addTopic);
         r.exportItem(fileWriter, r.execute(addTopic, chainDataSource->clone()));
     } else {
-        auto keyify = infra::KleisliUtils<M>::action(
-            basic::CommonFlowUtilComponents<M>::template keyify<basic::ByteData>()
+        auto sink = basic::simple_shared_chain::createChainDataSink<
+            R, basic::ByteData 
+        >(
+            r 
+            , sharedChainCreator->template writerFactory<
+                basic::ByteData
+                , basic::simple_shared_chain::EmptyStateChainFolder
+                , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<basic::ByteData>
+                , void //no idle logic
+                , true //force separate data storage if possible
+            >(env, outputChainLocatorStr)
+            , "output_chain"
         );
-        r.registerAction("keyify", keyify);
-        r.execute(keyify, chainDataSource->clone());
-
-        auto chainDataWriter = sharedChainCreator->template writer<
-            basic::ByteData
-            , basic::simple_shared_chain::EmptyStateChainFolder
-            , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<basic::ByteData>
-            , void //no idle logic
-            , true //force separate data storage if possible
-        >(env, outputChainLocatorStr);
-
-        r.registerOnOrderFacility("chainDataWriter", chainDataWriter);
-
-        auto trivialExporter = M::template trivialExporter<typename M::template KeyedData<basic::ByteData,bool>>();
-        r.registerExporter("trivialExporter", trivialExporter);
-
-        r.placeOrderWithFacility(
-            r.actionAsSource(keyify)
-            , chainDataWriter
-            , r.exporterAsSink(trivialExporter)
-        );
+        r.connect(chainDataSource->clone(), sink);
     }
 
     return chainDataSource->clone();

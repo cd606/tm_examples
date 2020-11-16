@@ -9,6 +9,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
+#include <tm_kit/basic/simple_shared_chain/ChainDataImporterExporter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
@@ -35,7 +36,7 @@ void runTranscription(Env *env, std::string const &inputChainLocatorStr, std::st
     transport::SharedChainCreator<M> sharedChainCreator;
 
     bool inputIsCaptureFile = (inputChainLocatorStr.find("://") == std::string::npos);
-    typename R::template Sourceoid<ChainData> chainDataSource;
+    typename std::optional<typename R::template Source<ChainData>> chainDataSource = std::nullopt;
 
     if (inputIsCaptureFile) {
         auto ifs = std::make_shared<std::ifstream>(inputChainLocatorStr.c_str(), std::ios::binary);
@@ -47,56 +48,45 @@ void runTranscription(Env *env, std::string const &inputChainLocatorStr, std::st
         );
         auto parser = basic::SerializationActions<M>::template deserialize<ChainData>();
         auto removeTopic = basic::SerializationActions<M>::template removeTopic<ChainData>();
-        chainDataSource = R::sourceAsSourceoid(
-            r.execute("removeTopic", removeTopic
-                , r.execute("parser", parser
-                    , r.importItem("byteDataImporter", byteDataImporter)))
+        chainDataSource = r.execute("removeTopic", removeTopic
+            , r.execute("parser", parser
+                , r.importItem("byteDataImporter", byteDataImporter))
         );
     } else {
-        auto chainDataImporter = sharedChainCreator.template reader<
-            ChainData
-            , main_program_logic::TrivialChainDataFolder
+        chainDataSource = basic::simple_shared_chain::createChainDataSource<
+            R, ChainData
         >(
-            env
-            , inputChainLocatorStr
-        );
-        auto simpleFilter = infra::KleisliUtils<M>::action(
-            basic::CommonFlowUtilComponents<M>::template filterOnOptional<ChainData>()
-        );
-        chainDataSource = R::sourceAsSourceoid(
-            r.execute("simpleFilter", simpleFilter
-                , r.importItem("chainDataImporter", chainDataImporter))
+            r 
+            , sharedChainCreator.template readerFactory<
+                ChainData
+                , main_program_logic::TrivialChainDataFolder
+            >(
+                env
+                , inputChainLocatorStr
+            )
+            , "input_chain"
         );
     }
 
-    auto keyify = infra::KleisliUtils<M>::action(
-        basic::CommonFlowUtilComponents<M>::template keyify<ChainData>()
+    auto chainDataSink = basic::simple_shared_chain::createChainDataSink<
+        R, ChainData
+    >(
+        r 
+        , sharedChainCreator.template writerFactory<
+            ChainData
+            , basic::simple_shared_chain::EmptyStateChainFolder
+            , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
+        >(env, outputChainLocatorStr)
+        , "output_chain"
     );
-    r.registerAction("keyify", keyify);
-    r.connect(chainDataSource, r.actionAsSink(keyify));
 
-    auto chainDataWriter = sharedChainCreator.template writer<
-        ChainData
-        , basic::simple_shared_chain::EmptyStateChainFolder
-        , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
-    >(env, outputChainLocatorStr);
-
-    r.registerOnOrderFacility("chainDataWriter", chainDataWriter);
-
-    auto trivialExporter = M::template trivialExporter<typename M::template KeyedData<ChainData,bool>>();
-    r.registerExporter("trivialExporter", trivialExporter);
-
-    r.placeOrderWithFacility(
-        r.actionAsSource(keyify)
-        , chainDataWriter
-        , r.exporterAsSink(trivialExporter)
-    );
+    r.connect(chainDataSource->clone(), chainDataSink);
 
     basic::AppRunnerUtilComponents<R>
         ::setupExitTimer(
         r 
         , std::chrono::hours(24)
-        , r.actionAsSource(keyify)
+        , chainDataSource->clone()
         , [](Env *env) {
             env->log(infra::LogLevel::Info, "Wrapping up!");
         }
