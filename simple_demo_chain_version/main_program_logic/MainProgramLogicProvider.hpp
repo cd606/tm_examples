@@ -38,7 +38,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         , std::string const &graphPrefix
         , std::string const &alertTopic=""
     ) {
-        using TheEnvironment = typename R::EnvironmentType;
         using M = typename R::AppType;
         auto *env = r.environment();
 
