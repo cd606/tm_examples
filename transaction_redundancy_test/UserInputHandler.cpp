@@ -8,7 +8,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
-#include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>

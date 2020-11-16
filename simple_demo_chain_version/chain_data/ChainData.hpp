@@ -44,6 +44,7 @@ namespace simple_demo_chain_version {
 
     #define PlaceRequestFields \
         ((int, id)) \
+        ((dev::cd606::tm::basic::ByteData, externalID)) \
         ((double, value))
     #define ConfirmRequestReceiptFields \
         ((std::vector<int>, ids))

@@ -2,9 +2,9 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
-#include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
+#include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
@@ -153,7 +153,7 @@ void runSinglePass(std::string const &dbFile) {
                 std::chrono::system_clock::time_point
             >
         >,
-        infra::IntIDComponent<>
+        basic::IntIDComponent<>
     >;
 
     using M = infra::SinglePassIterationApp<TheEnvironment>;

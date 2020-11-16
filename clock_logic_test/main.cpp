@@ -4,8 +4,8 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
-#include <tm_kit/infra/IntIDComponent.hpp>
 
+#include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
@@ -76,8 +76,7 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
             basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
             , false
         >,
-        infra
-        ::IntIDComponent<uint32_t>
+        basic::IntIDComponent<uint32_t>
     >;
     using App = infra::SinglePassIterationApp<TheEnvironment>;
 

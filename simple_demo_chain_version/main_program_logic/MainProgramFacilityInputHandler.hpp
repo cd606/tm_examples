@@ -20,7 +20,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         Env *env_ = nullptr;
     public:
         using InputType = double;
-        using ResponseType = std::optional<PlaceRequest>;
+        using ResponseType = bool;
 
         using RealInput = typename infra::RealTimeApp<Env>::template TimedDataType<
             typename infra::RealTimeApp<Env>::template Key<InputType>
@@ -38,10 +38,11 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                 int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
                 PlaceRequest r {
                     state.max_id_sofar+1
+                    , env->id_to_bytes(input.value.id())
                     , input.value.key()
                 };
                 return {
-                    r
+                    true
                     , std::tuple<std::string, ChainData> {
                         ""
                         , ChainData {now, r}
@@ -50,7 +51,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             } else {
                 env->log(infra::LogLevel::Info, "Not sending request because there are too many outstanding requests");
                 return {
-                    std::nullopt
+                    false
                     , std::nullopt
                 };
             }

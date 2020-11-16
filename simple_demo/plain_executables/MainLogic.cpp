@@ -3,9 +3,9 @@
 #include <tm_kit/infra/BasicWithTimeApp.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
-#include <tm_kit/infra/IntIDComponent.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
+#include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/VoidStruct.hpp>
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
@@ -160,7 +160,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
-        infra::IntIDComponent<>
+        basic::IntIDComponent<>
     >;
     using M = infra::SinglePassIterationApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -232,7 +232,7 @@ void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateG
         infra::TrivialExitControlComponent,
         basic::TrivialBoostLoggingComponent,
         basic::real_time_clock::ClockComponent,
-        infra::IntIDComponent<>
+        basic::IntIDComponent<>
     >;
     using M = infra::BasicWithTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;

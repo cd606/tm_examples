@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
             id = s.max_id_sofar+1;
             PlaceRequest r {
                 id
+                , env.id_to_bytes(env.new_id())
                 , value
             };
             return std::tuple<std::string, ChainData> {
