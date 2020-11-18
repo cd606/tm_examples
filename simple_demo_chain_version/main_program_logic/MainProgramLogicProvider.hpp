@@ -21,19 +21,12 @@
 
 namespace simple_demo_chain_version { namespace main_program_logic {
 
-    template <class R>
+    template <class R, template <class M> class ChainCreator>
     typename R::template FacilitioidConnector<double, std::optional<ChainData>>
     chainBasedRequestHandler(
         R &r 
-        , basic::simple_shared_chain::ChainWriterOnOrderFacilityFactory<
-            typename R::AppType
-            , MainProgramStateFolder
-            , MainProgramFacilityInputHandler<typename R::EnvironmentType>
-        > chainFacilityFactory
-        , basic::simple_shared_chain::ChainReaderImporterFactory<
-            typename R::AppType
-            , TrivialChainDataFolder
-        > chainDataImporterFactory
+        , ChainCreator<typename R::AppType> &chainCreator
+        , std::string const &chainLocatorStr
         , std::string const &graphPrefix
     ) {
         return basic::simple_shared_chain::createChainBackedFacility<
@@ -44,8 +37,21 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             , MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>
         >(
             r 
-            , chainFacilityFactory
-            , chainDataImporterFactory
+            , chainCreator.template writerFactory<
+                ChainData
+                , MainProgramStateFolder
+                , MainProgramFacilityInputHandler<typename R::EnvironmentType>
+            >(
+                r.environment()
+                , chainLocatorStr
+            )
+            , chainCreator.template readerFactory<
+                ChainData
+                , TrivialChainDataFolder
+            >(
+                r.environment()
+                , chainLocatorStr
+            )
             , std::make_shared<MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>>()
             , graphPrefix+"/facility_combo"
         ).facility;

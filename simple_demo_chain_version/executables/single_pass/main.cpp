@@ -54,28 +54,12 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr) {
 
     transport::SharedChainCreator<M> sharedChainCreator;
 
-    auto mainLogicChainFacilityFactory = sharedChainCreator.writerFactory<
-        ChainData
-        , main_program_logic::MainProgramStateFolder
-        , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
-    >(
-        &env
-        , chainLocatorStr
-    );
-    auto mainLogicChainDataImporterFactory = sharedChainCreator.readerFactory<
-        ChainData
-        , main_program_logic::TrivialChainDataFolder
-    >(
-        &env
-        , chainLocatorStr
-    );
-
     main_program_logic::mainProgramLogicMain(
         r
         , main_program_logic::chainBasedRequestHandler(
             r
-            , mainLogicChainFacilityFactory
-            , mainLogicChainDataImporterFactory
+            , sharedChainCreator
+            , chainLocatorStr
             , "main_program"
         )
         , inputDataSource.clone()

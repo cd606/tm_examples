@@ -77,22 +77,6 @@ int main(int argc, char **argv) {
     //Please note that this object should not be allowed to go out of scope
     transport::SharedChainCreator<M> sharedChainCreator;
 
-    auto chainFacilityFactory = sharedChainCreator.writerFactory<
-        ChainData
-        , main_program_logic::MainProgramStateFolder
-        , main_program_logic::MainProgramFacilityInputHandler<TheEnvironment>
-    >(
-        &env
-        , chainLocatorStr
-    );
-    auto chainDataImporterFactory = sharedChainCreator.readerFactory<
-        ChainData
-        , main_program_logic::TrivialChainDataFolder
-    >(
-        &env
-        , chainLocatorStr
-    );
-
     //get the input data
     auto heartbeatSource = 
         transport::MultiTransportBroadcastListenerManagingUtils<R>
@@ -121,8 +105,8 @@ int main(int argc, char **argv) {
         r
         , main_program_logic::chainBasedRequestHandler(
             r
-            , chainFacilityFactory
-            , chainDataImporterFactory
+            , sharedChainCreator 
+            , chainLocatorStr
             , "main_program"
         )
         , inputDataSource.clone()
