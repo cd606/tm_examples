@@ -119,8 +119,12 @@ int main(int argc, char **argv) {
     //main logic 
     main_program_logic::mainProgramLogicMain(
         r
-        , chainFacilityFactory
-        , chainDataImporterFactory
+        , main_program_logic::chainBasedRequestHandler(
+            r
+            , chainFacilityFactory
+            , chainDataImporterFactory
+            , "main_program"
+        )
         , inputDataSource.clone()
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(

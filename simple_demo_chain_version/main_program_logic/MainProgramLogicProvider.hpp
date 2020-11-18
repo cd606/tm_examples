@@ -22,7 +22,8 @@
 namespace simple_demo_chain_version { namespace main_program_logic {
 
     template <class R>
-    void mainProgramLogicMain(
+    typename R::template FacilitioidConnector<double, std::optional<ChainData>>
+    chainBasedRequestHandler(
         R &r 
         , basic::simple_shared_chain::ChainWriterOnOrderFacilityFactory<
             typename R::AppType
@@ -33,6 +34,29 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             typename R::AppType
             , TrivialChainDataFolder
         > chainDataImporterFactory
+        , std::string const &graphPrefix
+    ) {
+        return basic::simple_shared_chain::createChainBackedFacility<
+            R 
+            , ChainData
+            , MainProgramStateFolder
+            , MainProgramFacilityInputHandler<typename R::EnvironmentType>
+            , MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>
+        >(
+            r 
+            , chainFacilityFactory
+            , chainDataImporterFactory
+            , std::make_shared<MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>>()
+            , graphPrefix+"/facility_combo"
+        ).facility;
+    }
+
+    template <class R>
+    void mainProgramLogicMain(
+        R &r 
+        , typename R::template FacilitioidConnector<
+            double, std::optional<ChainData>
+        > requestHandler
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
         , typename R::template FacilityWrapper<std::tuple<std::string, ConfigureCommand>, ConfigureResult> cfgFacilityWrapper
         , std::string const &graphPrefix
@@ -114,20 +138,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         r.registerAction(graphPrefix+"/preprocess", upToOperationLogicInput);
         r.registerAction(graphPrefix+"/operation_logic", logic);
 
-        auto facilityComboRet = basic::simple_shared_chain::createChainBackedFacility<
-            R 
-            , ChainData
-            , MainProgramStateFolder
-            , MainProgramFacilityInputHandler<typename R::EnvironmentType>
-            , MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>
-        >(
-            r 
-            , chainFacilityFactory
-            , chainDataImporterFactory
-            , std::make_shared<MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>>()
-            , graphPrefix+"/facility_combo"
-        );
-
         auto keyify = infra::KleisliUtils<M>::action(
             basic::CommonFlowUtilComponents<M>::template keyify<double>()
         );
@@ -136,7 +146,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         );
 
         r.convertToSourceoid(std::move(dataSource))(r, r.actionAsSink(upToOperationLogicInput));
-        facilityComboRet.facility(
+        requestHandler(
             r
             , r.execute(graphPrefix+"/keyify", keyify, 
                 r.execute(logic, r.actionAsSource(upToOperationLogicInput))

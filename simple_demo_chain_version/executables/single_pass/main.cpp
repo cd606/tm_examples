@@ -72,8 +72,12 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr) {
 
     main_program_logic::mainProgramLogicMain(
         r
-        , mainLogicChainFacilityFactory
-        , mainLogicChainDataImporterFactory
+        , main_program_logic::chainBasedRequestHandler(
+            r
+            , mainLogicChainFacilityFactory
+            , mainLogicChainDataImporterFactory
+            , "main_program"
+        )
         , inputDataSource.clone()
         , std::nullopt
         , "main_program"
