@@ -13,6 +13,9 @@
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
+#ifdef _MSC_VER
+#include <tm_kit/transport/EmptyIdentityCheckerComponent.hpp>
+#endif
 
 using namespace simple_demo_chain_version;
 
@@ -27,6 +30,9 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent
+#ifdef _MSC_VER
+        , transport::ClientSideEmptyIdentityAttacherComponent<basic::VoidStruct, basic::CBOR<double>>
+#endif
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
