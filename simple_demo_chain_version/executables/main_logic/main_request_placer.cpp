@@ -7,14 +7,12 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-#include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
-#include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
-#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/SharedChainCreator.hpp>
 #include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
 
@@ -34,9 +32,7 @@ int main(int argc, char **argv) {
             basic::real_time_clock::ClockComponent
         >,
         transport::CrossGuidComponent,
-        transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
-        transport::rabbitmq::RabbitMQComponent,
-        transport::zeromq::ZeroMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
         transport::lock_free_in_memory_shared_chain::SharedMemoryChainComponent,
         transport::security::SignatureWithNameHookFactoryComponent<ChainData>,
@@ -59,12 +55,12 @@ int main(int argc, char **argv) {
     );
     R r(&env);
 
-    env.setLogFilePrefix("simple_demo_chain_version_main_logic_");
+    env.setLogFilePrefix("simple_demo_chain_version_main_logic_request_placer");
 
     //setting up the heartbeat
 
     transport::initializeHeartbeatAndAlertComponent
-        (&env, "simple_demo_chain_version MainLogic", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
+        (&env, "simple_demo_chain_version MainLogic Request Placer", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.main_logic.heartbeat", std::chrono::seconds(1));
 
@@ -77,51 +73,46 @@ int main(int argc, char **argv) {
     //Please note that this object should not be allowed to go out of scope
     transport::SharedChainCreator<M> sharedChainCreator;
 
-    //get the input data
-    auto heartbeatSource = 
-        transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::oneBroadcastListener<
-            transport::HeartbeatMessage
-        >(
-            r 
-            , "heartbeatListener"
-            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
-            , "simple_demo_chain_version.#.heartbeat"
-        );
-
-    auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::setupBroadcastListenerThroughHeartbeat<InputData>
-    (
-        r 
-        , heartbeatSource.clone()
-        , std::regex("simple_demo_chain_version DataSource")
-        , "input data publisher"
-        , "input.data"
-        , "inputDataSourceComponents"
-    );
-
-    //main logic 
-    main_program_logic::mainProgramLogicMain(
+    auto requestPlacer = main_program_logic::chainBasedRequestHandler(
         r
-        , main_program_logic::chainBasedRequestHandler(
-            r
-            , sharedChainCreator 
-            , chainLocatorStr
-            , "main_program"
-        )
-        , inputDataSource.clone()
-        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
-            <ConfigureCommand, ConfigureResult>(
-            "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
-            , "cfg_wrapper"
-        )
+        , sharedChainCreator 
+        , chainLocatorStr
         , "main_program"
+    );
+    auto cborCapableRequestPlacer = basic::AppRunnerUtilComponents<R>::wrapFacilitioidConnector<
+        basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>, double, std::optional<ChainData>
+    >(
+        infra::KleisliUtils<M>::liftPure<basic::CBOR<double>>(
+            [](basic::CBOR<double> &&x) -> double {
+                return x.value;
+            }
+        )
+        , infra::KleisliUtils<M>::liftPure<double>(
+            [](double &&x) -> basic::CBOR<double> {
+                return {x};
+            }
+        )
+        , infra::KleisliUtils<M>::liftPure<std::optional<ChainData>>(
+            [](std::optional<ChainData> &&x) -> basic::CBOR<std::optional<ChainData>> {
+                return {std::move(x)};
+            }
+        )
+        , std::get<0>(requestPlacer)
+        , "cbor_wrapper"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrap
+        <basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>>(
+        r 
+        , std::get<1>(requestPlacer)
+        , cborCapableRequestPlacer
+        , "redis://127.0.0.1:6379:::simple_demo_chain_version_request_queue"
+        , "facility_wrapper"
     );
 
     //write execution graph and start
 
     std::ostringstream graphOss;
-    r.writeGraphVizDescription(graphOss, "simple_demo_chain_version_calculator");
+    r.writeGraphVizDescription(graphOss, "simple_demo_chain_version_request_placer");
     env.log(infra::LogLevel::Info, "The execution graph is:");
     env.log(infra::LogLevel::Info, graphOss.str());
 

@@ -22,14 +22,17 @@
 namespace simple_demo_chain_version { namespace main_program_logic {
 
     template <class R, template <class M> class ChainCreator>
-    typename R::template FacilitioidConnector<double, std::optional<ChainData>>
+    std::tuple<
+        typename R::template FacilitioidConnector<double, std::optional<ChainData>>
+        , std::string
+    >
     chainBasedRequestHandler(
         R &r 
         , ChainCreator<typename R::AppType> &chainCreator
         , std::string const &chainLocatorStr
         , std::string const &graphPrefix
     ) {
-        return basic::simple_shared_chain::createChainBackedFacility<
+        auto res = basic::simple_shared_chain::createChainBackedFacility<
             R 
             , ChainData
             , MainProgramStateFolder
@@ -54,7 +57,8 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             )
             , std::make_shared<MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>>()
             , graphPrefix+"/facility_combo"
-        ).facility;
+        );
+        return {res.facility, res.registeredNameForFacilitioidConnector};
     }
 
     template <class R>

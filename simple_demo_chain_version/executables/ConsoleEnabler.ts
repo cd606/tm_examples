@@ -106,7 +106,7 @@ function run(inputT : proto.Type, outputT : proto.Type) : void {
     );
     let heartbeatAction = TMInfra.RealTimeApp.Utils.liftMaybe<E,TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>,boolean>(
         (h : TMBasic.TypedDataWithTopic<TMTransport.RemoteComponents.Heartbeat>) => {
-            if (h.content.sender_description == "simple_demo_chain_version MainLogic") {
+            if (h.content.sender_description == "simple_demo_chain_version MainLogic Integrated" || h.content.sender_description == "simple_demo_chain_version MainLogic Request Generator") {
                 if (h.content.facility_channels.hasOwnProperty("main_program/cfgFacility")) {
                     let channelInfoFromHeartbeat = h.content.facility_channels["main_program/cfgFacility"];
                     facility.changeAddress(channelInfoFromHeartbeat);
