@@ -14,6 +14,11 @@
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #ifdef _MSC_VER
+//Visual C++ does not like void appearing in std::tuple, which means
+//some heavy template code for multi-transport client side facility creator
+//will fail if there is no identity attacher for the facility.
+//Before the template code can be made MSVC-compliant, the easiest way
+//is just to put an empty identity attacher in
 #include <tm_kit/transport/EmptyIdentityCheckerComponent.hpp>
 #endif
 
