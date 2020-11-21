@@ -79,17 +79,14 @@ int main(int argc, char **argv) {
         , chainLocatorStr
         , "main_program"
     );
-    auto cborCapableRequestPlacer = basic::WrapFacilitioidConnectorForSerialization<R>::wrapServerSide<
-        double, std::optional<ChainData>
-    >(
-        std::get<0>(requestPlacer)
-        , "cbor_wrapper"
-    );
     transport::MultiTransportFacilityWrapper<R>::wrap
         <basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>>(
         r 
         , std::get<1>(requestPlacer)
-        , cborCapableRequestPlacer
+        , basic::WrapFacilitioidConnectorForSerialization<R>::wrapServerSide(
+            std::get<0>(requestPlacer)
+            , "cbor_wrapper"
+        )
         , "redis://127.0.0.1:6379:::simple_demo_chain_version_request_queue"
         , "facility_wrapper"
     );
