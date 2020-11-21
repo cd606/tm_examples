@@ -7,7 +7,7 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/AppRunnerUtils.hpp>
+#include <tm_kit/basic/WrapFacilitioidConnectorForSerialization.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
@@ -79,25 +79,10 @@ int main(int argc, char **argv) {
         , chainLocatorStr
         , "main_program"
     );
-    auto cborCapableRequestPlacer = basic::AppRunnerUtilComponents<R>::wrapFacilitioidConnector<
-        basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>, double, std::optional<ChainData>
+    auto cborCapableRequestPlacer = basic::WrapFacilitioidConnectorForSerialization<R>::wrapServerSide<
+        double, std::optional<ChainData>
     >(
-        infra::KleisliUtils<M>::liftPure<basic::CBOR<double>>(
-            [](basic::CBOR<double> &&x) -> double {
-                return x.value;
-            }
-        )
-        , infra::KleisliUtils<M>::liftPure<double>(
-            [](double &&x) -> basic::CBOR<double> {
-                return {x};
-            }
-        )
-        , infra::KleisliUtils<M>::liftPure<std::optional<ChainData>>(
-            [](std::optional<ChainData> &&x) -> basic::CBOR<std::optional<ChainData>> {
-                return {std::move(x)};
-            }
-        )
-        , std::get<0>(requestPlacer)
+        std::get<0>(requestPlacer)
         , "cbor_wrapper"
     );
     transport::MultiTransportFacilityWrapper<R>::wrap

@@ -6,7 +6,7 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/AppRunnerUtils.hpp>
+#include <tm_kit/basic/WrapFacilitioidConnectorForSerialization.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
@@ -78,27 +78,9 @@ int main(int argc, char **argv) {
     //main logic
     main_program_logic::mainProgramLogicMain(
         r
-        , basic::AppRunnerUtilComponents<R>::wrapFacilitioidConnector<
-            double, std::optional<ChainData>, basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>
-        >(
-            infra::KleisliUtils<M>::liftPure<double>(
-                [](double &&x) -> basic::CBOR<double> {
-                    return {x};
-                }
-            )
-            , infra::KleisliUtils<M>::liftPure<basic::CBOR<double>>(
-                [](basic::CBOR<double> &&x) -> double {
-                    return x.value;
-                }
-            )
-            , infra::KleisliUtils<M>::liftPure<basic::CBOR<std::optional<ChainData>>>(
-                [](basic::CBOR<std::optional<ChainData>> &&x) -> std::optional<ChainData> {
-                    return std::move(x.value);
-                }
-            )
-            , requestPlacer 
-            , "remote_facility_wrapper"
-        )
+        , basic::WrapFacilitioidConnectorForSerialization<R>::wrapClientSide<
+            double, std::optional<ChainData>
+        >(requestPlacer, "remote_facility_wrapper")
         , inputDataSource.clone()
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
