@@ -66,15 +66,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
                 return std::nullopt;
             }
         }
-        /*
-        ConfigureResult configure(std::tuple<std::string, ConfigureCommand> &&cmd) {
-            enabled_ = std::get<1>(cmd).enabled();
-            logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled")+" by '"+std::get<0>(cmd)+"'");
-            statusUpdater_(enabled_);
-            ConfigureResult res;
-            res.set_enabled(enabled_);
-            return res;
-        }*/
         void setEnabled(bool enabled) {
             enabled_ = enabled;
             logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled"));
@@ -90,11 +81,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
     std::optional<double> OperationLogic::runLogic(double &&input) {
         return impl_->runLogic(input);
     }
-    /*
-    ConfigureResult OperationLogic::configure(std::tuple<std::string, ConfigureCommand> &&cmd) {
-        return impl_->configure(std::move(cmd));
-    }
-    */
     void OperationLogic::setEnabled(bool enabled) {
         impl_->setEnabled(enabled);
     }

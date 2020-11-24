@@ -5,11 +5,3 @@ package simple_demo_chain_version;
 message InputData {
     double value = 1;
 }
-
-message ConfigureCommand {
-    bool enabled = 1;
-}
-
-message ConfigureResult {
-    bool enabled = 1;
-}

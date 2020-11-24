@@ -1,7 +1,6 @@
 #ifndef MAIN_PROGRAM_STATE_FOLDER_HPP_
 #define MAIN_PROGRAM_STATE_FOLDER_HPP_
 
-#include "defs.pb.h"
 #include "simple_demo_chain_version/chain_data/ChainData.hpp"
 
 #include <tm_kit/infra/ChronoUtils.hpp>

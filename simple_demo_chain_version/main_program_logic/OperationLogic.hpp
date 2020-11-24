@@ -5,7 +5,6 @@
 #include <memory>
 #include <functional>
 #include <chrono>
-#include "defs.pb.h"
 
 namespace simple_demo_chain_version { namespace main_program_logic {
 
@@ -36,7 +35,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         OperationLogic(OperationLogic &&);
         OperationLogic &operator=(OperationLogic &&);
         std::optional<double> runLogic(double &&input);
-        //ConfigureResult configure(std::tuple<std::string, ConfigureCommand> &&);
         void setEnabled(bool enabled);
     };
 

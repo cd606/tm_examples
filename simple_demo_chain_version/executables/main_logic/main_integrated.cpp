@@ -152,13 +152,6 @@ int main(int argc, char **argv) {
         ))
         , inputDataSource.clone()
         , r.actionAsSource(convertToBool)
-        /*
-        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
-            <ConfigureCommand, ConfigureResult>(
-            "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
-            , "cfg_wrapper"
-        )
-        */
         , "main_program"
     );
 

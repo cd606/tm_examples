@@ -1,7 +1,6 @@
 #ifndef MAIN_PROGRAM_FACILITY_INPUT_HANDLER_HPP_
 #define MAIN_PROGRAM_FACILITY_INPUT_HANDLER_HPP_
 
-#include "defs.pb.h"
 #include "simple_demo_chain_version/chain_data/ChainData.hpp"
 #include "simple_demo_chain_version/main_program_logic/MainProgramStateFolder.hpp"
 

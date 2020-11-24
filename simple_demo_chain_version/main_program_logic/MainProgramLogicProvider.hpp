@@ -7,6 +7,7 @@
 #include "simple_demo_chain_version/main_program_logic/ProgressReporter.hpp"
 #include "simple_demo_chain_version/main_program_logic/MainProgramChainDataReader.hpp"
 #include "simple_demo_chain_version/main_program_logic/MainProgramIDAndFinalFlagExtractor.hpp"
+#include "defs.pb.h"
 
 #include <tm_kit/basic/simple_shared_chain/ChainWriter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
@@ -68,7 +69,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             double, std::optional<ChainData>
         > requestHandler
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
-        , std::optional<typename R::template Source<bool>> const &enabledSource //typename R::template FacilityWrapper<std::tuple<std::string, ConfigureCommand>, ConfigureResult> cfgFacilityWrapper
+        , std::optional<typename R::template Source<bool>> const &enabledSource
         , std::string const &graphPrefix
         , std::string const &alertTopic=""
     ) {
@@ -173,19 +174,6 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             r.registerExporter(graphPrefix+"/setEnabled", enabledSetter);
             r.exportItem(enabledSetter, enabledSource->clone());
         }
-
-        /*
-        if (cfgFacilityWrapper) {
-            auto cfgFacility = M::template liftPureOnOrderFacility<
-                std::tuple<std::string, ConfigureCommand>
-            >(
-                boost::hana::curry<2>(std::mem_fn(&OperationLogic::configure))(operationLogicPtr.get())
-            );
-            r.registerOnOrderFacility(graphPrefix+"/cfgFacility", cfgFacility);
-            (*cfgFacilityWrapper)(r, cfgFacility);
-            r.markStateSharing(cfgFacility, logic, "enabled");
-        }
-        */
 
         auto progressReporter = M::template liftMulti<
             std::tuple<std::string, std::optional<ChainData>>
