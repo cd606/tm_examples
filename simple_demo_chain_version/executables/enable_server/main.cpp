@@ -134,8 +134,6 @@ public:
         return 0;
     }
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
-        //Since the whole database is represented as a list
-        //, there will never be insert or delete on the "key" (void struct)
         return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
     }
     //Please notice that in this setup, TI::ProcessedUpdate is simply TI::DataDelta
@@ -162,8 +160,6 @@ public:
         }
     }
     TI::TransactionResponse handleDelete(std::string const &account, TI::Key const &key, std::optional<TI::Version> const &versionToDelete) override final {
-        //Since the whole database is represented as a list
-        //, there will never be insert or delete on the "key" (void struct)
         return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
     }
 };
