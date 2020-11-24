@@ -18,6 +18,10 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 
+#ifdef _MSC_VER
+#define ROCKSDB_NAMESPACE rocksdb
+#endif
+
 #include <boost/program_options.hpp>
 
 #include <iostream>
