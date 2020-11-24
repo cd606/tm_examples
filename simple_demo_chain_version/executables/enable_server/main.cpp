@@ -17,6 +17,8 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <rocksdb/utilities/transaction.h>
+#include <rocksdb/utilities/transaction_db.h>
 
 #ifdef _MSC_VER
 #define ROCKSDB_NAMESPACE rocksdb
@@ -40,13 +42,13 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(Storage, StorageFields);
 
 class DSComponent : public basic::transaction::v2::DataStreamEnvComponent<DI> {
 private:
-    ROCKSDB_NAMESPACE::DB *db_;
+    ROCKSDB_NAMESPACE::TransactionDB *db_;
     std::function<void(std::string)> logger_;
     Callback *cb_;
 public:
     DSComponent() : db_(nullptr), logger_() {
     }
-    DSComponent(ROCKSDB_NAMESPACE::DB *db, std::function<void(std::string)> const &logger) : db_(db), logger_(logger) {
+    DSComponent(ROCKSDB_NAMESPACE::TransactionDB *db, std::function<void(std::string)> const &logger) : db_(db), logger_(logger) {
     }
     DSComponent(DSComponent &&c) : db_(c.db_), logger_(std::move(c.logger_)) {}
     DSComponent &operator=(DSComponent &&c) {
@@ -61,19 +63,21 @@ public:
         cb_ = cb;
         Storage initialData = {0, true};
         std::string val;
-        auto status = db_->Get(ROCKSDB_NAMESPACE::ReadOptions(), "enabled", &val);
+        auto txn = db_->BeginTransaction(ROCKSDB_NAMESPACE::WriteOptions());
+        auto status = txn->GetForUpdate(ROCKSDB_NAMESPACE::ReadOptions(), "enabled", &val);
         if (status.IsNotFound()) {
             val = basic::bytedata_utils::RunSerializer<Storage>::apply(initialData);
-            db_->Put(ROCKSDB_NAMESPACE::WriteOptions(), "enabled", val);
+            txn->Put("enabled", val);
         } else {
             auto parsed = basic::bytedata_utils::RunDeserializer<Storage>::apply(val);
             if (!parsed) {
                 val = basic::bytedata_utils::RunSerializer<Storage>::apply(initialData);
-                db_->Put(ROCKSDB_NAMESPACE::WriteOptions(), "enabled", val);
+                txn->Put("enabled", val);
             } else {
                 initialData = *parsed;
             }
         }
+        txn->Commit();
         std::ostringstream oss;
         oss << "[DSComponent] loaded {version=" << initialData.version << ", enabled=" << initialData.enabled << "}";
         logger_(oss.str());
@@ -95,10 +99,12 @@ public:
 
 class THComponent : public basic::transaction::v2::TransactionEnvComponent<TI> {
 private:
-    ROCKSDB_NAMESPACE::DB *db_;
+    ROCKSDB_NAMESPACE::TransactionDB *db_;
     std::function<void(std::string)> logger_;
     DSComponent *dsComponent_;
     std::mutex mutex_;
+    ROCKSDB_NAMESPACE::Transaction *txn_;
+    int64_t globalVersion_;
 
     void triggerCallback(TI::TransactionResponse const &resp, TI::Key const &key, TI::DataDelta const &dataDelta) {
         dsComponent_->callback()->onUpdate(DI::Update {
@@ -113,54 +119,60 @@ private:
         });
     }
 public:
-    THComponent() : db_(nullptr), logger_(), dsComponent_(nullptr) {
+    THComponent() : db_(nullptr), logger_(), dsComponent_(nullptr), txn_(nullptr), globalVersion_(0) {
     }
-    THComponent(ROCKSDB_NAMESPACE::DB *db, std::function<void(std::string)> const &logger, DSComponent *dsComponent) : db_(db), logger_(logger), dsComponent_(dsComponent) {
+    THComponent(ROCKSDB_NAMESPACE::TransactionDB *db, std::function<void(std::string)> const &logger, DSComponent *dsComponent) : db_(db), logger_(logger), dsComponent_(dsComponent), txn_(nullptr), globalVersion_(0) {
     }
-    THComponent(THComponent &&c) : db_(c.db_), logger_(std::move(c.logger_)), dsComponent_(c.dsComponent_) {}
+    THComponent(THComponent &&c) : db_(c.db_), logger_(std::move(c.logger_)), dsComponent_(c.dsComponent_), txn_(nullptr), globalVersion_(c.globalVersion_) {}
     THComponent &operator=(THComponent &&c) {
         if (this != &c) {
             db_ = c.db_;
             dsComponent_ = c.dsComponent_;
+            globalVersion_ = c.globalVersion_;
         }
         return *this;
     }
     virtual ~THComponent() {
     }
     TI::GlobalVersion acquireLock(std::string const &account, TI::Key const &, TI::DataDelta const *) override final {
-        return 0;
+        mutex_.lock();
+        txn_ = db_->BeginTransaction(ROCKSDB_NAMESPACE::WriteOptions());
+        std::string val;
+        auto s = txn_->GetForUpdate(ROCKSDB_NAMESPACE::ReadOptions(), "enabled", &val);
+        if (s.IsNotFound()) {
+            globalVersion_ = 0;
+        } else {
+            auto data = basic::bytedata_utils::RunDeserializer<Storage>::apply(val);
+            if (!data) {
+                globalVersion_ = 0;
+            } else {
+                globalVersion_ = data->version;
+            }
+        }
+        return globalVersion_;
     }
     TI::GlobalVersion releaseLock(std::string const &account, TI::Key const &, TI::DataDelta const *) override final {
-        return 0;
+        txn_->Commit();
+        mutex_.unlock();
+        return globalVersion_;
     }
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
-        return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
+        return {globalVersion_, basic::transaction::v2::RequestDecision::FailureConsistency};
     }
     //Please notice that in this setup, TI::ProcessedUpdate is simply TI::DataDelta
     TI::TransactionResponse handleUpdate(std::string const &account, TI::Key const &key, std::optional<TI::VersionSlice> const &updateVersionSlice, TI::ProcessedUpdate const &dataDelta) override final {
-        if (db_) {
-            std::lock_guard<std::mutex> _(mutex_);
-            Storage data;
-
-            if (!updateVersionSlice) {
-                std::string val;
-                db_->Get(ROCKSDB_NAMESPACE::ReadOptions(), "enabled", &val);
-                data = *(basic::bytedata_utils::RunDeserializer<Storage>::apply(val));
-                data.enabled = dataDelta;
-            } else {
-                data = {*updateVersionSlice, dataDelta};
-            }
-            ++(data.version);
-            db_->Put(ROCKSDB_NAMESPACE::WriteOptions(), "enabled", basic::bytedata_utils::RunSerializer<Storage>::apply(data));
-            TI::TransactionResponse resp {data.version, basic::transaction::v2::RequestDecision::Success};
-            triggerCallback(resp, key, dataDelta);
-            return resp;
-        } else {
-            return {0, basic::transaction::v2::RequestDecision::FailurePermission};
-        }
+        Storage data {
+            std::max((updateVersionSlice?*updateVersionSlice:0), globalVersion_)+1
+            , dataDelta
+        };
+        txn_->Put("enabled", basic::bytedata_utils::RunSerializer<Storage>::apply(data));
+        globalVersion_ = data.version;
+        TI::TransactionResponse resp {data.version, basic::transaction::v2::RequestDecision::Success};
+        triggerCallback(resp, key, dataDelta);
+        return resp;
     }
     TI::TransactionResponse handleDelete(std::string const &account, TI::Key const &key, std::optional<TI::Version> const &versionToDelete) override final {
-        return {0, basic::transaction::v2::RequestDecision::FailureConsistency};
+        return {globalVersion_, basic::transaction::v2::RequestDecision::FailureConsistency};
     }
 };
 
@@ -208,12 +220,13 @@ int main(int argc, char **argv) {
     TheEnvironment env;
 
     ROCKSDB_NAMESPACE::Options options;
+    ROCKSDB_NAMESPACE::TransactionDBOptions txn_options;
     options.IncreaseParallelism();
     options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;
-    ROCKSDB_NAMESPACE::DB *db;
-    auto status = ROCKSDB_NAMESPACE::DB::Open(
-        options, vm["db_path"].as<std::string>(), &db
+    ROCKSDB_NAMESPACE::TransactionDB *db;
+    auto status = ROCKSDB_NAMESPACE::TransactionDB::Open(
+        options, txn_options, vm["db_path"].as<std::string>(), &db
     );
     if (!status.ok()) {
         std::cerr << "Can't open RocksDB file " << vm["db_path"].as<std::string>() << "\n";
