@@ -68,7 +68,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             double, std::optional<ChainData>
         > requestHandler
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
-        , typename R::template FacilityWrapper<std::tuple<std::string, ConfigureCommand>, ConfigureResult> cfgFacilityWrapper
+        , std::optional<typename R::template Source<bool>> const &enabledSource //typename R::template FacilityWrapper<std::tuple<std::string, ConfigureCommand>, ConfigureResult> cfgFacilityWrapper
         , std::string const &graphPrefix
         , std::string const &alertTopic=""
     ) {
@@ -92,7 +92,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         };
 
         auto operationLogicPtr = std::make_shared<OperationLogic>(
-            [&env](std::string const &s) {
+            [env](std::string const &s) {
                 env->log(infra::LogLevel::Info, s);
             }
             , statusUpdaterUsingHeartbeatAndAlert
@@ -164,6 +164,17 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             , r.actionAsSink(graphPrefix+"/extractIDAndData", extractIDAndData)
         );
 
+        if (enabledSource) {
+            auto enabledSetter = M::template pureExporter<bool>(
+                [operationLogicPtr](bool &&x) {
+                    operationLogicPtr->setEnabled(x);
+                }
+            );
+            r.registerExporter(graphPrefix+"/setEnabled", enabledSetter);
+            r.exportItem(enabledSetter, enabledSource->clone());
+        }
+
+        /*
         if (cfgFacilityWrapper) {
             auto cfgFacility = M::template liftPureOnOrderFacility<
                 std::tuple<std::string, ConfigureCommand>
@@ -174,6 +185,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             (*cfgFacilityWrapper)(r, cfgFacility);
             r.markStateSharing(cfgFacility, logic, "enabled");
         }
+        */
 
         auto progressReporter = M::template liftMulti<
             std::tuple<std::string, std::optional<ChainData>>

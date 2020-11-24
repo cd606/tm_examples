@@ -1,5 +1,6 @@
 #include "simple_demo_chain_version/main_program_logic/MainProgramLogicProvider.hpp"
 #include "simple_demo_chain_version/security_keys/VerifyingKeys.hpp"
+#include "simple_demo_chain_version/enable_server_data/EnableServerTransactionData.hpp"
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
@@ -7,18 +8,21 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
+#include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
-#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/SharedChainCreator.hpp>
 #include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
+#include <tm_kit/transport/ExitDataSource.hpp>
+#include <tm_kit/transport/RemoteTransactionSubscriberManagingUtils.hpp>
 
 using namespace simple_demo_chain_version;
+using namespace simple_demo_chain_version::enable_server;
 
 int main(int argc, char **argv) {
     const transport::security::SignatureHelper::PrivateKey mainLogicKey = {
@@ -34,13 +38,13 @@ int main(int argc, char **argv) {
             basic::real_time_clock::ClockComponent
         >,
         transport::CrossGuidComponent,
-        transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
         transport::rabbitmq::RabbitMQComponent,
         transport::zeromq::ZeroMQComponent,
         transport::HeartbeatAndAlertComponent,
         transport::lock_free_in_memory_shared_chain::SharedMemoryChainComponent,
         transport::security::SignatureWithNameHookFactoryComponent<ChainData>,
-        transport::security::VerifyUsingNameTagHookFactoryComponent<ChainData>
+        transport::security::VerifyUsingNameTagHookFactoryComponent<ChainData>,
+        transport::ClientSideSimpleIdentityAttacherComponent<std::string, GS::Input>
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -56,6 +60,11 @@ int main(int argc, char **argv) {
         transport::security::VerifyUsingNameTagHookFactoryComponent<ChainData> {
             verifyingKeys
         }
+    );
+    env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>::operator=(
+        transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>(
+            "main_integrated"
+        )
     );
     R r(&env);
 
@@ -99,6 +108,38 @@ int main(int argc, char **argv) {
         , "input.data"
         , "inputDataSourceComponents"
     );
+    auto exitDataSource = transport::ExitDataSourceCreator::addExitDataSource(
+        r, "onExit"
+    );
+    auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R,GS>
+        ::createSubscriber
+        (
+            r 
+            , heartbeatSource.clone()
+            , std::regex("simple_demo_chain_version Enable Server")
+            , "transaction_server_components/subscription_handler"
+            , GS::Subscription {{basic::VoidStruct {}}}
+            , {std::move(exitDataSource)}
+        );
+    //for some reason gcc requires the explicit parameter specification for GS::Input
+    //but clang does not require that
+    auto enableServerDataSource = basic::transaction::v2::basicDataStreamClientCombination<R,DI,GS::Input>(
+        r 
+        , "translateEnableServerDataSource"
+        , enableServerSubscriber
+    );
+    auto convertToBool = M::liftPure<M::KeyedData<GS::Input,DI::FullUpdate>>(
+        [&env](M::KeyedData<GS::Input,DI::FullUpdate> &&update) -> bool {
+            bool res = false;
+            for (auto const &oneUpdate : update.data.data) {
+                res = (oneUpdate.data && *(oneUpdate.data));
+            }
+            env.log(infra::LogLevel::Info, std::string("Received enabled update: ")+(res?"enabled":"disabled"));
+            return res;
+        }
+    );
+    r.registerAction("converToBool", convertToBool);
+    r.execute(convertToBool, std::move(enableServerDataSource));
 
     //main logic 
     main_program_logic::mainProgramLogicMain(
@@ -110,11 +151,14 @@ int main(int argc, char **argv) {
             , "main_program"
         ))
         , inputDataSource.clone()
+        , r.actionAsSource(convertToBool)
+        /*
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <ConfigureCommand, ConfigureResult>(
             "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
             , "cfg_wrapper"
         )
+        */
         , "main_program"
     );
 
