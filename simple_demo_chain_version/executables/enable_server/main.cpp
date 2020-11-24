@@ -20,7 +20,7 @@
 #include <rocksdb/utilities/transaction.h>
 #include <rocksdb/utilities/transaction_db.h>
 
-#ifdef _MSC_VER
+#ifndef ROCKSDB_NAMESPACE
 #define ROCKSDB_NAMESPACE rocksdb
 #endif
 
