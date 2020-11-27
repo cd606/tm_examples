@@ -111,8 +111,8 @@ int main(int argc, char **argv) {
     auto exitDataSource = transport::ExitDataSourceCreator::addExitDataSource(
         r, "onExit"
     );
-    auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R,GS>
-        ::createSubscriber
+    auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R>
+        ::createSubscriber<GS>
         (
             r 
             , heartbeatSource.clone()
