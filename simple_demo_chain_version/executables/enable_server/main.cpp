@@ -274,16 +274,18 @@ int main(int argc, char **argv) {
     );
 
     transport::MultiTransportFacilityWrapper<R>::wrap
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
+        <TI::Transaction,TI::TransactionResponse>(
         r
-        , transactionLogicCombinationRes.transactionFacility
+        , r.getRegisteredName(transactionLogicCombinationRes.transactionFacility)
+        , r.facilityConnector(transactionLogicCombinationRes.transactionFacility)
         , "rabbitmq://127.0.0.1::guest:guest:simple_demo_chain_version_enable_transaction_queue"
         , "transaction_wrapper/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        <GS::Input,GS::Output>(
         r
-        , transactionLogicCombinationRes.subscriptionFacility
+        , r.getRegisteredName(transactionLogicCombinationRes.subscriptionFacility)
+        , r.facilityConnector(transactionLogicCombinationRes.subscriptionFacility)
         , "rabbitmq://127.0.0.1::guest:guest:simple_demo_chain_version_enable_subscription_queue"
         , "subscription_wrapper/"
     );
