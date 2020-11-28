@@ -5,6 +5,20 @@ enable_client_gui_library = static_library(
     , dependencies: [common_deps]
 )
 executable(
+    'oneshot_enable_client'
+    , ['OneShotMain.cpp']
+    , include_directories: [inc]
+    , link_with: [enable_client_gui_library]
+    , dependencies: [common_deps]
+)
+executable(
+    'linenoise_enable_client'
+    , ['LineNoiseMain.cpp']
+    , include_directories: [inc]
+    , link_with: [enable_client_gui_library]
+    , dependencies: [common_deps, dependency('linenoise-ng')]
+)
+executable(
     'ftxui_enable_client'
     , ['FTXUIMain.cpp']
     , include_directories: [inc]

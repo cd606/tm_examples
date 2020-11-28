@@ -50,4 +50,10 @@ extern void enablerGUIDataFlow(
     , std::optional<R::Source<basic::VoidStruct>> const &exitSource
 );
 
+extern void enablerOneShotDataFlow(
+    R &r
+    , std::string const &clientName
+    , bool enableCommand
+);
+
 #endif
