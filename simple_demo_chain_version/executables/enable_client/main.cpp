@@ -80,11 +80,14 @@ int main(int argc, char **argv) {
     r.registerImporter("exitImporter", exitImporter);
     auto exitFeedFunc = std::get<1>(exitImporterAndFunc);
 
-    EnablerGUIComponent component(configureFeedFunc, exitFeedFunc);
+    //For some reason my build of FTXUI will core dump when calling
+    //destructor for this component, therefore I deliberately avoided
+    //the destructor call
+    auto *component = new EnablerGUIComponent(configureFeedFunc, exitFeedFunc);
 
     auto statusHandler = M::pureExporter<bool>(
-        [&component,&screen](bool &&data) {
-            component.setEnabled(data);
+        [component,&screen](bool &&data) {
+            component->setEnabled(data);
             screen.PostEvent(ftxui::Event::Custom);
         }
     );
@@ -106,8 +109,8 @@ int main(int argc, char **argv) {
 
     env.log(infra::LogLevel::Info, graphOss.str());
 
-    component.TakeFocus();
-    screen.Loop(&component);
+    component->TakeFocus();
+    screen.Loop(component);
 
-    exit(0);
+    return 0;
 }
