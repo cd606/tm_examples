@@ -1,14 +1,14 @@
-#include "EnablerGUIDataFlow.hpp"
-
-#include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/transport/ExitDataSource.hpp>
-
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/screen/string.hpp>
 #include <ftxui/component/button.hpp>
 #include <ftxui/component/container.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+
+#include "EnablerGUIDataFlow.hpp"
+
+#include <tm_kit/infra/TerminationController.hpp>
+#include <tm_kit/transport/ExitDataSource.hpp>
 
 class EnablerGUIComponent : public ftxui::Component {
 private:
