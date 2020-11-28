@@ -7,9 +7,6 @@
 
 #include "EnablerGUIDataFlow.hpp"
 
-#include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/transport/ExitDataSource.hpp>
-
 class EnablerGUIComponent : public ftxui::Component {
 private:
     std::function<void(bool &&)> configureFeedFunc_;
