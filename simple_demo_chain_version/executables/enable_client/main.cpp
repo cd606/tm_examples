@@ -60,7 +60,14 @@ public:
 };
 
 int main(int argc, char **argv) {
+    auto screen = ftxui::ScreenInteractive::Fullscreen();
+
     TheEnvironment env;
+    env.CustomizedExitControlComponent::operator=(
+        CustomizedExitControlComponent(
+            screen.ExitLoopClosure()
+        )
+    );
     R r(&env);
 
     auto configureImporterAndFunc = M::triggerImporter<bool>();
@@ -73,13 +80,7 @@ int main(int argc, char **argv) {
     r.registerImporter("exitImporter", exitImporter);
     auto exitFeedFunc = std::get<1>(exitImporterAndFunc);
 
-    auto screen = ftxui::ScreenInteractive::Fullscreen();
-    auto screenExit = screen.ExitLoopClosure();
-    EnablerGUIComponent component(configureFeedFunc, [screenExit,exitFeedFunc]() {
-        screenExit();
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        exitFeedFunc();
-    });
+    EnablerGUIComponent component(configureFeedFunc, exitFeedFunc);
 
     auto statusHandler = M::pureExporter<bool>(
         [&component,&screen](bool &&data) {
@@ -108,6 +109,5 @@ int main(int argc, char **argv) {
     component.TakeFocus();
     screen.Loop(&component);
 
-    infra::terminationController(infra::RunForever {&env});
-    return 0;
+    exit(0);
 }

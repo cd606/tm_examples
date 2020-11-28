@@ -18,9 +18,21 @@
 using namespace dev::cd606::tm;
 using namespace simple_demo_chain_version::enable_server;
 
+class CustomizedExitControlComponent {
+private:
+    std::function<void()> f_;
+public:
+    CustomizedExitControlComponent() : f_() {}
+    CustomizedExitControlComponent(std::function<void()> const &f) : f_(f) {}
+    CustomizedExitControlComponent &operator=(CustomizedExitControlComponent &&) = default;
+    void exit() {
+        f_();
+    }
+};
+
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<false>,
-    infra::TrivialExitControlComponent,
+    CustomizedExitControlComponent,
     basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
     transport::CrossGuidComponent,
     transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>,
