@@ -698,7 +698,7 @@ int main(int argc, char **argv) {
 
     r.registerAction("transactionCommandParser", transactionCommandParser);
     cmdSource(r, r.actionAsSink(transactionCommandParser));
-    transactionFacility(
+    transactionFacility.facility(
         r
         , r.execute(
             "keyifyTI", keyifyTI

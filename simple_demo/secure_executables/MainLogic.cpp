@@ -240,7 +240,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                     return true;
                 }
             )
-        );
+        ).facility;
     } else {
         calc = &(MockCalculatorCombination<
                     R

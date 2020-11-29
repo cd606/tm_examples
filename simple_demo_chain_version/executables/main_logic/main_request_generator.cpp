@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
             , heartbeatSource.clone()
             , std::regex("simple_demo_chain_version MainLogic Request Placer")
             , "main_program/facility_combo/facility"
-        );
+        ).facility;
 
     auto exitDataSource = transport::ExitDataSourceCreator::addExitDataSource(
         r, "onExit"

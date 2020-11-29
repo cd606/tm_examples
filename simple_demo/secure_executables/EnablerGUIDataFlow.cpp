@@ -50,7 +50,7 @@ void enablerGUIDataFlow(
             , heartbeatSource.clone()
             , std::regex("simple_demo secure MainLogic")
             , "cfgFacility"
-        );
+        ).facility;
 
     auto keyify = M::template kleisli<ConfigureCommand>(
         basic::CommonFlowUtilComponents<M>::template keyify<ConfigureCommand>()

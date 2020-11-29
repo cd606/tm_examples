@@ -102,7 +102,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
                 , heartbeatSource.clone()
                 , std::regex("simple_demo plain Calculator")
                 , "calculator facility"
-            );
+            ).facility;
     } else {
         calc = &(MockCalculatorCombination<
                     R
