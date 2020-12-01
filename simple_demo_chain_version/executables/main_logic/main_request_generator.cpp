@@ -64,11 +64,18 @@ int main(int argc, char **argv) {
             , "simple_demo_chain_version.#.heartbeat"
         );
 
+    auto heartbeatSharer = 
+        infra::KleisliUtils<M>::action(
+            basic::CommonFlowUtilComponents<M>::shareBetweenDownstream<transport::HeartbeatMessage>()
+        );
+    r.registerAction("heartbeatSharer", heartbeatSharer);
+    auto sharedHeartbeatSource = r.execute(heartbeatSharer, heartbeatSource.clone());
+
     auto inputDataSource = transport::MultiTransportBroadcastListenerManagingUtils<R>
         ::setupBroadcastListenerThroughHeartbeat<InputData>
     (
         r 
-        , heartbeatSource.clone()
+        , sharedHeartbeatSource.clone()
         , std::regex("simple_demo_chain_version DataSource")
         , "input data publisher"
         , "input.data"
@@ -79,7 +86,7 @@ int main(int argc, char **argv) {
         ::setupOneNonDistinguishedRemoteFacility<basic::CBOR<double>, basic::CBOR<std::optional<ChainData>>>
         (
             r 
-            , heartbeatSource.clone()
+            , sharedHeartbeatSource.clone()
             , std::regex("simple_demo_chain_version MainLogic Request Placer")
             , "main_program/facility_combo/facility"
         ).facility;
@@ -91,7 +98,7 @@ int main(int argc, char **argv) {
         ::createSubscriber<GS>
         (
             r 
-            , heartbeatSource.clone()
+            , sharedHeartbeatSource.clone()
             , std::regex("simple_demo_chain_version Enable Server")
             , "transaction_server_components/subscription_handler"
             , GS::Subscription {{basic::VoidStruct {}}}
