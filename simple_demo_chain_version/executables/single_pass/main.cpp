@@ -34,7 +34,7 @@ using TheEnvironment = infra::Environment<
 using M = infra::SinglePassIterationApp<TheEnvironment>;
 using R = infra::AppRunner<M>;
 
-void run(std::string const &inputFile, std::string const &chainLocatorStr) {
+void run(std::string const &inputFile, std::string const &chainLocatorStr, bool printGraphOnly) {
     TheEnvironment env;
     R r(&env);
     std::ifstream ifs(inputFile.c_str(), std::ios::binary);
@@ -103,12 +103,16 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr) {
     r.registerExporter("discard", discardCalculatorChainDataInfo);
     r.exportItem(discardCalculatorChainDataInfo, calculatorLogicMainRes.chainDataGeneratedFromCalculator.clone());
     
+    if (printGraphOnly) {
+        r.writeGraphVizDescription(std::cout, "single_pass_combination");
+        return;
+    }
     r.finalize();
 }
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        std::cerr << "Usage: single_pass FILE_NAME [CHAIN_LOCATOR]\n";
+        std::cerr << "Usage: single_pass FILE_NAME [CHAIN_LOCATOR] [print-graph-only]\n";
         return 1;
     }
     std::string dataSourceCaptureFileName = argv[1];
@@ -116,6 +120,7 @@ int main(int argc, char **argv) {
     if (argc >= 3) {
         chainLocatorStr = argv[2];
     }
-    run(dataSourceCaptureFileName, chainLocatorStr);
+    bool printGraphOnly = (argc >= 4 && std::string(argv[3]) == "print-graph-only");
+    run(dataSourceCaptureFileName, chainLocatorStr, printGraphOnly);
     return 0;
 }
