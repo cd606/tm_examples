@@ -10,62 +10,62 @@ const printf = require('printf'); //this module can only be loaded this way in T
 yargs
     .scriptName("listener")
     .usage("$0 <options>")
-    .option('--file', {
+    .option('file', {
         describe: 'FILENAME'
         , type: 'string'
         , nargs: 1
         , demand: true
     })
-    .option('--printMode', {
+    .option('printMode', {
         describe: 'length|string|cbor|none|bytes|protobuf:FILE_NAME:TYPE_NAME'
         , type: 'string'
         , nargs: 1
         , demand: false
         , default: "length"
     })
-    .option('--fileMagicLength', {
+    .option('fileMagicLength', {
         describe: 'file magic length'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 4
     })
-    .option('--recordMagicLength', {
+    .option('recordMagicLength', {
         describe: 'record magic length'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 4
     })
-    .option('--timeFieldLength', {
+    .option('timeFieldLength', {
         describe: 'topic length field length'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 8
     })
-    .option('--topicLengthFieldLength', {
+    .option('topicLengthFieldLength', {
         describe: 'topic length field length'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 4
     })
-    .option('--dataLengthFieldLength', {
+    .option('dataLengthFieldLength', {
         describe: 'data field length'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 4
     })
-    .option('--hasFinalFlag', {
+    .option('hasFinalFlag', {
         describe: 'whether file has final flag'
         , type: 'boolean'
         , nargs: 1
         , demand: false
         , default: true
     })
-    .option('--timeUnit', {
+    .option('timeUnit', {
         describe: 'second|millisecond|microsecond'
         , type: 'string'
         , nargs: 1

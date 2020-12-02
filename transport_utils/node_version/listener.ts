@@ -10,34 +10,34 @@ import * as dateFormat from 'dateformat'
 yargs
     .scriptName("listener")
     .usage("$0 <options>")
-    .option('--address', {
+    .option('address', {
         describe: 'PROTOCOL://LOCATOR'
         , type: 'string'
         , nargs: 1
         , demand: true
     })
-    .option('--topic', {
+    .option('topic', {
         describe: 'topic to subscribe'
         , type: 'string'
         , nargs: 1
         , demand: false
         , default: null
     })
-    .option('--printMode', {
+    .option('printMode', {
         describe: 'length|string|cbor|none|bytes|protobuf:FILE_NAME:TYPE_NAME'
         , type: 'string'
         , nargs: 1
         , demand: false
         , default: "length"
     })
-    .option('--summaryPeriod', {
+    .option('summaryPeriod', {
         describe: 'summary period in seconds'
         , type: 'number'
         , nargs: 1
         , demand: false
         , default: 0
     })
-    .option('--captureFile', {
+    .option('captureFile', {
         describe: 'capture file name'
         , type: 'string'
         , nargs: 1

@@ -6,19 +6,19 @@ import * as yargs from 'yargs'
 yargs
     .scriptName("relayer")
     .usage("$0 <options>")
-    .option('--incomingAddress', {
+    .option('incomingAddress', {
         describe: 'PROTOCOL://LOCATOR'
         , type: 'string'
         , nargs: 1
         , demand: true
     })
-    .option('--outgoingAddress', {
+    .option('outgoingAddress', {
         describe: 'PROTOCOL://LOCATOR'
         , type: 'string'
         , nargs: 1
         , demand: true
     })
-    .option('--summaryPeriod', {
+    .option('summaryPeriod', {
         describe: 'summary period in seconds'
         , type: 'number'
         , nargs: 1
