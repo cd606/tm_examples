@@ -10,3 +10,4 @@ tm_simple_demo_chain_version_calculator_logic_lib = static_library(
     , include_directories: [inc]
     , dependencies: [common_deps]
 )
+subdir('typecheck')
