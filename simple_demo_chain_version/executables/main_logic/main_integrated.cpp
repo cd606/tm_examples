@@ -141,6 +141,23 @@ int main(int argc, char **argv) {
     r.registerAction("converToBool", convertToBool);
     r.execute(convertToBool, std::move(enableServerDataSource));
 
+    std::string alertTopic = "";
+    auto statusUpdaterUsingHeartbeatAndAlert = [&env,alertTopic](bool enabled) {
+        if constexpr (std::is_convertible_v<TheEnvironment *, transport::HeartbeatAndAlertComponent *>) {
+            if (enabled) {
+                env.setStatus("calculation_status", transport::HeartbeatMessage::Status::Good, "enabled");
+                if (alertTopic != "") {
+                    env.sendAlert(alertTopic, infra::LogLevel::Info, "main logic calculation enabled");
+                }
+            } else {
+                env.setStatus("calculation_status", transport::HeartbeatMessage::Status::Warning, "disabled");
+                if (alertTopic != "") {
+                    env.sendAlert(alertTopic, infra::LogLevel::Warning, "main logic calculation disabled");
+                }
+            }
+        }
+    };
+
     //main logic 
     main_program_logic::mainProgramLogicMain(
         r
@@ -153,6 +170,7 @@ int main(int argc, char **argv) {
         , inputDataSource.clone()
         , r.actionAsSource(convertToBool)
         , "main_program"
+        , statusUpdaterUsingHeartbeatAndAlert
     );
 
     //write execution graph and start

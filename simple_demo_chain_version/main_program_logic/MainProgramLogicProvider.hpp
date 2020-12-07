@@ -12,7 +12,6 @@
 #include <tm_kit/basic/simple_shared_chain/ChainWriter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/simple_shared_chain/ChainBackedFacility.hpp>
-#include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <boost/hana/functional/curry.hpp>
 
@@ -71,32 +70,16 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         , typename R::template ConvertibleToSourceoid<InputData> &&dataSource
         , std::optional<typename R::template Source<bool>> const &enabledSource
         , std::string const &graphPrefix
-        , std::string const &alertTopic=""
+        , std::function<void(bool)> const &statusUpdater = [](bool x) {}
     ) {
         using M = typename R::AppType;
         auto *env = r.environment();
-
-        auto statusUpdaterUsingHeartbeatAndAlert = [env,alertTopic](bool enabled) {
-            if constexpr (std::is_convertible_v<typename R::EnvironmentType *, transport::HeartbeatAndAlertComponent *>) {
-                if (enabled) {
-                    env->setStatus("calculation_status", transport::HeartbeatMessage::Status::Good, "enabled");
-                    if (alertTopic != "") {
-                        env->sendAlert(alertTopic, infra::LogLevel::Info, "main logic calculation enabled");
-                    }
-                } else {
-                    env->setStatus("calculation_status", transport::HeartbeatMessage::Status::Warning, "disabled");
-                    if (alertTopic != "") {
-                        env->sendAlert(alertTopic, infra::LogLevel::Warning, "main logic calculation disabled");
-                    }
-                }
-            }
-        };
 
         auto operationLogicPtr = std::make_shared<OperationLogic>(
             [env](std::string const &s) {
                 env->log(infra::LogLevel::Info, s);
             }
-            , statusUpdaterUsingHeartbeatAndAlert
+            , statusUpdater
         );
         r.preservePointer(operationLogicPtr);
 
