@@ -38,5 +38,5 @@ tm_byte_data_chain_transcriber_exe = executable(
     , ['byte_data_chain_transcriber.cpp']
     , include_directories: [inc]
     , link_args : byte_data_chain_transcriber_link_args
-    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), more_boost_dep]
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('tclap')]
 )

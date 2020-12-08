@@ -17,11 +17,9 @@
 #include <iostream>
 #include <fstream>
 
-#include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
+#include <tclap/CmdLine.h>
 
 using namespace dev::cd606::tm;
-using namespace boost::program_options;
 
 class TrivialByteDataChainFolder : public basic::simple_shared_chain::TrivialChainDataFetchingFolder<basic::ByteData> {
 private:
@@ -197,33 +195,26 @@ void run(std::string const &inputChainLocatorStr, std::string const &outputChain
 }
 
 int main(int argc, char **argv) {
-    options_description desc("allowed options");
-    desc.add_options()
-        ("help", "display help message")
-        ("input", value<std::string>(), "a chain locator or a capture file name, if it does not contain \"://\", it is a capture file name")
-        ("output", value<std::string>(), "a chain locator or a capture file name, if it does not contain \"://\", it is a capture file name")
-        ("realTimeMode", "runs in real time mode (only meaningful if both input and output are chains)")
-    ;
-    variables_map vm;
-    store(parse_command_line(argc, argv, desc), vm);
-    notify(vm);
+    TCLAP::CmdLine cmd("Byte data chain transcriber", ' ', "0.0.1");
+    TCLAP::ValueArg<std::string> inputArg("i", "input", "a chain locator or a capture file name, if it does not contain \"://\", it is a capture file name", true, "", "string");
+    TCLAP::ValueArg<std::string> outputArg("o", "output", "a chain locator or a capture file name, if it does not contain \"://\", it is a capture file name", true, "", "string");
+    cmd.add(inputArg);
+    cmd.add(outputArg);    
+    TCLAP::SwitchArg realTimeModeArg("r", "realTimeMode", "runs in real time mode (only meaningful if both input and output are chains)", cmd, false);
 
-    if (vm.count("help")) {
-        std::cout << desc << '\n';
-        return 0;
-    }
-    if (!vm.count("input")) {
+    cmd.parse(argc, argv);
+
+    auto inputChainLocatorStr = inputArg.getValue();
+    if (inputChainLocatorStr == "") {
         std::cerr << "Please provide input\n";
         return 1;
     }
-    if (!vm.count("output")) {
+    auto outputChainLocatorStr = outputArg.getValue();
+    if (outputChainLocatorStr == "") {
         std::cerr << "Please provide output\n";
         return 1;
     }
-
-    auto inputChainLocatorStr = vm["input"].as<std::string>();
-    auto outputChainLocatorStr = vm["output"].as<std::string>();
-    bool realTimeMode = vm.count("realTimeMode");
+    auto realTimeMode = realTimeModeArg.getValue();
     
     run(inputChainLocatorStr, outputChainLocatorStr, realTimeMode);
 
