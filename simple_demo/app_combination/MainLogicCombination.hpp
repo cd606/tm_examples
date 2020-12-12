@@ -61,9 +61,8 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
                 simple_demo::InputData
                 , simple_demo::CalculateResult
             >(
-                boost::hana::curry<4>(std::mem_fn(&MainLogic::runLogic))(mainLogicPtr.get())
+                boost::hana::curry<2>(std::mem_fn(&MainLogic::runLogic))(mainLogicPtr.get())
                 , dev::cd606::tm::infra::LiftParameters<std::chrono::system_clock::time_point>()
-                    .RequireMask(dev::cd606::tm::infra::FanInParamMask("01")) //only the first input (InputData) is required
                     .DelaySimulator(
                         [](int which, std::chrono::system_clock::time_point const &) -> std::chrono::system_clock::duration {
                             if (which == 0) {
@@ -181,9 +180,8 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
                 double
                 , simple_demo::CalculateResult
             >(
-                boost::hana::curry<4>(std::mem_fn(&MainLogic2::runLogic))(mainLogicPtr.get())
+                boost::hana::curry<2>(std::mem_fn(&MainLogic2::runLogic))(mainLogicPtr.get())
                 , dev::cd606::tm::infra::LiftParameters<std::chrono::system_clock::time_point>()
-                    .RequireMask(dev::cd606::tm::infra::FanInParamMask("01")) //only the first input (InputData) is required
                     .DelaySimulator(
                         [](int which, std::chrono::system_clock::time_point const &) -> std::chrono::system_clock::duration {
                             if (which == 0) {

@@ -114,11 +114,14 @@ int main(int argc, char **argv) {
                     , basic::VoidStruct {}
                 );
             auto perClockUpdate = M::kleisli2<basic::VoidStruct,uint64_t>(
-                [](int which, M::InnerData<basic::VoidStruct> &&clockData, M::InnerData<uint64_t> &&counter) -> M::Data<basic::VoidStruct> {
-                    if (which == 0) {
+                [](M::InnerData<std::variant<basic::VoidStruct,uint64_t>> &&data) -> M::Data<basic::VoidStruct> {
+                    static uint64_t counter = 0;
+                    if (data.timedData.value.index() == 0) {
                         std::ostringstream oss;
-                        oss << "Got " << counter.timedData.value << " messages";
-                        clockData.environment->log(infra::LogLevel::Info, oss.str());
+                        oss << "Got " << counter << " messages";
+                        data.environment->log(infra::LogLevel::Info, oss.str());
+                    } else {
+                        counter = std::get<1>(data.timedData.value);
                     }
                     return std::nullopt;
                 }

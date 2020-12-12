@@ -5,6 +5,7 @@
 #include <memory>
 #include <functional>
 #include <chrono>
+#include <variant>
 #include "defs.pb.h"
 
 class MainLogicImpl;
@@ -20,9 +21,7 @@ public:
     MainLogic(MainLogic &&);
     MainLogic &operator=(MainLogic &&);
     std::optional<simple_demo::CalculateCommand> runLogic(
-        int which
-        , std::tuple<std::chrono::system_clock::time_point, simple_demo::InputData> &&input
-        , std::tuple<std::chrono::system_clock::time_point, simple_demo::CalculateResult> &&result
+        std::tuple<std::chrono::system_clock::time_point, std::variant<simple_demo::InputData, simple_demo::CalculateResult>> &&input
     );
     simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&);
@@ -56,9 +55,7 @@ public:
     MainLogic2(MainLogic2 &&);
     MainLogic2 &operator=(MainLogic2 &&);
     std::optional<simple_demo::CalculateCommand> runLogic(
-        int which
-        , double &&input
-        , simple_demo::CalculateResult &&result
+        std::variant<double, simple_demo::CalculateResult> &&input
     );
     simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&);

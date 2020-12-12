@@ -84,15 +84,13 @@ public:
     }
     ~MainLogicImpl() = default;
     std::optional<simple_demo::CalculateCommand> runLogic(
-        int which
-        , std::tuple<std::chrono::system_clock::time_point, simple_demo::InputData> &&input
-        , std::tuple<std::chrono::system_clock::time_point, simple_demo::CalculateResult> &&result
+        std::tuple<std::chrono::system_clock::time_point, std::variant<simple_demo::InputData, simple_demo::CalculateResult>> &&input
     ) {
-        switch (which) {
+        switch (std::get<1>(input).index()) {
         case 0:
-            return handleInput(std::move(input));
+            return handleInput({std::get<0>(input), std::move(std::get<0>(std::get<1>(input)))});
         case 1:
-            handleResult(std::move(std::get<1>(result)));
+            handleResult(std::move(std::get<1>(std::get<1>(input))));
             return std::nullopt;
         default:
             return std::nullopt;
@@ -148,11 +146,9 @@ MainLogic::~MainLogic() {}
 MainLogic::MainLogic(MainLogic &&) = default;
 MainLogic &MainLogic::operator=(MainLogic &&) = default;
 std::optional<simple_demo::CalculateCommand> MainLogic::runLogic(
-    int which
-    , std::tuple<std::chrono::system_clock::time_point, simple_demo::InputData> &&input
-    , std::tuple<std::chrono::system_clock::time_point, simple_demo::CalculateResult> &&result
+    std::tuple<std::chrono::system_clock::time_point, std::variant<simple_demo::InputData, simple_demo::CalculateResult>> &&input
 ) {
-    return impl_->runLogic(which, std::move(input), std::move(result));
+    return impl_->runLogic(std::move(input));
 }
 simple_demo::ConfigureResult MainLogic::configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
     return impl_->configure(std::move(cmd));
@@ -254,15 +250,13 @@ public:
     }
     ~MainLogic2Impl() = default;
     std::optional<simple_demo::CalculateCommand> runLogic(
-        int which
-        , double input
-        , simple_demo::CalculateResult &&result
+        std::variant<double, simple_demo::CalculateResult> &&input
     ) {
-        switch (which) {
+        switch (input.index()) {
         case 0:
-            return handleInput(input);
+            return handleInput(std::move(std::get<0>(input)));
         case 1:
-            handleResult(std::move(result));
+            handleResult(std::move(std::get<1>(input)));
             return std::nullopt;
         default:
             return std::nullopt;
@@ -316,11 +310,9 @@ MainLogic2::~MainLogic2() {}
 MainLogic2::MainLogic2(MainLogic2 &&) = default;
 MainLogic2 &MainLogic2::operator=(MainLogic2 &&) = default;
 std::optional<simple_demo::CalculateCommand> MainLogic2::runLogic(
-    int which
-    , double &&input
-    , simple_demo::CalculateResult &&result
+    std::variant<double, simple_demo::CalculateResult> &&input
 ) {
-    return impl_->runLogic(which, input, std::move(result));
+    return impl_->runLogic(std::move(input));
 }
 simple_demo::ConfigureResult MainLogic2::configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
     return impl_->configure(std::move(cmd));
