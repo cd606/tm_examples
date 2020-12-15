@@ -24,6 +24,7 @@ using namespace simple_demo_chain_version;
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<true>,
     infra::TrivialExitControlComponent,
+    //infra::TraceNodesComponent,
     basic::TimeComponentEnhancedWithSpdLogging<
         basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
         , false //don't log thread ID

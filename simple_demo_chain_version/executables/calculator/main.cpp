@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
+        //infra::TraceNodesComponent,
         basic::TimeComponentEnhancedWithSpdLogging<
             basic::real_time_clock::ClockComponent
         >,
