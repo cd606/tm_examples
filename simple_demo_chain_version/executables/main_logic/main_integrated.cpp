@@ -5,6 +5,7 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
+#include <tm_kit/infra/TraceNodesComponent.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
@@ -34,6 +35,7 @@ int main(int argc, char **argv) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
+        //infra::TraceNodesComponent,
         basic::TimeComponentEnhancedWithSpdLogging<
             basic::real_time_clock::ClockComponent
         >,
