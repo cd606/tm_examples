@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option cc_enable_arenas = true;
+
 package db_subscription;
 
 message db_data {

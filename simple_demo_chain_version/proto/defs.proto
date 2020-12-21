@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option cc_enable_arenas = true;
+
 package simple_demo_chain_version;
 
 message InputData {
