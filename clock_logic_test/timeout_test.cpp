@@ -33,11 +33,13 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     R r(&env);
-    auto primary = M::liftPure<int>([sleepSec](int &&x) -> double {
+    auto primary = M::liftPure<int>([&env,sleepSec](int &&x) -> double {
+        env.log(infra::LogLevel::Info, "Primary fires");
         std::this_thread::sleep_for(std::chrono::seconds(sleepSec));
         return x*3.0;
     }, infra::LiftParameters<M::TimePoint>().SuggestThreaded(true));
-    auto secondary = M::liftPure<int>([](int &&x) -> double {
+    auto secondary = M::liftPure<int>([&env](int &&x) -> double {
+        env.log(infra::LogLevel::Info, "Secondary fires");
         return x*2.0;
     });
 
