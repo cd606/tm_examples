@@ -58,6 +58,8 @@ int main(int argc, char **argv) {
     }
 
     TheEnvironment env;
+
+    env.setLogFilePrefix("simple_demo_chain_version_data_source_");
     
     transport::initializeHeartbeatAndAlertComponent
         (&env, "simple_demo_chain_version DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
@@ -73,6 +75,8 @@ int main(int argc, char **argv) {
             r
             , "input data publisher"
             , (same_host?"zeromq://ipc::::/tmp/simple_demo_chain_version_input_data":"zeromq://localhost:12345")
+            /*, std::nullopt
+            , true*/
         );
     auto importerPair = M::triggerImporter<InputData>();
 
@@ -83,6 +87,11 @@ int main(int argc, char **argv) {
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.data_source.heartbeat", std::chrono::seconds(10));
+
+    std::ostringstream graphOss;
+    r.writeGraphVizDescription(graphOss, "simple_demo_chain_version_data_source");
+    env.log(infra::LogLevel::Info, "The execution graph is:");
+    env.log(infra::LogLevel::Info, graphOss.str());
 
     r.finalize();
 

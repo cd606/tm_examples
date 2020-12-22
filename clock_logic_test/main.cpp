@@ -8,14 +8,8 @@
 #include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
-#include <tm_kit/basic/real_time_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/empty_clock/ClockComponent.hpp>
-#include <tm_kit/basic/empty_clock/ClockImporter.hpp>
-#include <tm_kit/basic/empty_clock/ClockOnOrderFacility.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 
@@ -58,10 +52,7 @@ void real_time_run(std::ostream &fileOutput) {
     env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
-    clock_logic_test_app::clockLogicMain<
-        basic::real_time_clock::ClockImporter<TheEnvironment>
-        , basic::real_time_clock::ClockOnOrderFacility<TheEnvironment>
-        >(r, fileOutput);
+    clock_logic_test_app::clockLogicMain(r, fileOutput);
     r.writeGraphVizDescription(std::cout, "test");
     r.finalize();
 
@@ -87,10 +78,7 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
     env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
-    clock_logic_test_app::clockLogicMain<
-        basic::single_pass_iteration_clock::ClockImporter<TheEnvironment>
-        , basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
-        >(r, fileOutput);
+    clock_logic_test_app::clockLogicMain(r, fileOutput);
     r.writeGraphVizDescription(std::cout, "test");
     r.finalize();
 
@@ -112,10 +100,7 @@ void typecheck_run(std::ostream &fileOutput) {
     env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
-    clock_logic_test_app::clockLogicMain<
-        basic::empty_clock::ClockImporter<TheEnvironment>
-        , basic::empty_clock::ClockOnOrderFacility<TheEnvironment>
-        >(r, fileOutput);
+    clock_logic_test_app::clockLogicMain(r, fileOutput);
     r.writeGraphVizDescription(std::cout, "test");
     r.finalize();
 

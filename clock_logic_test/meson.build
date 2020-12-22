@@ -4,3 +4,9 @@ tm_clock_logic_testexe = executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'timeout_test'
+    , ['timeout_test.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)

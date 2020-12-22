@@ -4,14 +4,17 @@
 #include <tm_kit/infra/WithTimeData.hpp>
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
+#include <tm_kit/basic/AppClockHelper.hpp>
 #include "FacilityLogic.hpp"
 #include <sstream>
 
 namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app {
 
-    template <class ClockImporterExporter, class ClockOnOrderFacility, class R>
+    template <class R>
     void clockLogicMain(R &r, std::ostream &fileOutput) {
         using M = typename R::AppType;
+        using ClockImporterExporter = typename basic::AppClockHelper<M>::Importer;
+        using ClockOnOrderFacility = typename basic::AppClockHelper<M>::Facility;
         using TheEnvironment = typename R::EnvironmentType;
         using FileComponent = typename basic::template ByteDataWithTopicRecordFileImporterExporter<M>;
 
