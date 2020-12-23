@@ -50,12 +50,8 @@ int main(int argc, char **argv) {
 
     auto pathway = basic::AppRunnerUtilComponents<R>::pathwayWithTimeout<int, double>(
         std::chrono::seconds(timeoutSec)
-        , [primary](R &r, R::Source<int> &&source, R::Sink<double> const &sink) {
-            r.connect(r.execute(primary, std::move(source)), sink);
-        }
-        , [secondary](R &r, R::Source<int> &&source, R::Sink<double> const &sink) {
-            r.connect(r.execute(secondary, std::move(source)), sink);
-        }
+        , basic::AppRunnerUtilComponents<R>::singleActionPathway<int,double>(primary)
+        , basic::AppRunnerUtilComponents<R>::singleActionPathway<int,double>(secondary)
         , "timeout"
     );
     r.registerAction("secondary", secondary);
