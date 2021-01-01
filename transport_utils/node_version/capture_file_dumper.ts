@@ -38,7 +38,7 @@ yargs
         , default: 4
     })
     .option('timeFieldLength', {
-        describe: 'topic length field length'
+        describe: 'time field length'
         , type: 'number'
         , nargs: 1
         , demand: false
@@ -126,20 +126,26 @@ function * readCaptureFile(fd : number) : Generator<CaptureFileItem, void, unkno
                 return;
             } //skip the record header
         }
-        if (fs.readSync(fd, buffer, 0, timeFieldLen, null) != timeFieldLen) {
-            return;
+        let t : bigint = BigInt(0);
+        if (timeFieldLen > 0) {
+            if (fs.readSync(fd, buffer, 0, timeFieldLen, null) != timeFieldLen) {
+                return;
+            }
+            t = buffer.readBigInt64LE();
         }
-        let t : bigint = buffer.readBigInt64LE();
         let formattedTime = timeFormatter(t);
-        if (fs.readSync(fd, buffer, 0, topicLengthFieldLen, null) != topicLengthFieldLen) {
-            return;
+        let topic = '';
+        if (topicLengthFieldLen > 0) {
+            if (fs.readSync(fd, buffer, 0, topicLengthFieldLen, null) != topicLengthFieldLen) {
+                return;
+            }
+            let topicLen = buffer.readUInt32LE();
+            let topicBuf = Buffer.alloc(topicLen);
+            if (fs.readSync(fd, topicBuf, 0, topicLen, null) != topicLen) {
+                return;
+            }
+            topic = topicBuf.toString('utf-8');
         }
-        let topicLen = buffer.readUInt32LE();
-        let topicBuf = Buffer.alloc(topicLen);
-        if (fs.readSync(fd, topicBuf, 0, topicLen, null) != topicLen) {
-            return;
-        }
-        let topic = topicBuf.toString('utf-8');
         if (fs.readSync(fd, buffer, 0, dataLengthFieldLen, null) != dataLengthFieldLen) {
             return;
         }
