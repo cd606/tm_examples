@@ -152,7 +152,7 @@ public:
     void initialize(Env *env, Chain *chain) {
         dontLog_ = env->value().dontLog;
     }
-    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<DataOnChain>> basicHandleInput(Env *env, typename App::template TimedDataType<typename App::template Key<InputType>> const &input, State const &currentState) {
         auto idStr = Env::id_to_string(input.value.id());
         return std::visit([this,env,&idStr,&currentState](auto &&x) -> std::tuple<ResponseType, std::optional<DataOnChain>> {
             using T = std::decay_t<decltype(x)>;
@@ -203,9 +203,9 @@ public:
             }
         }, std::move(input.value.key().value));
     }
-    std::tuple<ResponseType, std::optional<std::tuple<std::string, typename Chain::DataType>>> handleInput(Env *env, Chain *chain, typename App::template TimedDataType<typename App::template Key<InputType>> &&input, State const &currentState) {
+    std::tuple<ResponseType, std::optional<std::tuple<std::string, typename Chain::DataType>>> handleInput(Env *env, Chain *chain, typename App::template TimedDataType<typename App::template Key<InputType>> const &input, State const &currentState) {
         auto idStr = App::EnvironmentType::id_to_string(input.value.id());
-        auto resp = basicHandleInput(env, std::move(input), currentState);
+        auto resp = basicHandleInput(env, input, currentState);
         if (std::get<1>(resp)) {
             return {
                 std::get<0>(resp)
