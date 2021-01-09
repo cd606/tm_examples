@@ -9,11 +9,12 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
+#include <tm_kit/basic/simple_shared_chain/InMemoryWithLockChain.hpp>
+#include <tm_kit/basic/simple_shared_chain/InMemoryLockFreeChain.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/etcd_shared_chain/EtcdChain.hpp>
 #include <tm_kit/transport/redis_shared_chain/RedisChain.hpp>
-#include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInMemoryChain.hpp>
 #include <tm_kit/transport/lock_free_in_memory_shared_chain/LockFreeInBoostSharedMemoryChain.hpp>
 
 using namespace dev::cd606::tm;
@@ -561,13 +562,13 @@ int main(int argc, char **argv) {
             break;
         case InMem:
             {
-                transport::etcd_shared_chain::InMemoryChain<DataOnChain> chain;
+                basic::simple_shared_chain::InMemoryWithLockChain<DataOnChain> chain;
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
         case LockFreeInMem:
             {
-                transport::lock_free_in_memory_shared_chain::LockFreeInMemoryChain<DataOnChain> chain;
+                basic::simple_shared_chain::InMemoryLockFreeChain<DataOnChain> chain;
                 histRun(&chain, part, "2020-01-01", (mode == HistNoLog));
             }
             break;
