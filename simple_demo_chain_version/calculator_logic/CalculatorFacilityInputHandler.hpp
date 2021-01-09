@@ -31,7 +31,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         static std::tuple<
             ResponseType
             , std::optional<std::tuple<std::string, simple_demo_chain_version::ChainData>>
-        > handleInput(Env *env, Chain *chain, RealInput<Env> &&input, CalculatorState const &state) {
+        > handleInput(Env *env, Chain *chain, RealInput<Env> const &input, CalculatorState const &state) {
             int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
             simple_demo_chain_version::ChainData d {
                 now

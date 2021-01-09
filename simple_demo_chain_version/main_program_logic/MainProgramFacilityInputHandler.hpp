@@ -32,7 +32,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         static std::tuple<
             ResponseType
             , std::optional<std::tuple<std::string, ChainData>>
-        > handleInput(Env *env, void *chain, RealInput &&input, MainProgramState const &state) {
+        > handleInput(Env *env, void *chain, RealInput const &input, MainProgramState const &state) {
             if (state.outstandingIDs.size() < 2) {
                 int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
                 PlaceRequest r {
