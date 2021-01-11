@@ -27,7 +27,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         template <class Env, class Chain>
         std::tuple<
             std::optional<OffChainUpdateType>
-            , std::optional<std::tuple<std::string, simple_demo_chain_version::ChainData>>
+            , std::vector<std::tuple<std::string, simple_demo_chain_version::ChainData>>
         > work(Env *env, Chain *chain, CalculatorState const &state) {
             int64_t now = infra::withtime_utils::sinceEpoch<std::chrono::milliseconds>(env->now());
             if constexpr (Chain::SupportsExtraData) {
@@ -46,7 +46,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
 
         std::tuple<
             std::optional<OffChainUpdateType>
-            , std::optional<std::tuple<std::string, simple_demo_chain_version::ChainData>>
+            , std::vector<std::tuple<std::string, simple_demo_chain_version::ChainData>>
         > realWork(int64_t now, CalculatorState const &state);
     };
 } }

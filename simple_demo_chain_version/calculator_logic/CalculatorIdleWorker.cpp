@@ -3,7 +3,7 @@
 namespace simple_demo_chain_version { namespace calculator_logic {
     std::tuple<
         std::optional<CalculatorIdleWorker::OffChainUpdateType>
-        , std::optional<std::tuple<std::string, simple_demo_chain_version::ChainData>>
+        , std::vector<std::tuple<std::string, simple_demo_chain_version::ChainData>>
     > CalculatorIdleWorker::realWork(int64_t now, CalculatorState const &state) {
         std::unordered_map<int, double> valueRef;
         if (!state.newlyPlacedRequests.empty()) {
@@ -28,10 +28,10 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                 };
                 return {
                     OffChainUpdateType {d, valueRef}
-                    , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                    , {std::tuple<std::string, simple_demo_chain_version::ChainData> {
                         ""
                         , d
-                    }
+                    }}
                 };
             } else if (firstToTimeout) {
                 simple_demo_chain_version::ChainData d {
@@ -43,10 +43,10 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                 };
                 return {
                     OffChainUpdateType {d, valueRef}
-                    , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                    , {std::tuple<std::string, simple_demo_chain_version::ChainData> {
                         ""
                         , d
-                    }
+                    }}
                 };
             }
         } else if (!state.requestsBeingHandled.empty()) {
@@ -58,10 +58,13 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                     };
                     return {
                         OffChainUpdateType {d, valueRef}
-                        , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                        , {std::tuple<std::string, simple_demo_chain_version::ChainData> {
                             ""
                             , d
-                        }
+                        }, std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                            ""
+                            , d
+                        }}
                     };
                 } else if (item.second.latestResponseTimestamp+5000 < now) {
                     if (item.second.latestResponseTimestamp != 0) {
@@ -71,10 +74,10 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                         };
                         return {
                             OffChainUpdateType {d, valueRef}
-                            , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                            , {std::tuple<std::string, simple_demo_chain_version::ChainData> {
                                 ""
                                 , d
-                            }
+                            }}
                         };
                     } else if (item.second.acceptedTimestamp+5000 < now) {
                         simple_demo_chain_version::ChainData d {
@@ -83,10 +86,10 @@ namespace simple_demo_chain_version { namespace calculator_logic {
                         };
                         return {
                             OffChainUpdateType {d, valueRef}
-                            , std::tuple<std::string, simple_demo_chain_version::ChainData> {
+                            , {std::tuple<std::string, simple_demo_chain_version::ChainData> {
                                 ""
                                 , d
-                            }
+                            }}
                         };
                     }
                 }
@@ -94,7 +97,7 @@ namespace simple_demo_chain_version { namespace calculator_logic {
         }
         return {
             std::nullopt
-            , std::nullopt
+            , {}
         };
     }
 } }
