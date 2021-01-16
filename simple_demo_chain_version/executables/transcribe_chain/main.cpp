@@ -52,35 +52,34 @@ void runTranscription(Env *env, std::string const &inputChainLocatorStr, std::st
             , r.execute("parser", parser
                 , r.importItem("byteDataImporter", byteDataImporter))
         );
-    } else {
-        chainDataSource = basic::simple_shared_chain::createChainDataSource<
+
+        auto chainDataSink = basic::simple_shared_chain::createChainDataSink<
             R, ChainData
         >(
             r 
-            , sharedChainCreator.template readerFactory<
+            , sharedChainCreator.template writerFactory<
                 ChainData
-                , main_program_logic::TrivialChainDataFolder
-            >(
-                env
-                , inputChainLocatorStr
-            )
-            , "input_chain"
+                , basic::simple_shared_chain::EmptyStateChainFolder
+                , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
+            >(env, outputChainLocatorStr)
+            , "output_chain"
+        );
+
+        r.connect(chainDataSource->clone(), chainDataSink);
+    } else {
+        chainDataSource = basic::simple_shared_chain::setupChainTranscriber<
+            R, transport::SharedChainCreator, ChainData
+        >(
+            r 
+            , sharedChainCreator
+            , inputChainLocatorStr
+            , outputChainLocatorStr
+            , [](ChainData const &d) {
+                return main_program_logic::TrivialChainDataFolder::extractTime({d});
+            }
+            , "transcriber"
         );
     }
-
-    auto chainDataSink = basic::simple_shared_chain::createChainDataSink<
-        R, ChainData
-    >(
-        r 
-        , sharedChainCreator.template writerFactory<
-            ChainData
-            , basic::simple_shared_chain::EmptyStateChainFolder
-            , basic::simple_shared_chain::SimplyPlaceOnChainInputHandler<ChainData>
-        >(env, outputChainLocatorStr)
-        , "output_chain"
-    );
-
-    r.connect(chainDataSource->clone(), chainDataSink);
 
     basic::AppRunnerUtilComponents<R>
         ::setupExitTimer(
