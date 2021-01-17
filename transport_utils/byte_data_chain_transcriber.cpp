@@ -73,6 +73,7 @@ auto transcribe(R &r, std::string const &inputChainLocatorStr, std::string const
                 basic::ByteData
                 , TrivialByteDataChainFolder
                 , void //no trigger type
+                , void //no result transformer
                 , true //force separate data storage if possible
             >(
                 env
