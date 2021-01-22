@@ -4,6 +4,7 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
@@ -27,9 +28,9 @@ using namespace dev::cd606::tm;
 using namespace simple_demo_chain_version;
 using namespace boost::program_options;
 
-template <class Env>
+template <class Env, template <class E> class App>
 void runTranscription(Env *env, std::string const &inputChainLocatorStr, std::string const &outputChainLocatorStr) {
-    using M = infra::SinglePassIterationApp<Env>;
+    using M = App<Env>;
     using R = infra::AppRunner<M>;
 
     R r(env);
@@ -81,19 +82,25 @@ void runTranscription(Env *env, std::string const &inputChainLocatorStr, std::st
         );
     }
 
-    basic::AppRunnerUtilComponents<R>
-        ::setupExitTimer(
-        r 
-        , std::chrono::hours(24)
-        , chainDataSource->clone()
-        , [](Env *env) {
-            env->log(infra::LogLevel::Info, "Wrapping up!");
-        }
-        , "exitTimerPart"
-    );
+    if constexpr (std::is_same_v<M, infra::SinglePassIterationApp<Env>>) {
+        basic::AppRunnerUtilComponents<R>
+            ::setupExitTimer(
+            r 
+            , std::chrono::hours(24)
+            , chainDataSource->clone()
+            , [](Env *env) {
+                env->log(infra::LogLevel::Info, "Wrapping up!");
+            }
+            , "exitTimerPart"
+        );
+    }
     r.finalize();
+    if constexpr (std::is_same_v<M, infra::RealTimeApp<Env>>) {
+        infra::terminationController(infra::RunForever{});
+    }
 }
 
+template <template <class E> class App>
 void runSignedTranscription(std::string const &inputChainLocatorStr, std::string const &outputChainLocatorStr) {
     const transport::security::SignatureHelper::PrivateKey transcriptionKey = {
         0x72,0x6C,0xE8,0x00,0x79,0xB9,0x13,0xD9,0x9F,0xE7,0x95,0xC8,0xAD,0x50,0xBA,0xF9,
@@ -127,9 +134,10 @@ void runSignedTranscription(std::string const &inputChainLocatorStr, std::string
         }
     );
 
-    runTranscription<TheEnvironment>(&env, inputChainLocatorStr, outputChainLocatorStr);
+    runTranscription<TheEnvironment,App>(&env, inputChainLocatorStr, outputChainLocatorStr);
 }
 
+template <template <class E> class App>
 void runPlainTranscription(std::string const &inputChainLocatorStr, std::string const &outputChainLocatorStr) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
@@ -143,7 +151,7 @@ void runPlainTranscription(std::string const &inputChainLocatorStr, std::string 
     >;
     TheEnvironment env;
 
-    runTranscription<TheEnvironment>(&env, inputChainLocatorStr, outputChainLocatorStr);
+    runTranscription<TheEnvironment,App>(&env, inputChainLocatorStr, outputChainLocatorStr);
 }
 
 int main(int argc, char **argv) {
@@ -153,6 +161,7 @@ int main(int argc, char **argv) {
         ("input", value<std::string>(), "a chain locator or a capture file name, if it does not contain \"://\", it is a capture file name")
         ("output", value<std::string>(), "a chain locator")
         ("chainIsSigned", "whether chain is signed")
+        ("realTimeMode", "whether to run in real-time mode")
     ;
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -174,11 +183,20 @@ int main(int argc, char **argv) {
     auto inputChainLocatorStr = vm["input"].as<std::string>();
     auto outputChainLocatorStr = vm["output"].as<std::string>();
     bool chainIsSigned = vm.count("chainIsSigned");
+    bool realTimeMode = vm.count("realTimeMode");
 
-    if (chainIsSigned) {
-        runSignedTranscription(inputChainLocatorStr, outputChainLocatorStr);
+    if (realTimeMode) {
+        if (chainIsSigned) {
+            runSignedTranscription<infra::RealTimeApp_T>(inputChainLocatorStr, outputChainLocatorStr);
+        } else {
+            runPlainTranscription<infra::RealTimeApp_T>(inputChainLocatorStr, outputChainLocatorStr);
+        }
     } else {
-        runPlainTranscription(inputChainLocatorStr, outputChainLocatorStr);
+        if (chainIsSigned) {
+            runSignedTranscription<infra::SinglePassIterationApp_T>(inputChainLocatorStr, outputChainLocatorStr);
+        } else {
+            runPlainTranscription<infra::SinglePassIterationApp_T>(inputChainLocatorStr, outputChainLocatorStr);
+        }
     }
     return 0;
 }
