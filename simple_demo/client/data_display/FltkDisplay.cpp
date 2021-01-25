@@ -1,8 +1,3 @@
-#include <FL/Fl.H>
-#include <FL/Fl_Double_Window.H>
-#include <FL/Fl_Box.H>
-#include <FL/Fl_Chart.H>
-
 #include "DataDisplayFlow.hpp"
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
@@ -10,6 +5,11 @@
 
 #include <sstream>
 #include <iostream>
+
+#include <FL/Fl.H>
+#include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Box.H>
+#include <FL/Fl_Chart.H>
 
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<false>,
