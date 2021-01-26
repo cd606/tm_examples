@@ -73,10 +73,6 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
-    /*
-    env.transport::multicast::MulticastComponent::operator=(
-        transport::multicast::MulticastComponent(transport::multicast::MulticastComponentTopicEncodingChoice::BinaryAdHoc)
-    );*/
     R r(&env);
 
     {

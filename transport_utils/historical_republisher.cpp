@@ -92,10 +92,6 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     using FileComponent = basic::ByteDataWithTopicRecordFileImporterExporter<App>;
 
     TheEnvironment env;
-    /*
-    env.transport::multicast::MulticastComponent::operator=(
-        transport::multicast::MulticastComponent(transport::multicast::MulticastComponentTopicEncodingChoice::BinaryAdHoc)
-    );*/
         
     auto dateStr = infra::withtime_utils::localTimeString(firstTimePoint).substr(0, 10);
     std::ostringstream oss;
