@@ -30,9 +30,7 @@ void guiClientDataFlow(
     );
     r.registerOnOrderFacility("gsFacility", gsFacility);
     auto gsSubscriptionCmdCreator = M::constFirstPushKeyImporter<GS::Input>(
-        GS::Input {
-            GS::Subscription { std::vector<Key> {Key {}} }
-        }
+        basic::transaction::named_value_store::subscription<M,db_data>()
     );
     r.registerImporter("gsSubscriptionCmdCreator", gsSubscriptionCmdCreator);
     //The reason that we pass gsSubscriptionCmdCreator through gsInputPipe is that,
@@ -56,8 +54,8 @@ void guiClientDataFlow(
     r.registerAction("gsInputPipe", gsInputPipe);
     auto gsClientOutputs = basic::transaction::v2::dataStreamClientCombination<
         R, DI
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
+        , basic::transaction::named_value_store::VersionMerger
+        , basic::transaction::named_value_store::ApplyDelta<db_data>
     >(
         r 
         , "gsOutputHandling"

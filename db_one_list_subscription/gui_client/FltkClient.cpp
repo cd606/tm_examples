@@ -17,8 +17,8 @@
 class MyTable : public Fl_Table {
 private:
     int64_t version_;
-    std::vector<std::tuple<db_key,db_data>> dataVec_;
-    Data dataMap_;
+    std::vector<basic::transaction::named_value_store::Item<db_data>> dataVec_;
+    basic::transaction::named_value_store::Collection<db_data> dataMap_;
     mutable std::mutex mutex_;
 
     void DrawHeader(const char *s, int X, int Y, int W, int H) {
@@ -61,7 +61,7 @@ private:
             return;
         case CONTEXT_CELL:  
             {
-                std::tuple<db_key,db_data> thisData;
+                basic::transaction::named_value_store::Item<db_data> thisData;
                 {
                     std::lock_guard<std::mutex> _(mutex_);
                     if (static_cast<size_t>(ROW) >= dataVec_.size()) {
@@ -71,7 +71,7 @@ private:
                 }
                 switch (COL) {
                 case 0:
-                    sprintf(s, "%s", std::get<0>(thisData).name.c_str());
+                    sprintf(s, "%s", std::get<0>(thisData).c_str());
                     DrawData(s, X, Y, W, H);
                     break;
                 case 1:
@@ -150,24 +150,24 @@ void insertUpdateCallback(Fl_Widget *) {
         return;
     }
 
-    db_item item;
+    basic::transaction::named_value_store::Item<db_data> item;
     try {
-        item.key.name = name;
-        item.data.amount = boost::lexical_cast<int32_t>(amount);
-        item.data.stat = boost::lexical_cast<double>(stat);
+        std::get<0>(item) = name;
+        std::get<1>(item).amount = boost::lexical_cast<int32_t>(amount);
+        std::get<1>(item).stat = boost::lexical_cast<double>(stat);
     } catch (boost::bad_lexical_cast const &) {
         return;
     }
 
-    db_delta delta;
-    delta.inserts_updates.items.push_back(std::move(item));
+    basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+    delta.inserts_updates.push_back(std::move(item));
     auto versionAndOldCount = table->details();
     if (std::get<0>(versionAndOldCount) < 0) {
         return;
     }
     transactionFunc(TI::Transaction { {
         TI::UpdateAction {
-            Key{}, std::get<0>(versionAndOldCount), std::get<1>(versionAndOldCount), delta
+            basic::VoidStruct {}, std::get<0>(versionAndOldCount), std::get<1>(versionAndOldCount), delta
         }
     } });
 }
@@ -179,15 +179,15 @@ void deleteCallback(Fl_Widget *) {
         return;
     }
 
-    db_delta delta;
-    delta.deletes.keys.push_back(db_key {name});
+    basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+    delta.deletes.push_back(name);
     auto versionAndOldCount = table->details();
     if (std::get<0>(versionAndOldCount) < 0) {
         return;
     }
     transactionFunc(TI::Transaction { {
         TI::UpdateAction {
-            Key{}, std::get<0>(versionAndOldCount), std::get<1>(versionAndOldCount), delta
+            basic::VoidStruct {}, std::get<0>(versionAndOldCount), std::get<1>(versionAndOldCount), delta
         }
     } });
 }

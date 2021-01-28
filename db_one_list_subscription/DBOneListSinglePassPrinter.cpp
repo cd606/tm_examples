@@ -13,6 +13,7 @@
 #include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
+#include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
@@ -21,7 +22,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
-#include "TransactionHelpers.hpp"
+#include "DBData.hpp"
 
 #include <soci/soci.h>
 #include <soci/sqlite3/soci-sqlite3.h>
@@ -34,14 +35,7 @@
 using namespace dev::cd606::tm;
 using namespace db_one_list_subscription;
 
-using DI = basic::transaction::v2::DataStreamInterface<
-    int64_t
-    , Key
-    , int64_t
-    , Data
-    , int64_t
-    , DataDelta
->;
+using DI = basic::transaction::named_value_store::DI<db_data>;
 
 template <class R> 
 typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
@@ -58,10 +52,8 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
   ) 
 {
     using M = typename R::AppType;
-    
-    using GS = basic::transaction::v2::GeneralSubscriberTypes<
-        typename M::EnvironmentType::IDType, DI
-    >;
+
+    using GS = basic::transaction::named_value_store::GS<typename M::EnvironmentType::IDType,db_data>;
 
     auto printFullUpdate = M::template pureExporter<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
         [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) {
@@ -85,7 +77,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
                             oss << ',';
                         }
                         ++jj;
-                        oss << "{name='" << row.first.name << "'";
+                        oss << "{name='" << row.first << "'";
                         oss << ",amount=" << row.second.amount;
                         oss << ",stat=" << row.second.stat;
                         oss << "}";
@@ -105,9 +97,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
       
     auto createCommand = M::template liftPure<basic::VoidStruct>(
         [](basic::VoidStruct &&) -> typename GS::Input {
-            return typename GS::Input {
-                typename GS::SnapshotRequest { std::vector<Key> {Key {}} }
-            };
+            return basic::transaction::named_value_store::snapshotRequest<M,db_data>();
         }
     );
     auto keyify = M::template kleisli<typename GS::Input>(
@@ -117,8 +107,8 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
     auto keyedCommand = r.execute("keyify", keyify, r.actionAsSource("createCommand", createCommand));
     auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
         R, DI
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
+        , basic::transaction::named_value_store::VersionMerger
+        , basic::transaction::named_value_store::ApplyDelta<db_data>
     >(
         r 
         , "outputHandling"
@@ -177,22 +167,21 @@ void runSinglePass(std::string const &dbFile) {
 #endif
                 , dbFile
             );
-            Data initialData;
+            basic::transaction::named_value_store::Collection<db_data> initialData;
             soci::rowset<soci::row> res = 
                 session_->prepare << "SELECT name, amount, stat FROM test_table";
             for (auto const &r : res) {
-                db_key key;
-                key.name = r.get<std::string>(0);
+                auto name = r.get<std::string>(0);
                 db_data data;
                 data.amount = r.get<int>(1);
                 data.stat = r.get<double>(2);
-                initialData.insert({key, data});
+                initialData.insert({name, data});
             }
             DI::Update update {
                 0
                 , std::vector<DI::OneUpdateItem> {
                     DI::OneFullUpdateItem {
-                        Key {}
+                        basic::VoidStruct {}
                         , 0
                         , std::move(initialData)
                     }
@@ -211,8 +200,8 @@ void runSinglePass(std::string const &dbFile) {
 
     using DM = basic::transaction::v2::TransactionDeltaMerger<
         DI, false, M::PossiblyMultiThreaded
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
+        , basic::transaction::named_value_store::VersionMerger
+        , basic::transaction::named_value_store::ApplyDelta<db_data>
     >;
 
     auto subscriptionFacility = basic::transaction::v2::subscriptionLogicCombination<
@@ -247,9 +236,8 @@ void runSinglePass(std::string const &dbFile) {
 }
 
 void runRealTime() {   
-    using GS = basic::transaction::v2::GeneralSubscriberTypes<
-        typename boost::uuids::uuid, DI
-    >;
+    using GS = basic::transaction::named_value_store::GS<boost::uuids::uuid,db_data>;
+
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,

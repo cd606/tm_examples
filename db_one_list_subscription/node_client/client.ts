@@ -73,13 +73,11 @@ async function run(args : Args) {
                     , oldVersionSlice : [args.old_version]
                     , oldDataSummary : [args.old_count]
                     , dataDelta : {
-                        deletes: {keys: []}
-                        , inserts_updates : {
-                            items: [{
-                                key : [args.name]
-                                , data : [args.amount, args.stat]
-                            }]
-                        }
+                        deletes: []
+                        , inserts_updates : [[
+                            args.name
+                            , [args.amount, args.stat]
+                        ]]
                     }
                 }
             ]);
@@ -94,10 +92,8 @@ async function run(args : Args) {
                     , oldVersionSlice : [args.old_version]
                     , oldDataSummary : [args.old_count]
                     , dataDelta : {
-                        deletes: {keys: [[args.name]]}
-                        , inserts_updates : {
-                            items: []
-                        }
+                        deletes: [args.name]
+                        , inserts_updates : []
                     }
                 }
             ]);

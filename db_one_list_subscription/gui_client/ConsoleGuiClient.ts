@@ -7,21 +7,12 @@ import * as util from 'util'
 
 //for C++ struct CBOR types that are serialized with field names, we use interfaces
 //, for those that are serialized without field names, we use types
-type DBKey = [string];
+type DBKey = string;
 type DBData = [number, number]; //first is name, second is amount
-interface DBItem {
-    key : DBKey;
-    data : DBData;
-}
-interface DBDeltaDelete {
-    keys : DBKey[];
-}
-interface DBDeltaInsertUpdate {
-    items : DBItem[];
-}
+type DBItem = [DBKey, DBData];
 interface DBDelta {
-    deletes : DBDeltaDelete;
-    inserts_updates : DBDeltaInsertUpdate;
+    deletes : DBKey[];
+    inserts_updates : DBItem[];
 }
 
 type Key = TMBasic.VoidStruct;
@@ -86,11 +77,11 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
         , (ld : LocalData, delta : TMBasic.Transaction.DataStreamInterface.OneDeltaUpdateItem<Key,number,DataDelta>) => {
             if (ld.version == undefined || localData.version < delta[1]) {
                 let d = delta[2];
-                for (let k of d.deletes.keys) {
-                    ld.data.delete(k[0]);
+                for (let k of d.deletes) {
+                    ld.data.delete(k);
                 }
-                for (let iu of d.inserts_updates.items) {
-                    ld.data.set(iu.key[0], iu.data);
+                for (let iu of d.inserts_updates) {
+                    ld.data.set(iu[0], iu[1]);
                 }
                 ld.version = delta[1];
             }
@@ -100,8 +91,8 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
                 ld.version = full.version;
                 ld.data.clear();
                 if (full.data.length != 0) {
-                    for (let item of full.data[0].entries()) {
-                        ld.data.set(item[0][0], item[1]);
+                    for (let item of Object.entries(full.data[0])) {
+                        ld.data.set(item[0], item[1]);
                     }
                 }
             }
@@ -377,13 +368,11 @@ function setup() {
                     , oldVersionSlice : [dataCopy.version]
                     , oldDataSummary : [dataCopy.data.size]
                     , dataDelta : {
-                        deletes: {keys: []}
-                        , inserts_updates : {
-                            items: [{
-                                key : [nameInput.getValue().trim()]
-                                , data : [parseInt(amtInput.getValue().trim()), parseFloat(statInput.getValue().trim())]
-                            }]
-                        }
+                        deletes: []
+                        , inserts_updates : [[
+                                nameInput.getValue().trim()
+                                , [parseInt(amtInput.getValue().trim()), parseFloat(statInput.getValue().trim())]
+                        ]]
                     }
                 }
             ]));
@@ -398,10 +387,8 @@ function setup() {
                     , oldVersionSlice : [dataCopy.version]
                     , oldDataSummary : [dataCopy.data.size]
                     , dataDelta : {
-                        deletes: {keys: [[nameInput.getValue().trim()]]}
-                        , inserts_updates : {
-                            items: []
-                        }
+                        deletes: [nameInput.getValue().trim()]
+                        , inserts_updates : []
                     }
                 }
             ]));

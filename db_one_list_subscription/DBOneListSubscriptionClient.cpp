@@ -9,6 +9,7 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
+#include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
@@ -16,7 +17,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
-#include "TransactionHelpers.hpp"
+#include "DBData.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -26,17 +27,8 @@ using namespace dev::cd606::tm;
 using namespace db_one_list_subscription;
 
 void diMain(std::string const &cmd, std::string const &idStr) {
-    using DI = basic::transaction::v2::DataStreamInterface<
-        int64_t
-        , Key
-        , int64_t
-        , Data
-        , int64_t
-        , DataDelta
-    >;
-    using GS = basic::transaction::v2::GeneralSubscriberTypes<
-        transport::CrossGuidComponent::IDType, DI
-    >;
+    using DI = basic::transaction::named_value_store::DI<db_data>;
+    using GS = basic::transaction::named_value_store::GS<transport::CrossGuidComponent::IDType,db_data>;
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
         infra::TrivialExitControlComponent,
@@ -119,7 +111,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
                             oss << ',';
                         }
                         ++jj;
-                        oss << "{name='" << row.first.name << "'";
+                        oss << "{name='" << row.first << "'";
                         oss << ",amount=" << row.second.amount;
                         oss << ",stat=" << row.second.stat;
                         oss << "}";
@@ -139,9 +131,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     auto createCommand = M::liftMaybe<basic::VoidStruct>(
         [&env,cmd,idStr](basic::VoidStruct &&) -> std::optional<GS::Input> {
             if (cmd == "subscribe") {
-                return GS::Input {
-                    GS::Subscription { std::vector<Key> {Key {}} }
-                };
+                return basic::transaction::named_value_store::subscription<M,db_data>();
             } else if (cmd == "unsubscribe") {
                 if (idStr == "all") {
                     return GS::Input {
@@ -157,9 +147,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
                     GS::ListSubscriptions {}
                 };
             } else if (cmd == "snapshot") {
-                return GS::Input {
-                    GS::SnapshotRequest { std::vector<Key> {Key {}} }
-                };
+                return basic::transaction::named_value_store::snapshotRequest<M,db_data>();
             } else {
                 return std::nullopt;
             }
@@ -178,8 +166,8 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
     auto clientOutputs = basic::transaction::v2::dataStreamClientCombination<
         R, DI
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
+        , basic::transaction::named_value_store::VersionMerger
+        , basic::transaction::named_value_store::ApplyDelta<db_data>
     >(
         r 
         , "outputHandling"
@@ -201,15 +189,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
 }
 
 void tiMain(std::string const &cmd, std::string const &name, int amount, double stat, int64_t oldVersion, size_t oldDataCount) {
-    using TI = basic::transaction::v2::TransactionInterface<
-        int64_t
-        , Key
-        , int64_t
-        , Data
-        , DataSummary
-        , int64_t
-        , DataDelta
-    >;
+    using TI = basic::transaction::named_value_store::TI<db_data>;
 
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<false>,
@@ -249,23 +229,23 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
     auto createCommand = M::liftMaybe<basic::VoidStruct>(
         [cmd,name,amount,stat,oldVersion,oldDataCount](basic::VoidStruct &&) -> std::optional<TI::Transaction> {
             if (cmd == "update") {
-                db_delta delta;
-                delta.inserts_updates.items.push_back(db_item {
-                    db_key {name}, db_data {amount, stat}
+                basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+                delta.inserts_updates.push_back({
+                    name, db_data {amount, stat}
                 });
 
                 return TI::Transaction { {
                     TI::UpdateAction {
-                        Key{}, oldVersion, oldDataCount, delta
+                        basic::VoidStruct {}, oldVersion, oldDataCount, delta
                     }
                 } };
             } else if (cmd == "delete") {
-                db_delta delta;
-                delta.deletes.keys.push_back(db_key {name});
+                basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+                delta.deletes.push_back(name);
 
                 return TI::Transaction { {
                     TI::UpdateAction {
-                        Key{}, oldVersion, oldDataCount, delta
+                        basic::VoidStruct {}, oldVersion, oldDataCount, delta
                     }
                 } };
             } else {

@@ -42,7 +42,7 @@ class MyFrame: public wxFrame
 {
 private:
     int64_t version_;
-    Data dataMap_;
+    basic::transaction::named_value_store::Collection<db_data> dataMap_;
     mutable std::mutex mutex_;
 
     wxTextCtrl *nameInput_;
@@ -229,7 +229,7 @@ void MyFrame::OnDataUpdate(wxCommandEvent& event)
     int row = 0;
     std::ostringstream oss;
     for (auto const &item : dataMap_) {
-        dataGrid_->SetCellValue(row, 0, item.first.name);
+        dataGrid_->SetCellValue(row, 0, item.first);
         dataGrid_->SetCellValue(row, 1, boost::lexical_cast<std::string>(item.second.amount));
         oss.str("");
         oss << std::fixed << std::setprecision(6) << item.second.stat;
@@ -253,17 +253,17 @@ void MyFrame::OnInsertUpdateButtonClick(wxCommandEvent& event)
         return;
     }
 
-    db_item item;
+    basic::transaction::named_value_store::Item<db_data> item;
     try {
-        item.key.name = name;
-        item.data.amount = boost::lexical_cast<int32_t>(amount);
-        item.data.stat = boost::lexical_cast<double>(stat);
+        std::get<0>(item) = name;
+        std::get<1>(item).amount = boost::lexical_cast<int32_t>(amount);
+        std::get<1>(item).stat = boost::lexical_cast<double>(stat);
     } catch (boost::bad_lexical_cast const &) {
         return;
     }
 
-    db_delta delta;
-    delta.inserts_updates.items.push_back(std::move(item));
+    basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+    delta.inserts_updates.push_back(std::move(item));
 
     {
         std::lock_guard<std::mutex> _(mutex_);
@@ -272,7 +272,7 @@ void MyFrame::OnInsertUpdateButtonClick(wxCommandEvent& event)
         }
         transactionFunc_(TI::Transaction { {
             TI::UpdateAction {
-                Key{}, version_, dataMap_.size(), delta
+                basic::VoidStruct {}, version_, dataMap_.size(), delta
             }
         } });
     }
@@ -285,8 +285,8 @@ void MyFrame::OnDeleteButtonClick(wxCommandEvent& event)
         return;
     }
 
-    db_delta delta;
-    delta.deletes.keys.push_back(db_key {name});
+    basic::transaction::named_value_store::CollectionDelta<db_data> delta;
+    delta.deletes.push_back(name);
 
     {
         std::lock_guard<std::mutex> _(mutex_);
@@ -295,7 +295,7 @@ void MyFrame::OnDeleteButtonClick(wxCommandEvent& event)
         }
         transactionFunc_(TI::Transaction { {
             TI::UpdateAction {
-                Key{}, version_, dataMap_.size(), delta
+                basic::VoidStruct {}, version_, dataMap_.size(), delta
             }
         } });
     }

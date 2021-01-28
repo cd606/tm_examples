@@ -8,6 +8,7 @@
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
+#include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
 
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -15,7 +16,7 @@
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
-#include "TransactionHelpers.hpp"
+#include "DBData.hpp"
 
 #include <soci/soci.h>
 #include <soci/sqlite3/soci-sqlite3.h>
@@ -27,28 +28,11 @@
 using namespace dev::cd606::tm;
 using namespace db_one_list_subscription;
 
-using DI = basic::transaction::v2::DataStreamInterface<
-    int64_t
-    , Key
-    , int64_t
-    , Data
-    , int64_t
-    , DataDelta
->;
+using DI = basic::transaction::named_value_store::DI<db_data>;
+using TI = basic::transaction::named_value_store::TI<db_data>;
+using GS = basic::transaction::named_value_store::GS<boost::uuids::uuid,db_data>;
 
-using TI = basic::transaction::v2::TransactionInterface<
-    int64_t
-    , Key
-    , int64_t
-    , Data
-    , DataSummary
-    , int64_t
-    , DataDelta
->;
-
-using GS = basic::transaction::v2::GeneralSubscriberTypes<
-    boost::uuids::uuid, DI
->;
+using Data = basic::transaction::named_value_store::Collection<db_data>;
 
 class DSComponent : public basic::transaction::v2::DataStreamEnvComponent<DI> {
 private:
@@ -75,12 +59,11 @@ public:
         soci::rowset<soci::row> res = 
             session_->prepare << "SELECT name, amount, stat FROM test_table";
         for (auto const &r : res) {
-            db_key key;
-            key.name = r.get<std::string>(0);
+            auto name = r.get<std::string>(0);
             db_data data;
             data.amount = r.get<int>(1);
             data.stat = r.get<double>(2);
-            initialData.insert({key, data});
+            initialData.insert({name, data});
         }
         std::ostringstream oss;
         oss << "[DSComponent] loaded " << initialData.size() << " rows";
@@ -89,7 +72,7 @@ public:
             0
             , std::vector<DI::OneUpdateItem> {
                 DI::OneFullUpdateItem {
-                    Key {}
+                    {}
                     , 0
                     , std::move(initialData)
                 }
@@ -161,14 +144,14 @@ public:
             std::vector<std::string> namesToInsert;
             std::vector<int> amountsToInsert;
             std::vector<double> statsToInsert;
-            for (auto const &key : dataDelta.deletes.keys) {
-                namesToDelete.insert(key.name);
+            for (auto const &key : dataDelta.deletes) {
+                namesToDelete.insert(key);
             }
-            for (auto const &item: dataDelta.inserts_updates.items) {
-                namesToDelete.insert(item.key.name);
-                namesToInsert.push_back(item.key.name);
-                amountsToInsert.push_back(item.data.amount);
-                statsToInsert.push_back(item.data.stat);
+            for (auto const &item: dataDelta.inserts_updates) {
+                namesToDelete.insert(std::get<0>(item));
+                namesToInsert.push_back(std::get<0>(item));
+                amountsToInsert.push_back(std::get<1>(item).amount);
+                statsToInsert.push_back(std::get<1>(item).stat);
             }
             if (!namesToDelete.empty()) {
                 std::vector<std::string> namesToDeleteVec { namesToDelete.begin(), namesToDelete.end() };
@@ -270,18 +253,9 @@ int main(int argc, char **argv) {
 
     R r(&env);
 
-    using TF = basic::transaction::v2::TransactionFacility<
-        M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::Verbose
-        , std::equal_to<int64_t>
-        , std::equal_to<int64_t>
-        , CheckSummary
-    >;
+    using TF = basic::transaction::named_value_store::TF<M, db_data>;
     auto dataStore = std::make_shared<TF::DataStore>();
-    using DM = basic::transaction::v2::TransactionDeltaMerger<
-        DI, false, M::PossiblyMultiThreaded
-        , basic::transaction::v2::TriviallyMerge<int64_t, int64_t>
-        , ApplyDelta
-    >;
+    using DM = basic::transaction::named_value_store::DM<M, db_data>;
     auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
         R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::Verbose
     >(

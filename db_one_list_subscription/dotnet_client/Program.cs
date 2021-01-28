@@ -10,44 +10,24 @@ using Microsoft.Extensions.CommandLineUtils;
 namespace dotnet_client
 {
     [CborWithoutFieldNames]
-    class DBKey
-    {
-        public string name {get; set;}
-    }
-    [CborWithoutFieldNames]
     class DBData
     {
         public Int32 amount {get; set;}
         public double stat {get; set;}
     }
-    [CborWithFieldNames]
-    class DBItem
-    {
-        public DBKey key {get; set;}
-        public DBData data {get; set;}
-    }
-    [CborWithFieldNames]
-    class DBDeltaDelete
-    {
-        public List<DBKey> keys {get; set;}
-    }
-    [CborWithFieldNames]
-    class DBDeltaInsertUpdate
-    {
-        public List<DBItem> items {get; set;}
-    }
+
     [CborWithFieldNames]
     class DBDelta
     {
-        public DBDeltaDelete deletes {get; set;}
-        public DBDeltaInsertUpdate inserts_updates {get; set;}
+        public List<string> deletes {get; set;}
+        public List<(string,DBData)> inserts_updates {get; set;}
     }
 }
 
 namespace dotnet_client
 {
-    using GS = GeneralSubscriber<Int64, VoidStruct, Int64, Dictionary<DBKey,DBData>, Int64, DBDelta>;
-    using TI = TransactionInterface<Int64, VoidStruct, Int64, Dictionary<DBKey,DBData>, UInt32, Int64, DBDelta>;
+    using GS = GeneralSubscriber<Int64, VoidStruct, Int64, Dictionary<string,DBData>, Int64, DBDelta>;
+    using TI = TransactionInterface<Int64, VoidStruct, Int64, Dictionary<string,DBData>, UInt32, Int64, DBDelta>;
     class Program
     {
         enum Command {
@@ -123,17 +103,15 @@ namespace dotnet_client
                         , oldVersionSlice = data.old_version
                         , oldDataSummary = data.old_count
                         , dataDelta = new DBDelta() {
-                            deletes = new DBDeltaDelete() { keys = new List<DBKey>() }
-                            , inserts_updates = new DBDeltaInsertUpdate() {
-                                items = new List<DBItem>() {
-                                    new DBItem() {
-                                        key = new DBKey() {name = data.name}
-                                        , data = new DBData() {
-                                            amount = data.amount 
-                                            , stat = data.stat
-                                        }
+                            deletes = new List<string>()
+                            , inserts_updates = new List<(string, DBData)>() {
+                                (
+                                    data.name
+                                    , new DBData() {
+                                        amount = data.amount 
+                                        , stat = data.stat
                                     }
-                                }
+                                )
                             }
                         }
                     })
@@ -147,14 +125,8 @@ namespace dotnet_client
                         , oldVersionSlice = data.old_version
                         , oldDataSummary = data.old_count
                         , dataDelta = new DBDelta() {
-                            deletes = new DBDeltaDelete() { 
-                                keys = new List<DBKey>() {
-                                    new DBKey() {name = data.name}
-                                } 
-                            }
-                            , inserts_updates = new DBDeltaInsertUpdate() {
-                                items = new List<DBItem>()
-                            }
+                            deletes = new List<string>() { data.name }
+                            , inserts_updates = new List<(string,DBData)>() {}
                         }
                     })
             });

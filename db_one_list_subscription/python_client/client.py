@@ -88,13 +88,13 @@ async def update(qin : asyncio.Queue, qout : asyncio.Queue, name : str, amount :
             , "oldVersionSlice": [old_version]
             , "oldDataSummary": [old_count]
             , "dataDelta": {
-                "deletes": {"keys": []}
-                , "inserts_updates": {"items": [
-                    {
-                        "key": [name]
-                        , "data": [amount, stat]
-                    }
-                ]}
+                "deletes": []
+                , "inserts_updates": [
+                    [
+                        name
+                        , [amount, stat]
+                    ]
+                ]
             }
         }
     ]))
@@ -106,8 +106,8 @@ async def delete(qin : asyncio.Queue, qout : asyncio.Queue, name : str, old_vers
             , "oldVersionSlice": [old_version]
             , "oldDataSummary": [old_count]
             , "dataDelta": {
-                "deletes": {"keys": [[name]]}
-                , "inserts_updates": {"items": []}
+                "deletes": [name]
+                , "inserts_updates": []
             }
         }
     ]))

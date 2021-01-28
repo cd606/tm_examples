@@ -12,6 +12,7 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
+#include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
@@ -19,31 +20,15 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQOnOrderFacility.hpp>
 
-#include "db_one_list_subscription/TransactionHelpers.hpp"
+#include "db_one_list_subscription/DBData.hpp"
 
 using namespace dev::cd606::tm;
 using namespace db_one_list_subscription;
 
-using DI = basic::transaction::v2::DataStreamInterface<
-    int64_t
-    , Key
-    , int64_t
-    , Data
-    , int64_t
-    , DataDelta
->;
-using GS = basic::transaction::v2::GeneralSubscriberTypes<
-    transport::CrossGuidComponent::IDType, DI
->;
-using TI = basic::transaction::v2::TransactionInterface<
-    int64_t
-    , Key
-    , int64_t
-    , Data
-    , DataSummary
-    , int64_t
-    , DataDelta
->;
+using DI = basic::transaction::named_value_store::DI<db_data>;
+using GS = basic::transaction::named_value_store::GS<transport::CrossGuidComponent::IDType,db_data>;
+using TI = basic::transaction::named_value_store::TI<db_data>;
+
 using TheEnvironment = infra::Environment<
     infra::CheckTimeComponent<false>,
     infra::TrivialExitControlComponent,
