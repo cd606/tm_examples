@@ -7,6 +7,12 @@ executable(
     , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
 )
 executable(
+    'db_one_list_subscription_server_etcd'
+    , ['DBOneListSubscriptionServerEtcd.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep, dependency('libetcdcpp')]
+)
+executable(
     'db_one_list_subscription_client'
     , ['DBOneListSubscriptionClient.cpp']
     , include_directories: inc
