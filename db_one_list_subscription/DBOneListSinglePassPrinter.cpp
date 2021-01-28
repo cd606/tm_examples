@@ -53,7 +53,7 @@ typename R::template Sink<basic::VoidStruct> dbSinglePassPrinterLogic(
 {
     using M = typename R::AppType;
 
-    using GS = basic::transaction::named_value_store::GS<typename M::EnvironmentType::IDType,db_data>;
+    using GS = basic::transaction::named_value_store::GS<typename R::AppType::EnvironmentType::IDType,db_data>;
 
     auto printFullUpdate = M::template pureExporter<typename M::template KeyedData<typename GS::Input, DI::FullUpdate>>(
         [&env](typename M::template KeyedData<typename GS::Input, DI::FullUpdate> &&update) {
