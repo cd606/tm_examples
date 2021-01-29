@@ -17,6 +17,7 @@ TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES(TestEnum, ((Item1, "first i
 TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_SERIALIZE(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
 
 int main(int argc, char **argv) {
+    //std::cout << bytedata_utils::DirectlySerializableChecker<TriviallySerializable<std::array<double, 10>>>::IsDirectlySerializable() << '\n';
     using TestType = 
         std::tuple<
             TestEnum //int32_t
@@ -39,6 +40,7 @@ int main(int argc, char **argv) {
             , std::tuple<std::tuple<bool>>
             , std::tuple<>
             , std::tuple<float, double>
+            , TriviallySerializable<std::array<float,5>>
         >
     ;
     char buf[10] = {0x1, 0x2, 0x3, 0x4, 0x5, (char) 0xff, (char) 0xfe, (char) 0xfd, (char) 0xfc, (char) 0xfb};
@@ -83,11 +85,16 @@ int main(int argc, char **argv) {
         , std::tuple<std::tuple<bool>> {{true}}
         , std::tuple<> {}
         , std::tuple<float, double> {1.2f, 3.4}
+        , TriviallySerializable<std::array<float,5>> {
+            std::array<float, 5> {
+                1.0f, 2.0f, 3.0f, 4.0f, 5.0f
+            }
+        }
     };
     char buf1[1024];
-    auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 15>::apply(
+    auto encodedV = bytedata_utils::RunCBORSerializerWithNameList<TestType, 16>::apply(
         t
-        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16"}
         , buf1
     );
     auto encoded = std::string_view(buf1, encodedV);
@@ -100,9 +107,9 @@ int main(int argc, char **argv) {
     //auto encoded = bytedata_utils::RunSerializer<TestType>::apply(t);
     bytedata_utils::printByteDataDetails(std::cout, ByteDataView {encoded});
     std::cout << "\n";
-    auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 15>::apply(
+    auto decoded = bytedata_utils::RunCBORDeserializerWithNameList<TestType, 16>::apply(
         encoded, 0
-        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15"}
+        , {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16"}
     );
     //auto decoded = bytedata_utils::RunDeserializer<CBORWithMaxSizeHint<TestType>>::apply(encoded);
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
@@ -174,6 +181,11 @@ int main(int argc, char **argv) {
         std::cout << "\t, {{" << std::get<0>(std::get<0>(std::get<12>(data))) << "}}\n";
         std::cout << "\t, {}\n";
         std::cout << "\t, {" << std::get<0>(std::get<14>(data)) << "," << std::get<1>(std::get<14>(data)) << "}\n";
+        std::cout << "\t, {[";
+        for (auto const &item : std::get<15>(data).value) {
+            std::cout << item << ' ';
+        }
+        std::cout << "]}\n";
         std::cout << "}\n";
     } else {
         std::cout << "Decode failure\n";
