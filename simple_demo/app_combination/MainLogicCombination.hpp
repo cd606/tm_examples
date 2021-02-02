@@ -148,7 +148,7 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
         auto duplicator = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
             ::template duplicateInput<double>();
         auto exponentialAverage = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
-            ::template wholeHistoryKleisli<double>(
+            ::template wholeHistoryFold<double>(
             ExponentialAverage(std::log(0.5))
         );
         auto exponentialAverageWithInputAttached = dev::cd606::tm::basic::CommonFlowUtilComponents<M>

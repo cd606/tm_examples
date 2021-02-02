@@ -92,7 +92,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         auto duplicator = basic::CommonFlowUtilComponents<M>
             ::template duplicateInput<double>();
         auto exponentialAverage = basic::CommonFlowUtilComponents<M>
-            ::template wholeHistoryKleisli<double>(
+            ::template wholeHistoryFold<double>(
             ExponentialAverage(std::log(0.5))
         );
         auto exponentialAverageWithInputAttached = basic::CommonFlowUtilComponents<M>
