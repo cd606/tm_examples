@@ -12,7 +12,14 @@ nng_dep = [dependency('nngpp')]
 boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread', 'filesystem'])
 spd_dep = dependency('spdlog')
 crossguid_dep = dependency('crossguid')
-common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep]
+rt_link_args = ['-lrt']
+if build_machine.system() == 'windows'
+  rt_link_args += ['-lws2_32']
+endif
+rt_dep = declare_dependency(link_args: rt_link_args)
+common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep, rt_dep]
+
+
 protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
   arguments : ['--proto_path=@CURRENT_SOURCE_DIR@', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
