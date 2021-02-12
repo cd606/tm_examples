@@ -12,6 +12,10 @@
 #include <tm_kit/transport/zeromq/ZeroMQImporterExporter.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
+#include <tm_kit/transport/multicast/MulticastComponent.hpp>
+#include <tm_kit/transport/multicast/MulticastImporterExporter.hpp>
+#include <tm_kit/transport/shared_memory_broadcast/SharedMemoryBroadcastComponent.hpp>
+#include <tm_kit/transport/shared_memory_broadcast/SharedMemoryBroadcastImporterExporter.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
@@ -30,6 +34,8 @@ using TheEnvironment = infra::Environment<
     basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
     transport::zeromq::ZeroMQComponent,
     transport::rabbitmq::RabbitMQComponent,
+    transport::multicast::MulticastComponent,
+    transport::shared_memory_broadcast::SharedMemoryBroadcastComponent,
     transport::HeartbeatAndAlertComponent
 >;
 using M = infra::RealTimeApp<TheEnvironment>;
@@ -74,7 +80,8 @@ int main(int argc, char **argv) {
         ::oneBroadcastPublisher<InputData>(
             r
             , "input data publisher"
-            , (same_host?"zeromq://ipc::::/tmp/simple_demo_chain_version_input_data":"zeromq://localhost:12345")
+            //, (same_host?"zeromq://ipc::::/tmp/simple_demo_chain_version_input_data":"zeromq://localhost:12345")
+            , (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
             /*, std::nullopt
             , true*/
         );

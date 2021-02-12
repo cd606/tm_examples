@@ -14,6 +14,8 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/zeromq/ZeroMQComponent.hpp>
+#include <tm_kit/transport/multicast/MulticastComponent.hpp>
+#include <tm_kit/transport/shared_memory_broadcast/SharedMemoryBroadcastComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
@@ -42,6 +44,8 @@ int main(int argc, char **argv) {
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
         transport::zeromq::ZeroMQComponent,
+        transport::multicast::MulticastComponent,
+        transport::shared_memory_broadcast::SharedMemoryBroadcastComponent,
         transport::HeartbeatAndAlertComponent,
         transport::lock_free_in_memory_shared_chain::SharedMemoryChainComponent,
         transport::security::SignatureWithNameHookFactoryComponent<ChainData>,
