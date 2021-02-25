@@ -37,6 +37,7 @@ struct ReplayParameter {
     double speed;
     HMS calibratePointHistorical;
     std::variant<int, HM> calibratePointActual;
+    bool overrideDate;
 };
 
 std::chrono::system_clock::time_point fetchFirstTimePoint(ReplayParameter &&param) {
@@ -127,7 +128,8 @@ basic::VoidStruct runReplay(int which, ReplayParameter &&param, std::chrono::sys
     auto importer = FileComponent::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>,true>(
         ifs, 
         {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67},
-        {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
+        {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10},
+        param.overrideDate
     );
     auto dataSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
         ::oneByteDataBroadcastPublisher
@@ -182,6 +184,7 @@ int main(int argc, char **argv) {
         ("speed", value<double>(), "republish speed factor, default 1.0")
         ("calibratePointHistorical", value<std::string>(), "calibrate time point (for historical data), format is HH:MM[:SS]")
         ("calibratePointActual", value<std::string>(), "calibrate time point (for actual clock), format is HH:MM (no second!), or +N (where N is count of minutes)")
+        ("overrideDate", "override date")
     ;
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -270,6 +273,7 @@ int main(int argc, char **argv) {
     } else {
         param.calibratePointActual = *calibrateActualMinutes;
     }
+    param.overrideDate = vm.count("overrideDate");
 
     //Following commented-out code is an experiment of using an outer-graph
     //to combine inner-graphs. It is completely equivalent to the actual two-liner
@@ -301,7 +305,12 @@ int main(int argc, char **argv) {
 
     r.finalize();
     */
-    auto tp = fetchFirstTimePoint(std::move(param));
+    std::chrono::system_clock::time_point tp;
+    if (param.overrideDate) {
+        tp = std::chrono::system_clock::now();
+    } else {
+        tp = fetchFirstTimePoint(std::move(param));
+    }
     runReplay(1, std::move(param), std::move(tp));
 
     return 0;
