@@ -2,13 +2,11 @@ import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'
 import * as proto from 'protobufjs'
-import * as dateFormat from 'dateformat'
 import * as fs from 'fs'
-
-const printf = require('printf'); //this module can only be loaded this way in TypeScript
+import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
 
 yargs
-    .scriptName("listener")
+    .scriptName("capture file dumper")
     .usage("$0 <options>")
     .option('file', {
         describe: 'FILENAME'
@@ -74,106 +72,30 @@ yargs
     })
     ;
 
-interface CaptureFileItem {
-    time : string;
-    topic : string;
-    data : Buffer;
-    isFinal : boolean;
-}
-
-let timeFormatter = function(t : bigint) : string {
-    return t.toString();
-}
-switch (yargs.argv.timeUnit as string) {
-    case 'second':
-        timeFormatter = function(t : bigint) : string {
-            let d = new Date(Number(t*BigInt(1000)));
-            return dateFormat(d, "yyyy-mm-dd HH:MM:ss");
-        }
-        break;
-    case 'millisecond':
-        timeFormatter = function(t : bigint) : string {
-            let d = new Date(Number(t));
-            return dateFormat(d, "yyyy-mm-dd HH:MM:ss.l");
-        }
-        break;
-    case 'microsecond':
-        timeFormatter = function(t : bigint) : string {
-            let d = new Date(Number(t/BigInt(1000)));
-            return dateFormat(d, "yyyy-mm-dd HH:MM:ss")+printf('.%06d', Number(t%BigInt(1000000)));
-        }
-        break;
-    default:
-        break;
-}
-
-function * readCaptureFile(fd : number) : Generator<CaptureFileItem, void, unknown> {
-    let buffer : Buffer = Buffer.alloc(8);
-    let fileMagicLen = yargs.argv.fileMagicLength as number;
-    if (fileMagicLen > 0) {
-        if (fs.readSync(fd, buffer, 0, fileMagicLen, null) != fileMagicLen) {
-            return;
-        } //skip the file header
-    }
-    let recordMagicLen = yargs.argv.recordMagicLength as number;
-    let timeFieldLen = yargs.argv.timeFieldLength as number;
-    let topicLengthFieldLen = yargs.argv.topicLengthFieldLength as number;
-    let dataLengthFieldLen = yargs.argv.dataLengthFieldLength as number;
-    let hasFinalFlag = yargs.argv.hasFinalFlag as boolean;
-    while (true) {
-        if (recordMagicLen > 0) {
-            if (fs.readSync(fd, buffer, 0, recordMagicLen, null) != recordMagicLen) {
-                return;
-            } //skip the record header
-        }
-        let t : bigint = BigInt(0);
-        if (timeFieldLen > 0) {
-            if (fs.readSync(fd, buffer, 0, timeFieldLen, null) != timeFieldLen) {
-                return;
-            }
-            t = buffer.readBigInt64LE();
-        }
-        let formattedTime = timeFormatter(t);
-        let topic = '';
-        if (topicLengthFieldLen > 0) {
-            if (fs.readSync(fd, buffer, 0, topicLengthFieldLen, null) != topicLengthFieldLen) {
-                return;
-            }
-            let topicLen = buffer.readUInt32LE();
-            let topicBuf = Buffer.alloc(topicLen);
-            if (fs.readSync(fd, topicBuf, 0, topicLen, null) != topicLen) {
-                return;
-            }
-            topic = topicBuf.toString('utf-8');
-        }
-        if (fs.readSync(fd, buffer, 0, dataLengthFieldLen, null) != dataLengthFieldLen) {
-            return;
-        }
-        let dataLen = buffer.readUInt32LE();
-        let data = Buffer.alloc(dataLen);
-        if (fs.readSync(fd, data, 0, dataLen, null) != dataLen) {
-            return;
-        }
-        let isFinal = false;
-        if (hasFinalFlag) {
-            if (fs.readSync(fd, buffer, 0, 1, null) != 1) {
-                return;
-            }
-            isFinal = (buffer[0] != 0);
-        }
-        yield {
-            time : formattedTime
-            , topic : topic
-            , data : data
-            , isFinal : isFinal
-        };
-    }
-}
+let transformerOptions : TMBasic.Files.TopicCaptureFileRecordReaderOption = {
+    fileMagicLength : yargs.argv.fileMagicLength as number
+    , recordMagicLength : yargs.argv.recordMagicLength as number
+    , timeFieldLength : yargs.argv.timeFieldLength as number
+    , topicFieldLength : yargs.argv.topicLengthFieldLength as number
+    , dataLengthFieldLength : yargs.argv.dataLengthFieldLength as number
+    , timePrecision : yargs.argv.timeUnit as ("second" | "millisecond" | "microsecond")
+    , hasFinalFlagField : yargs.argv.hasFinalFlag as boolean
+};
 
 function mainLoop(p : (time : string, topic : string, data : Buffer, isFinal : boolean) => void) {
-    for (let item of readCaptureFile(fs.openSync(yargs.argv.file as string, 'r'))) {
-        p(item.time, item.topic, item.data, item.isFinal);
-    }
+    let inputStream = fs.createReadStream(yargs.argv.file as string, {encoding : null});
+    let transformer = TMBasic.Files.genericRecordStream(
+        new TMBasic.Files.TopicCaptureFileRecordReader(
+            transformerOptions
+        )
+    );
+    inputStream.pipe(transformer);
+    (async () => {
+        for await (const item of transformer) {
+            let typedItem = item as TMBasic.Files.TopicCaptureFileRecord;
+            p(typedItem.timeString, typedItem.topic, typedItem.data, typedItem.isFinal);
+        }
+    })();
 }
 
 let printMode = "length";
