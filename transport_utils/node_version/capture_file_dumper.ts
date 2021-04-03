@@ -76,7 +76,7 @@ let transformerOptions : TMBasic.Files.TopicCaptureFileRecordReaderOption = {
     fileMagicLength : yargs.argv.fileMagicLength as number
     , recordMagicLength : yargs.argv.recordMagicLength as number
     , timeFieldLength : yargs.argv.timeFieldLength as number
-    , topicFieldLength : yargs.argv.topicLengthFieldLength as number
+    , topicLengthFieldLength : yargs.argv.topicLengthFieldLength as number
     , dataLengthFieldLength : yargs.argv.dataLengthFieldLength as number
     , timePrecision : yargs.argv.timeUnit as ("second" | "millisecond" | "microsecond")
     , hasFinalFlagField : yargs.argv.hasFinalFlag as boolean
