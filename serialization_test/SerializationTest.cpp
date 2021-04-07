@@ -16,7 +16,51 @@ TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_SERIALIZE(TestEnum, (Item1) (Item2) (Item3)
 TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
 TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_SERIALIZE(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
 
+/*
+#define TEST_STRUCT_FIELDS \
+    ((int, a)) \
+    ((std::vector<std::string>, bTest)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<std::string,2>), c))
+
+TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(TestStruct, TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(TestStruct, TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_DEF(TestStruct2);
+TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(TestStruct2);
+
+#define TEST_STRUCT_3_FIELDS \
+    ((int, a)) \
+    ((std::vector<T>, bTest)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<T,2>), c))
+
+#define L \
+    ((typename, T)) \
+    ((typename, T2))
+
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_DEF(L, TestStruct3, TEST_STRUCT_3_FIELDS);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE(L, TestStruct3, TEST_STRUCT_3_FIELDS);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_EMPTY_STRUCT_DEF(L, TestStruct4);
+TM_BASIC_CBOR_CAPABLE_TEMPLATE_EMPTY_STRUCT_SERIALIZE(L, TestStruct4);
+*/
+
 int main(int argc, char **argv) {
+    /*
+    TestStruct s1;
+    auto p = StructFieldTypeInfo<TestStruct, StructFieldInfo<TestStruct>::getFieldIndex("bTest")>::fieldPointer();
+    (s1.*p).push_back("abc");
+    std::cout << (s1.*p)[0] << '\n';
+    std::cout << StructFieldInfo<TestStruct3<std::string,int>>::FIELD_NAMES.size() << '\n';
+    std::cout << StructFieldInfo<TestStruct3<std::string,int>>::FIELD_NAMES[1] << '\n';
+    StructFieldTypeInfo<TestStruct3<std::string,int>, StructFieldInfo<TestStruct3<std::string,int>>::getFieldIndex("bTest")>::TheType x {"a", "b"};
+    auto q = StructFieldTypeInfo<TestStruct3<std::string,int>, StructFieldInfo<TestStruct3<std::string,int>>::getFieldIndex("bTest")>::fieldPointer();
+    TestStruct3<std::string,int> s3;
+    (s3.*q).push_back("bcd");
+    const TestStruct3<std::string,int> s3_1 = s3;
+    std::cout << (s3_1.*q)[0] << '\n';
+    std::cout << x[0] << "\n";
+    std::cout << StructFieldInfo<TestStruct4<std::string,int>>::FIELD_NAMES.size() << '\n';
+    std::cout << StructFieldInfo<TestStruct4<std::string,int>>::getFieldIndex("bTest") << '\n';
+    return 0;
+    */
     //std::cout << bytedata_utils::DirectlySerializableChecker<TriviallySerializable<std::array<double, 10>>>::IsDirectlySerializable() << '\n';
     using TestType = 
         std::tuple<
