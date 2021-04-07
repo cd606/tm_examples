@@ -6,6 +6,7 @@
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/CalculationsOnInit.hpp>
+#include <tm_kit/basic/StructFieldInfoUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
@@ -34,15 +35,12 @@ DBQueryResult loadDBData(std::string const &dbFile, std::function<void(infra::Lo
 #endif
         , dbFile
     );    
+    using F = basic::struct_field_info_utils::StructFieldInfoBasedDataFiller<DBData>;
     soci::rowset<soci::row> res = 
-        session->prepare << "SELECT name, amount, stat FROM test_table";
+        session->prepare << ("SELECT "+F::commaSeparatedFieldNames()+" FROM test_table");
     DBQueryResult ret;
     for (auto const &r : res) {
-        ret.value.push_back(DBData {
-            r.get<std::string>(0)
-            , r.get<int>(1)
-            , r.get<double>(2)
-        });
+        ret.value.push_back(F::retrieveData(r));
     }
     std::ostringstream oss;
     oss << "[loadDBData] loaded " << ret.value.size() << " rows";
