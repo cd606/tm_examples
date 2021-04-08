@@ -6,6 +6,7 @@
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/CalculationsOnInit.hpp>
+#include <tm_kit/basic/StructFieldInfoUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
@@ -25,7 +26,7 @@
 
 using namespace dev::cd606::tm;
 
-using DBDataStorage = std::unordered_map<std::string, DBData>;
+using DBDataStorage = std::unordered_map<DBQuery, DBData, basic::struct_field_info_utils::StructFieldInfoBasedHash<DBQuery>>;
 
 DBDataStorage loadDBData(std::string const &dbFile, std::function<void(infra::LogLevel, std::string const &)> logger) {
     auto session = std::make_shared<soci::session>(
@@ -36,17 +37,15 @@ DBDataStorage loadDBData(std::string const &dbFile, std::function<void(infra::Lo
 #endif
         , dbFile
     );
+    using Q = basic::struct_field_info_utils::StructFieldInfoBasedDataFiller<DBQuery>;
+    using D = basic::struct_field_info_utils::StructFieldInfoBasedDataFiller<DBData>;
     soci::rowset<soci::row> res = 
-        session->prepare << "SELECT name, value1, value2 FROM test_table";
+        session->prepare << ("SELECT "+Q::commaSeparatedFieldNames()+", "+D::commaSeparatedFieldNames()+" FROM test_table");
     DBDataStorage ret;
     for (auto const &r : res) {
-        ret.insert({
-            r.get<std::string>(0)
-            , DBData {
-                r.get<int>(1)
-                , r.get<std::string>(2)
-            }
-        });
+        DBQuery q = Q::retrieveData(r, 0);
+        DBData d = D::retrieveData(r, Q::FieldCount);
+        ret.insert({q, d});
     }
     std::ostringstream oss;
     oss << "[loadDBData] loaded " << ret.size() << " rows";
@@ -55,7 +54,7 @@ DBDataStorage loadDBData(std::string const &dbFile, std::function<void(infra::Lo
 }
 
 DBQueryResult doQuery(DBDataStorage const &storage, DBQuery const &query) {
-    auto iter = storage.find(query.name);
+    auto iter = storage.find(query);
     if (iter == storage.end()) {
         return {std::nullopt};
     } else {
@@ -124,7 +123,7 @@ int main(int argc, char **argv) {
     auto queryFacility = basic::onOrderFacilityUsingInternallyPreCalculatedValue<M,DBQuery>(
         boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
         , [](DBDataStorage const &storage, DBQuery const &query) -> DBQueryResult {
-            auto iter = storage.find(query.name);
+            auto iter = storage.find(query);
             if (iter == storage.end()) {
                 return {std::nullopt};
             } else {
