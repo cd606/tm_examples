@@ -2,6 +2,7 @@
 #define READ_ONLY_DB_DATA_HPP_
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/transaction/complex_key_value_store/VersionlessDataModel.hpp>
 
 #define DBDataFields \
     ((int32_t, value1)) \
@@ -10,12 +11,13 @@
 TM_BASIC_CBOR_CAPABLE_STRUCT(DBData, DBDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(DBData, DBDataFields);
 
-#define DBQueryFields \
+#define DBKeyFields \
     ((std::string, name)) 
 
-TM_BASIC_CBOR_CAPABLE_STRUCT(DBQuery, DBQueryFields);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(DBQuery, DBQueryFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(DBKey, DBKeyFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(DBKey, DBKeyFields);
 
-using DBQueryResult = dev::cd606::tm::basic::CBOR<std::optional<DBData>>;
+using DBQuery = DBKey;
+using DBQueryResult = dev::cd606::tm::basic::transaction::complex_key_value_store::KeyBasedQueryResult<DBData>;
 
 #endif

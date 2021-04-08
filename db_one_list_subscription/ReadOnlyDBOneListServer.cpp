@@ -5,17 +5,14 @@
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/CalculationsOnInit.hpp>
-#include <tm_kit/basic/StructFieldInfoUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/complex_key_value_store_components/PreloadAllReadonlyServer.hpp>
+#include <tm_kit/transport/complex_key_value_store_components/OnDemandReadonlyServer.hpp>
 
-#include <boost/hana/functional/curry.hpp>
-
-#include <soci/soci.h>
 #include <soci/sqlite3/soci-sqlite3.h>
 
 #include <boost/program_options.hpp>
@@ -25,28 +22,6 @@
 #include "ReadOnlyDBOneListData.hpp"
 
 using namespace dev::cd606::tm;
-
-DBQueryResult loadDBData(std::string const &dbFile, std::function<void(infra::LogLevel, std::string const &)> logger) {
-    auto session = std::make_shared<soci::session>(
-#ifdef _MSC_VER
-        *soci::factory_sqlite3()
-#else
-        soci::sqlite3
-#endif
-        , dbFile
-    );    
-    using F = basic::struct_field_info_utils::StructFieldInfoBasedDataFiller<DBData>;
-    soci::rowset<soci::row> res = 
-        session->prepare << ("SELECT "+F::commaSeparatedFieldNames()+" FROM test_table");
-    DBQueryResult ret;
-    for (auto const &r : res) {
-        ret.value.push_back(F::retrieveData(r));
-    }
-    std::ostringstream oss;
-    oss << "[loadDBData] loaded " << ret.value.size() << " rows";
-    logger(infra::LogLevel::Info, oss.str());
-    return ret;
-}
 
 int main(int argc, char **argv) {
     namespace po = boost::program_options;
@@ -88,21 +63,30 @@ int main(int argc, char **argv) {
 
     R r(&env);
 
+    auto session = std::make_shared<soci::session>(
+#ifdef _MSC_VER
+        *soci::factory_sqlite3()
+#else
+        soci::sqlite3
+#endif
+        , vm["db_file"].as<std::string>()
+    );  
+    auto queryFacility = transport::complex_key_value_store_components::PreloadAllReadonlyServer<M>
+        ::fullDataQueryFacility<DBKey, DBData>
+        (
+            session
+            , "FROM test_table"
+        );
     /*
-    auto importer = basic::importerOfValueCalculatedOnInit<M>(
-        boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
-    );
-    auto queryFacility = basic::localOnOrderFacilityReturningPreCalculatedValue<M,DBQuery,DBQueryResult>();
-    r.registerImporter("importer", importer);
-    r.registerLocalOnOrderFacility("queryFacility", queryFacility);
-    r.connect(r.importItem(importer), r.localFacilityAsSink(queryFacility));
+    auto queryFacility = transport::complex_key_value_store_components::OnDemandReadonlyServer<M>
+        ::fullDataQueryFacility<DBKey, DBData>
+        (
+            session
+            , "FROM test_table"
+        );
     */
-    auto queryFacility = basic::onOrderFacilityReturningInternallyPreCalculatedValue<M,DBQuery>(
-        boost::hana::curry<2>(&loadDBData)(vm["db_file"].as<std::string>())
-    );
     r.registerOnOrderFacility("queryFacility", queryFacility);
     transport::MultiTransportFacilityWrapper<R>::wrap
-        //<DBQuery,DBQueryResult,DBQueryResult>(
         <DBQuery,DBQueryResult>(
         r
         , queryFacility
