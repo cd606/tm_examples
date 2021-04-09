@@ -36,4 +36,16 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
+executable(
+    'versionless_subscription_server'
+    , ['VersionlessSubscriptionServer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
+)
+executable(
+    'versionless_subscription_client'
+    , ['VersionlessSubscriptionClient.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
+)
 subdir('gui_client')
