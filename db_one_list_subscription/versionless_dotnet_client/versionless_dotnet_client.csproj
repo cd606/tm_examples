@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Here" Version="0.9.0" />
+    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1" />
+    <PackageReference Include="PeterO.Cbor" Version="4.2.0" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\tm_infra\TMInfraDotNet\TMInfraDotNet.csproj" />
+    <ProjectReference Include="..\..\..\tm_basic\TMBasicDotNet\TMBasicDotNet.csproj" />
+    <ProjectReference Include="..\..\..\tm_transport\TMTransportDotNet\TMTransportDotNet.csproj" />
+  </ItemGroup>
+
+</Project>
