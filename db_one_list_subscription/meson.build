@@ -48,4 +48,10 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
 )
+executable(
+    'versionless_single_pass_printer'
+    , ['VersionlessSinglePassPrinter.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
+)
 subdir('gui_client')
