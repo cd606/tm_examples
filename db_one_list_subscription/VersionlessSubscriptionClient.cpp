@@ -9,7 +9,6 @@
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
-#include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
