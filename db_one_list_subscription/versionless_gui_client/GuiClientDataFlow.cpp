@@ -112,6 +112,37 @@ void guiClientDataFlow(
     );
     r.registerAction("unsubscribeDetector", unsubscribeDetector);
     unsubscribeSink(r, r.execute(unsubscribeDetector, gsClientOutputs.rawSubscriptionOutputs.clone()));
+    
+    using COF = basic::real_time_clock::ClockOnOrderFacility<TheEnvironment>;
+    auto unsubscribeTimeout = COF::createClockCallback<basic::VoidStruct, UnsubscribeConfirmed>
+        (
+            [](std::chrono::system_clock::time_point const &, std::size_t, std::size_t) {
+                return UnsubscribeConfirmed {};
+            }
+        );
+    r.registerOnOrderFacility("unsubscribeTimeout", unsubscribeTimeout);
+    auto unsubscribeTimeoutInput = M::liftPure<GuiExitEvent>(
+        [](GuiExitEvent &&) -> M::Key<COF::FacilityInput<basic::VoidStruct>> {
+            return {{
+                {}
+                , {std::chrono::seconds(1)}
+            }};
+        }
+    );
+    r.registerAction("unsubscribeTimeoutInput", unsubscribeTimeoutInput);
+    auto unsubscribeTimeoutOutput = infra::KleisliUtils<M>::action(
+        basic::CommonFlowUtilComponents<M>::extractDataFromKeyedData<
+            COF::FacilityInput<basic::VoidStruct>, UnsubscribeConfirmed
+        >()
+    );
+    r.registerAction("unsubscribeTimeoutOutput", unsubscribeTimeoutOutput);
+    exitEventSource(r, r.actionAsSink(unsubscribeTimeoutInput));
+    r.placeOrderWithFacility(
+        r.actionAsSource(unsubscribeTimeoutInput)
+        , unsubscribeTimeout
+        , r.actionAsSink(unsubscribeTimeoutOutput)
+    );
+    unsubscribeSink(r, r.actionAsSource(unsubscribeTimeoutOutput));
 
     //Now set up transactions
     auto tiFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility

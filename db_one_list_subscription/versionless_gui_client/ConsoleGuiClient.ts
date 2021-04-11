@@ -144,6 +144,24 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
     let unsubscribeHandler = TMInfra.RealTimeApp.Utils.simpleExporter<
         E, UnsubscribeConfirmed
     >(logicInput.unsubscribeConfirmedHandler);
+    let guiExitTimeout = TMBasic.ClockOnOrderFacility.createClockCallback<E, TMBasic.VoidStruct, UnsubscribeConfirmed>(
+        function (_d : Date, _index : number, _count : number) : UnsubscribeConfirmed {
+            return {};
+        } 
+    );
+    let guiExitTimeoutInput = TMInfra.RealTimeApp.Utils.liftPure(
+        function(_x : GuiExitEvent) : TMInfra.Key<TMBasic.ClockOnOrderFacilityInput<TMBasic.VoidStruct>> {
+            return TMInfra.keyify({
+                inputData : 0
+                , callbackDurations : [1000]
+            });
+        }
+    );
+    let guiExitTimeoutOutput = TMInfra.RealTimeApp.Utils.liftPure(
+        function(x : TMInfra.KeyedData<TMBasic.ClockOnOrderFacilityInput<TMBasic.VoidStruct>,UnsubscribeConfirmed>) : UnsubscribeConfirmed {
+            return x.data;
+        }
+    );
     let tiFacility = TMTransport.RemoteComponents.createFacilityProxy<
         E, TIInput, TIOutput
     >(
@@ -160,7 +178,13 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
     r.connect(r.execute(guiExitHandler, r.importItem(guiExitImporter)), gsComboOutput.gsInputSink);
     r.exportItem(subscriptionIDSaver, gsComboOutput.gsOutputSource);
     r.exportItem(localDataExporter, gsComboOutput.localDataSource);
+    r.placeOrderWithFacility(
+        r.execute(guiExitTimeoutInput, r.importItem(guiExitImporter))
+        , guiExitTimeout
+        , r.actionAsSink(guiExitTimeoutOutput)
+    );
     r.exportItem(unsubscribeHandler, r.execute(unsubscribeDetector, gsComboOutput.gsOutputSource));
+    r.exportItem(unsubscribeHandler, r.actionAsSource(guiExitTimeoutOutput));
     r.placeOrderWithFacilityAndForget(r.importItem(tiImporter),tiFacility);
     r.finalize();
 

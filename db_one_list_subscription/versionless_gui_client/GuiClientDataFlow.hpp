@@ -10,6 +10,7 @@
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
+#include <tm_kit/basic/real_time_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
