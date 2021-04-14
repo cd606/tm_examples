@@ -58,8 +58,10 @@ int main(int argc, char **argv) {
 
     TheEnvironment env;
 
+    const std::string MY_ID_FOR_HEARTBEAT = "read_only_db_one_list_server";
+
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "read_only_db_one_list_server.heartbeat", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
+        (&env, MY_ID_FOR_HEARTBEAT, transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
 
     R r(&env);
 
@@ -93,6 +95,8 @@ int main(int argc, char **argv) {
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
         , "server_wrapper/"
     );
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, MY_ID_FOR_HEARTBEAT+".heartbeat", std::chrono::seconds(1));
     
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
@@ -100,7 +104,7 @@ int main(int argc, char **argv) {
     r.finalize();
 
     env.setStatus("program", transport::HeartbeatMessage::Status::Good);
-    env.sendAlert("read_only_db_one_list_server.alert", infra::LogLevel::Info, "Read-only DB one list server started");
+    env.sendAlert(MY_ID_FOR_HEARTBEAT+".alert", infra::LogLevel::Info, "Read-only DB one list server started");
     env.log(infra::LogLevel::Info, graphOss.str());
     env.log(infra::LogLevel::Info, "Read-only DB one list server started");
 

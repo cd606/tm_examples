@@ -7,7 +7,8 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
-#include <tm_kit/transport/MultiTransportRemoteFacility.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 
 #include <iostream>
 
@@ -15,7 +16,69 @@
 
 using namespace dev::cd606::tm;
 
-int main(int argc, char **argv) {
+void graphBasedMain() {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<false>,
+        infra::TrivialExitControlComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent,
+        transport::rabbitmq::RabbitMQComponent
+    >;
+    using M = infra::RealTimeApp<TheEnvironment>;
+    using R = infra::AppRunner<M>;
+
+    TheEnvironment env;
+    R r(&env);
+
+    auto heartbeatSource = 
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::oneBroadcastListener<
+            transport::HeartbeatMessage
+        >(
+            r 
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , "read_only_db_one_list_server.heartbeat"
+        );
+    auto remoteFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneNonDistinguishedRemoteFacility<DBQuery, DBQueryResult>(
+            r 
+            , heartbeatSource.clone()
+            , std::regex("read_only_db_one_list_server")
+            , "queryFacility"
+        );
+    auto facility = remoteFacilityInfo.facility;
+
+    auto input = M::liftMaybe<std::size_t>(
+        [](std::size_t &&s) -> std::optional<M::Key<DBQuery>> {
+            if (s > 0) {
+                return M::keyify(DBQuery {});
+            } else {
+                return std::nullopt;
+            }
+        }
+        , infra::LiftParameters<std::chrono::system_clock::time_point>().FireOnceOnly(true)
+    );
+    r.registerAction("input", input);
+    remoteFacilityInfo.feedUnderlyingCount(r, r.actionAsSink(input));
+
+    auto handler = M::pureExporter<M::KeyedData<DBQuery,DBQueryResult>>(
+        [&env](M::KeyedData<DBQuery,DBQueryResult> &&d) {
+            std::ostringstream oss;
+            oss << "Result is ";
+            basic::PrintHelper<DBQueryResult>::print(oss, d.data);
+            env.log(infra::LogLevel::Info, oss.str());
+            env.exit();
+        }
+    );
+    r.registerExporter("handler", handler);
+    facility(r, r.actionAsSource(input), r.exporterAsSink(handler));
+
+    r.finalize();
+    infra::terminationController(infra::RunForever {});
+}
+
+void directCallBasedMain() {
     using TheEnvironment = infra::Environment<
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
@@ -23,7 +86,6 @@ int main(int argc, char **argv) {
     >;
 
     TheEnvironment env;
-
     auto result = transport::OneShotMultiTransportRemoteFacilityCall<TheEnvironment>
         ::call<DBQuery, DBQueryResult>(
             &env 
@@ -35,6 +97,34 @@ int main(int argc, char **argv) {
     oss << "Result is ";
     basic::PrintHelper<DBQueryResult>::print(oss, result.get());
     env.log(infra::LogLevel::Info, oss.str());
+}
 
+void heartbeatCallBasedMain() {
+    using TheEnvironment = infra::Environment<
+        basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
+        transport::CrossGuidComponent,
+        transport::rabbitmq::RabbitMQComponent
+    >;
+
+    TheEnvironment env;
+    auto result = transport::OneShotMultiTransportRemoteFacilityCall<TheEnvironment>
+        ::callByHeartbeat<DBQuery, DBQueryResult>(
+            &env 
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , "read_only_db_one_list_server.heartbeat"
+            , std::regex("read_only_db_one_list_server")
+            , "queryFacility"
+            , DBQuery {}
+        );
+    std::ostringstream oss;
+    oss << "Result is ";
+    basic::PrintHelper<DBQueryResult>::print(oss, result.get());
+    env.log(infra::LogLevel::Info, oss.str());
+}
+
+int main(int argc, char **argv) {
+    //graphBasedMain();
+    //directCallBasedMain();
+    heartbeatCallBasedMain();
     return 0;
 }
