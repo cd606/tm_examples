@@ -1,4 +1,9 @@
 #include "GuiClientDataFlow.hpp"
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+
+namespace {
+    const std::string SERVER_HEARTBEAT_ID = "versionless_db_one_list_subscription_server";
+}
 
 void guiClientDataFlow(
     R &r
@@ -23,83 +28,116 @@ void guiClientDataFlow(
     //Next, redirect log file
     r.environment()->setLogFilePrefix(clientName);
 
-    //Now set up data subscription and unsubscription
-    auto gsFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
-        <GS::Input,GS::Output>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2")
-    );
-    r.registerOnOrderFacility("gsFacility", gsFacility);
-    auto gsSubscriptionCmdCreator = M::constFirstPushKeyImporter<GS::Input>(
-        basic::transaction::complex_key_value_store::as_collection::subscription<M,DBKey,DBData>()
-    );
-    r.registerImporter("gsSubscriptionCmdCreator", gsSubscriptionCmdCreator);
-    //The reason that we pass gsSubscriptionCmdCreator through gsInputPipe is that,
-    //by default, when an on-order facility is added into the data flow graph, its 
-    //maximum output connection number is set at 1. (This can be changed through a 
-    //method call to AppRunner, and as long as the call happens before finalize() it
-    //will be effective, however, since we have a way to deal with the problem through 
-    //introducing gsInputPipe here, we do not use this method.) In this program, we
-    //want to pass two things to gsFacility, one is the subscription (at the beginning
-    //of the program) and another is the unsubscription (at the end of the program), and
-    //we do have two sources (gsSubscriptionCmdCreator above, and gsUnsubscriber below),
-    //however, if we do two placeOrderWithFacility calls, then we need to provide two
-    //handlers for the output from the facility, and this will cause the maximum output
-    //connection number check to fail. If we make one of these calls placeOrderWithFacilityAndForget,
-    //then we won't be able to process the corresponding callback, but we want both
-    //callbacks in order for the program to function well. Therefore, we pass both 
-    //gsSubscriptionCmdCreator and gsUnsubscriber through gsInputPipe, and thus only one
-    //thing (the output from gsInputPipe) needs to be passed to gsFacility, and only one
-    //handler for the output is needed (which is provided from within dataStreamClientCombination).
-    auto gsInputPipe = M::kleisli<M::Key<GS::Input>>(basic::CommonFlowUtilComponents<M>::idFunc<M::Key<GS::Input>>());
-    r.registerAction("gsInputPipe", gsInputPipe);
-    auto gsClientOutputs = basic::transaction::complex_key_value_store::as_collection::Combinations<R,DBKey,DBData>
-        ::dataStreamClientCombinationFunc()
+    auto heartbeatSource = 
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::oneBroadcastListener<
+            transport::HeartbeatMessage
+        >(
+            r 
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , SERVER_HEARTBEAT_ID+".heartbeat"
+        );
+    auto tiFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneNonDistinguishedRemoteFacility<TI::Transaction,TI::TransactionResponse>(
+            r 
+            , heartbeatSource.clone()
+            , std::regex(SERVER_HEARTBEAT_ID)
+            , "transaction_server_components/transaction_handler"
+        );
+    auto diFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneDistinguishedRemoteFacility<GS::Input,GS::Output>(
+            r 
+            , heartbeatSource.clone()
+            , std::regex(SERVER_HEARTBEAT_ID)
+            , "transaction_server_components/subscription_handler"
+            , []() -> GS::Input {
+                return GS::Input {
+                    GS::Subscription { std::vector<DI::Key> {DI::Key {}} }
+                };
+            }
+            , [](GS::Input const &, GS::Output const &) {
+                return true;
+            }
+        );
+
+    using FacilityKey = std::tuple<transport::ConnectionLocator, GS::Input>;
+    auto clientOutputs = basic::transaction::complex_key_value_store::as_collection::Combinations<R,DBKey,DBData>
+        ::basicDataStreamClientCombinationFunc<FacilityKey>()
     (
         r 
-        , "gsOutputHandling"
-        , R::facilityConnector(gsFacility)
-        , r.execute(gsInputPipe, r.importItem(gsSubscriptionCmdCreator))
+        , "outputHandling"
+        , diFacilityInfo.feedOrderResults
         , nullptr
     );
-    auto extractFullUpdateData = M::liftPure<M::KeyedData<GS::Input,DI::FullUpdate>>(
-        [](M::KeyedData<GS::Input,DI::FullUpdate> &&d) -> DI::FullUpdate {
+
+    auto extractFullUpdateData = M::liftPure<M::KeyedData<FacilityKey,DI::FullUpdate>>(
+        [](M::KeyedData<FacilityKey,DI::FullUpdate> &&d) -> DI::FullUpdate {
             return std::move(d.data);
         }
     );
     r.registerAction("extractFullUpdateData", extractFullUpdateData);
-    updateSink(r, r.execute(extractFullUpdateData, gsClientOutputs.fullUpdates.clone()));
-    auto gsIDPtr = std::make_shared<TheEnvironment::IDType>();
+    updateSink(r, r.execute(extractFullUpdateData, clientOutputs.clone()));
+
+    auto gsIDPtr = std::make_shared<std::map<transport::ConnectionLocator, TheEnvironment::IDType>>();
     r.preservePointer(gsIDPtr);
-    auto gsIDSaver = M::pureExporter<M::KeyedData<GS::Input,GS::Output>>(
-        [gsIDPtr](M::KeyedData<GS::Input,GS::Output> &&update) {
+    auto gsIDSaver = M::pureExporter<M::KeyedData<FacilityKey,GS::Output>>(
+        [gsIDPtr](M::KeyedData<FacilityKey,GS::Output> &&update) {
             auto id = update.key.id();
-            std::visit([&id,gsIDPtr](auto const &x) {
+            std::visit([&update,&id,gsIDPtr](auto const &x) {
                 using T = std::decay_t<decltype(x)>;
                 if constexpr (std::is_same_v<T,GS::Subscription>) {
-                    *gsIDPtr = id;
+                    (*gsIDPtr)[std::get<0>(update.key.key())] =  id;
                 }
             }, update.data.value);
         }
     );
-    r.registerExporter("gsIDSaver", gsIDSaver);
-    r.exportItem(gsIDSaver, gsClientOutputs.rawSubscriptionOutputs.clone());
-    auto gsUnsubscriber = M::liftPure<GuiExitEvent>(
-        [gsIDPtr](GuiExitEvent &&) {
-            return M::Key<GS::Input>(GS::Input {
-                GS::Unsubscription {TheEnvironment::id_to_string(*gsIDPtr)}
-            });
+    diFacilityInfo.feedOrderResults(r, r.exporterAsSink("gsIDSaver", gsIDSaver));
+
+    auto removeID = M::pureExporter<std::tuple<transport::ConnectionLocator,bool>>(
+        [gsIDPtr](std::tuple<transport::ConnectionLocator,bool> &&t) {
+            if (!std::get<1>(t)) {
+                gsIDPtr->erase(std::get<0>(t));
+            }
+        }
+    );
+    diFacilityInfo.feedConnectionChanges(r, r.exporterAsSink("removeID", removeID));
+
+    auto gsUnsubscriber = M::liftMulti<GuiExitEvent>(
+        [gsIDPtr](GuiExitEvent &&) -> std::vector<M::Key<FacilityKey>> {
+            std::vector<M::Key<FacilityKey>> ret;
+            for (auto const &item : *gsIDPtr) {
+                ret.push_back(M::keyify(FacilityKey {
+                    item.first
+                    , GS::Input {
+                        GS::Unsubscription {TheEnvironment::id_to_string(item.second)}
+                    }
+                }));
+            }
+            return ret;
         }
     );
     r.registerAction("gsUnsubscriber", gsUnsubscriber);
     exitEventSource(r, r.actionAsSink(gsUnsubscriber));
-    r.execute(gsInputPipe, r.actionAsSource(gsUnsubscriber));
-    auto unsubscribeDetector = M::liftMaybe<M::KeyedData<GS::Input,GS::Output>>(
-        [gsIDPtr](M::KeyedData<GS::Input,GS::Output> &&update) -> std::optional<UnsubscribeConfirmed> {
+    diFacilityInfo.orderReceiver(r, r.actionAsSource(gsUnsubscriber));
+
+    auto unsubscribeDetector = M::liftMaybe<M::KeyedData<FacilityKey,GS::Output>>(
+        [gsIDPtr](M::KeyedData<FacilityKey,GS::Output> &&update) -> std::optional<UnsubscribeConfirmed> {
             auto id = update.key.id();
             return std::visit([&id,gsIDPtr](auto const &x) -> std::optional<UnsubscribeConfirmed> {
                 using T = std::decay_t<decltype(x)>;
                 if constexpr (std::is_same_v<T,GS::Unsubscription>) {
-                    if (id == *gsIDPtr) {
+                    std::optional<transport::ConnectionLocator> l = std::nullopt;
+                    for (auto const &item : *gsIDPtr) {
+                        if (item.second == id) {
+                            l = item.first;
+                            break;
+                        }
+                    }
+                    if (l) {
+                        gsIDPtr->erase(*l);
+                    }
+                    if (gsIDPtr->empty()) {
                         return UnsubscribeConfirmed {};
                     } else {
                         return std::nullopt;
@@ -111,7 +149,8 @@ void guiClientDataFlow(
         }
     );
     r.registerAction("unsubscribeDetector", unsubscribeDetector);
-    unsubscribeSink(r, r.execute(unsubscribeDetector, gsClientOutputs.rawSubscriptionOutputs.clone()));
+    diFacilityInfo.feedOrderResults(r, r.actionAsSink(unsubscribeDetector));
+    unsubscribeSink(r, r.actionAsSource(unsubscribeDetector));
     
     using COF = basic::real_time_clock::ClockOnOrderFacility<TheEnvironment>;
     auto unsubscribeTimeout = COF::createClockCallback<basic::VoidStruct, UnsubscribeConfirmed>
@@ -145,15 +184,14 @@ void guiClientDataFlow(
     unsubscribeSink(r, r.actionAsSource(unsubscribeTimeoutOutput));
 
     //Now set up transactions
-    auto tiFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
-        <TI::Transaction,TI::TransactionResponse>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2")
-    );
-    r.registerOnOrderFacility("tiFacility", tiFacility);
     auto tiKeyify = M::template kleisli<typename TI::Transaction>(
         basic::CommonFlowUtilComponents<M>::template keyify<typename TI::Transaction>()
     );
     r.registerAction("tiKeyify", tiKeyify);
     transactionCommandSource(r, r.actionAsSink(tiKeyify));
-    r.placeOrderWithFacilityAndForget(r.actionAsSource(tiKeyify), tiFacility);
+    tiFacilityInfo.facility(
+        r
+        , r.actionAsSource(tiKeyify)
+        , std::nullopt
+    );
 }

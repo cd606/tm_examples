@@ -120,6 +120,12 @@ public:
             }
             dataMap_ = std::move(*(update.data[0].data));
         }
+        std::sort(dataVec_.begin(), dataVec_.end(), [](
+            basic::transaction::complex_key_value_store::as_collection::Item<DBKey, DBData> const &a
+            , basic::transaction::complex_key_value_store::as_collection::Item<DBKey, DBData> const &b
+        ) {
+            return std::get<0>(a).name < std::get<0>(b).name;
+        });
         rows(dataMap_.size());
         redraw();
     }
