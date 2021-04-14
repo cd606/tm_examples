@@ -24,6 +24,8 @@
 
 using namespace dev::cd606::tm;
 
+const std::string SERVER_HEARTBEAT_ID = "versionless_db_one_list_subscription_server";
+
 void diMain(std::string const &cmd, std::string const &idStr) {
     using DI = basic::transaction::complex_key_value_store::as_collection::DI<DBKey, DBData>;
     using GS = basic::transaction::complex_key_value_store::as_collection::GS<transport::CrossGuidComponent::IDType, DBKey, DBData>;
@@ -49,14 +51,60 @@ void diMain(std::string const &cmd, std::string const &idStr) {
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <GS::Input,GS::Output>(
-        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2"
-    );
-    r.registerOnOrderFacility("facility", facility);
+    auto heartbeatSource = 
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::oneBroadcastListener<
+            transport::HeartbeatMessage
+        >(
+            r 
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , SERVER_HEARTBEAT_ID+".heartbeat"
+        );
+    auto diFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneDistinguishedRemoteFacility<GS::Input,GS::Output>(
+            r 
+            , heartbeatSource.clone()
+            , std::regex(SERVER_HEARTBEAT_ID)
+            , "transaction_server_components/subscription_handler"
+            , [&env,cmd,idStr]() -> GS::Input {
+                if (cmd == "subscribe") {
+                    return GS::Input {
+                        GS::Subscription { std::vector<DI::Key> {DI::Key {}} }
+                    };
+                } else if (cmd == "unsubscribe") {
+                    if (idStr == "all") {
+                        return GS::Input {
+                            GS::UnsubscribeAll {}
+                        };
+                    } else {
+                        return GS::Input {
+                            GS::Unsubscription {env.id_from_string(idStr)}
+                        };
+                    }
+                } else if (cmd == "list") {
+                    return GS::Input {
+                        GS::ListSubscriptions {}
+                    };
+                } else if (cmd == "snapshot") {
+                    return GS::Input {
+                        GS::SnapshotRequest { std::vector<DI::Key> {DI::Key {}} }
+                    };
+                } else {
+                    return GS::Input {
+                        GS::SnapshotRequest { std::vector<DI::Key> {DI::Key {}} }
+                    };
+                }
+            }
+            , [](GS::Input const &, GS::Output const &) {
+                return true;
+            }
+        );
 
-    auto printAck = M::simpleExporter<M::KeyedData<GS::Input,GS::Output>>(
-        [&env](M::InnerData<M::KeyedData<GS::Input,GS::Output>> &&o) {
+    using FacilityKey = std::tuple<transport::ConnectionLocator, GS::Input>;
+
+    auto printAck = M::simpleExporter<M::KeyedData<FacilityKey,GS::Output>>(
+        [&env](M::InnerData<M::KeyedData<FacilityKey,GS::Output>> &&o) {
             auto id = o.timedData.value.key.id();
             std::visit([&id,&env](auto const &x) {
                 using T = std::decay_t<decltype(x)>;
@@ -87,8 +135,8 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         }
     );
 
-    auto printFullUpdate = M::pureExporter<M::KeyedData<GS::Input,DI::FullUpdate>>(
-        [&env](M::KeyedData<GS::Input,DI::FullUpdate> &&update) {
+    auto printFullUpdate = M::pureExporter<M::KeyedData<FacilityKey,DI::FullUpdate>>(
+        [&env](M::KeyedData<FacilityKey,DI::FullUpdate> &&update) {
             std::ostringstream oss;
             oss << "Got full update {";
             oss << "updates=[";
@@ -122,58 +170,17 @@ void diMain(std::string const &cmd, std::string const &idStr) {
             env.log(infra::LogLevel::Info, oss.str());
         }
     );
-
-    auto createCommand = M::liftMaybe<basic::VoidStruct>(
-        [&env,cmd,idStr](basic::VoidStruct &&) -> std::optional<GS::Input> {
-            if (cmd == "subscribe") {
-                return GS::Input {
-                    GS::Subscription { std::vector<DI::Key> {DI::Key {}} }
-                };
-            } else if (cmd == "unsubscribe") {
-                if (idStr == "all") {
-                    return GS::Input {
-                        GS::UnsubscribeAll {}
-                    };
-                } else {
-                    return GS::Input {
-                        GS::Unsubscription {env.id_from_string(idStr)}
-                    };
-                }
-            } else if (cmd == "list") {
-                return GS::Input {
-                    GS::ListSubscriptions {}
-                };
-            } else if (cmd == "snapshot") {
-                return GS::Input {
-                    GS::SnapshotRequest { std::vector<DI::Key> {DI::Key {}} }
-                };
-            } else {
-                return std::nullopt;
-            }
-        }
-    );
-
-    auto keyify = M::kleisli<GS::Input>(
-        basic::CommonFlowUtilComponents<M>::keyify<GS::Input>()
-    );
-
-    auto initialImporter = M::constFirstPushImporter(
-        basic::VoidStruct {}
-    );
-
-    auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
-    auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
     auto clientOutputs = basic::transaction::complex_key_value_store::as_collection::Combinations<R,DBKey,DBData>
-        ::dataStreamClientCombinationFunc()
+        ::basicDataStreamClientCombinationFunc<FacilityKey>()
     (
         r 
         , "outputHandling"
-        , R::facilityConnector(facility)
-        , std::move(keyedCommand)
+        , diFacilityInfo.feedOrderResults
         , nullptr
     );
-    r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
-    r.exportItem("printFullUpdate", printFullUpdate, clientOutputs.fullUpdates.clone());
+    r.connect(clientOutputs.clone(), r.exporterAsSink("printFullUpdate", printFullUpdate));
+
+    diFacilityInfo.feedOrderResults(r, r.exporterAsSink("printAck", printAck));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
@@ -211,21 +218,30 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <TI::Transaction,TI::TransactionResponse>(
-        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2"
-    );
+    auto heartbeatSource = 
+        transport::MultiTransportBroadcastListenerManagingUtils<R>
+        ::oneBroadcastListener<
+            transport::HeartbeatMessage
+        >(
+            r 
+            , "heartbeatListener"
+            , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , SERVER_HEARTBEAT_ID+".heartbeat"
+        );
+    auto tiFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupOneNonDistinguishedRemoteFacility<TI::Transaction,TI::TransactionResponse>(
+            r 
+            , heartbeatSource.clone()
+            , std::regex(SERVER_HEARTBEAT_ID)
+            , "transaction_server_components/transaction_handler"
+        );
+    auto facility = tiFacilityInfo.facility;
 
-    auto initialImporter = M::simpleImporter<basic::VoidStruct>(
-        [](M::PublisherCall<basic::VoidStruct> &p) {
-            p(basic::VoidStruct {});
-        }
-        , infra::LiftParameters<std::chrono::system_clock::time_point>()
-            .SuggestThreaded(true)
-    );
-
-    auto createCommand = M::liftMaybe<basic::VoidStruct>(
-        [cmd,name,amount,stat,oldDataCount](basic::VoidStruct &&) -> std::optional<TI::Transaction> {
+    auto createCommand = M::liftMaybe<std::size_t>(
+        [cmd,name,amount,stat,oldDataCount](std::size_t &&x) -> std::optional<TI::Transaction> {
+            if (x == 0) {
+                return std::nullopt;
+            }
             if (cmd == "update") {
                 TI::DataDelta delta;
                 delta.inserts_updates.push_back({
@@ -250,6 +266,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
                 return std::nullopt;
             }
         }
+        , infra::LiftParameters<std::chrono::system_clock::time_point>().FireOnceOnly(true)
     );
 
     auto keyify = M::template kleisli<typename TI::Transaction>(
@@ -271,9 +288,9 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
         }
     );
 
-    auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
-    auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
-    r.placeOrderWithFacility(std::move(keyedCommand), "facility", facility, r.exporterAsSink("printResponse", printResponse));
+    tiFacilityInfo.feedUnderlyingCount(r, r.actionAsSink("createCommand", createCommand));
+    auto keyedCommand = r.execute("keyify", keyify, r.actionAsSource(createCommand));
+    facility(r, std::move(keyedCommand), r.exporterAsSink("printResponse", printResponse));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";

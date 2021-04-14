@@ -86,8 +86,10 @@ int main(int argc, char **argv) {
     );
     TransactionServer::initializeEnvironment(&env, session, "test_table");
 
+    const std::string MY_ID_FOR_HEARTBEAT = "versionless_db_one_list_subscription_server";
+
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
-        (&env, "db_subscription server", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
+        (&env, MY_ID_FOR_HEARTBEAT, transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
 
     R r(&env);
     auto transactionLogicCombinationRes = TransactionServer::setupTransactionServer(r, "transaction_server_components");
@@ -106,6 +108,8 @@ int main(int argc, char **argv) {
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2"
         , "subscription_wrapper/"
     );
+
+    transport::attachHeartbeatAndAlertComponent(r, &env, MY_ID_FOR_HEARTBEAT+".heartbeat", std::chrono::seconds(1));
     
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
