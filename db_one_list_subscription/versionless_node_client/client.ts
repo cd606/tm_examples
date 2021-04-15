@@ -1,7 +1,7 @@
 import * as cbor from 'cbor'
 import * as yargs from 'yargs'
 import * as util from 'util'
-import {MultiTransportFacilityClient, FacilityOutput} from '../../../tm_transport/node_lib/TMTransport'
+import {MultiTransportFacilityClient, FacilityOutput, RemoteComponents} from '../../../tm_transport/node_lib/TMTransport'
 import * as Stream from 'stream'
 
 enum Command {
@@ -32,12 +32,18 @@ function attachMyIdentity(data : Buffer) : Buffer {
 }
 
 async function run(args : Args) {
+    let heartbeat = await RemoteComponents.fetchTypedFirstUpdateAndDisconnect<RemoteComponents.Heartbeat>(
+        (d) => cbor.decode(d) as RemoteComponents.Heartbeat
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , "versionless_db_one_list_subscription_server.heartbeat"
+        , (data) => /versionless_db_one_list_subscription_server/.test(data.sender_description)
+    );
     let subscriptionStream = await MultiTransportFacilityClient.facilityStream({
-        address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2"
+        address : heartbeat.content.facility_channels["transaction_server_components/subscription_handler"]
         , identityAttacher : attachMyIdentity
     });
     let transactionStream = await MultiTransportFacilityClient.facilityStream({
-        address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2"
+        address : heartbeat.content.facility_channels["transaction_server_components/transaction_handler"]
         , identityAttacher : attachMyIdentity
     });
     let keyify = MultiTransportFacilityClient.keyify();
@@ -100,7 +106,7 @@ async function run(args : Args) {
         case Command.Unsubscribe:
             keyify.pipe(subscriptionStream[0]);
             subscriptionStream[1].pipe(resultHandlingStream);
-            if (args.id != "") {
+            if (args.id != "" && args.id != "all") {
                 sendCommand(keyify, [
                     1
                     , {
@@ -134,11 +140,54 @@ async function run(args : Args) {
     }
 }
 
+yargs
+    .scriptName("client")
+    .usage("$0 <options>")
+    .option('command', {
+        describe: 'subscribe|update|delete|unsubscribe|list|snapshot'
+        , type: 'string'
+        , nargs: 1
+        , demand: true
+    })
+    .option('name', {
+        describe: 'name in db entry'
+        , type: 'string'
+        , nargs: 1
+        , demand: false
+        , default: null
+    })
+    .option('amount', {
+        describe: 'amount in db entry'
+        , type: 'number'
+        , nargs: 1
+        , demand: false
+        , default: null
+    })
+    .option('stat', {
+        describe: 'stat in db entry'
+        , type: 'number'
+        , nargs: 1
+        , demand: false
+        , default: null
+    })
+    .option('old_count', {
+        describe: 'old db item count'
+        , type: 'number'
+        , nargs: 1
+        , demand: false
+        , default: null
+    })
+    .option('id', {
+        describe: 'id to unsubscribe'
+        , type: 'string'
+        , nargs: 1
+        , demand: false
+        , default: null
+    })
+    ;
+
 (async () => {
     let cmd : Command = Command.Unknown;
-    let f = function (x : unknown) : string {
-        return (typeof x === 'undefined'?"":(x as string));
-    };
     switch (yargs.argv.command) {
         case 'subscribe':
             cmd = Command.Subscribe;
@@ -166,11 +215,11 @@ async function run(args : Args) {
     }
     let args : Args = {
         command : cmd
-        , name : f(yargs.argv["name"])
-        , amount : parseInt(f(yargs.argv["amount"]))
-        , stat : parseFloat(f(yargs.argv["stat"]))
-        , old_count : parseInt(f(yargs.argv["old_count"]))
-        , id : f(yargs.argv["id"])
+        , name : yargs.argv["name"] as string
+        , amount : yargs.argv["amount"] as number
+        , stat : yargs.argv["stat"] as number
+        , old_count : yargs.argv["old_count"] as number
+        , id : yargs.argv["id"] as string
     }
     await run(args);
 })();
