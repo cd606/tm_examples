@@ -44,8 +44,15 @@ interface LogicOutput {
 
 const theKey : TMBasic.VoidStruct = 0;
 
-function tmLogic(logicInput : LogicInput) : LogicOutput {
+async function tmLogic(logicInput : LogicInput) : Promise<LogicOutput> {
     let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv(null, "console_gui_client.log"));
+
+    let heartbeat = await TMTransport.RemoteComponents.fetchTypedFirstUpdateAndDisconnect<TMTransport.RemoteComponents.Heartbeat>(
+        (d) => cbor.decode(d) as TMTransport.RemoteComponents.Heartbeat
+        , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , "versionless_db_one_list_subscription_server.heartbeat"
+        , (data) => /versionless_db_one_list_subscription_server/.test(data.sender_description)
+    );
 
     let gsFacility = TMTransport.RemoteComponents.createFacilityProxy<
         E, GSInput, GSOutput
@@ -62,7 +69,7 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
             return o;
         }
         , {
-            address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2"
+            address : heartbeat.content.facility_channels["transaction_server_components/subscription_handler"]
             , identityAttacher : TMTransport.RemoteComponents.Security.simpleIdentityAttacher("ConsoleGuiClient.ts")
         }
     );
@@ -168,7 +175,7 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
         (t : TIInput) => cbor.encode(t)
         , (d : Buffer) => cbor.decode(d) as TIOutput
         , {
-            address : "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2"
+            address : heartbeat.content.facility_channels["transaction_server_components/transaction_handler"]
             , identityAttacher : TMTransport.RemoteComponents.Security.simpleIdentityAttacher("ConsoleGuiClient.ts")
         }
     );
@@ -200,7 +207,7 @@ function tmLogic(logicInput : LogicInput) : LogicOutput {
     }
 }
 
-function setup() {
+async function setup() {
     let screen = blessed.screen({
         smartCSR: true
         , title: 'Console DB One List Client'
@@ -360,7 +367,7 @@ function setup() {
     });
 
     let dataCopy : LocalData = null;
-    let o : LogicOutput = tmLogic({
+    let o : LogicOutput = await tmLogic({
         dataHandler : (d : TMInfra.TimedDataWithEnvironment<E,LocalData>) => {
             dataCopy = d.timedData.value;
             let rows : string[][] = [["Name", "Amount", "Stat"]];
