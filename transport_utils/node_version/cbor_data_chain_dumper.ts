@@ -1,5 +1,5 @@
 import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
-import {SharedChainUtils, EtcdSharedChain, RedisSharedChain} from '../../../tm_transport/node_lib/TMTransport'
+import {SharedChainUtils, EtcdSharedChain, RedisSharedChain} from '../../../tm_transport/node_lib/TMTransport_Chains'
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'

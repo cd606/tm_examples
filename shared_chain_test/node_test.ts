@@ -1,4 +1,4 @@
-import {EtcdSharedChain} from '../../tm_transport/node_lib/TMTransport'
+import {EtcdSharedChain} from '../../tm_transport/node_lib/TMTransport_Chains'
 import {v4 as uuidv4} from "uuid"
 
 let config = EtcdSharedChain.defaultEtcdSharedChainConfiguration();

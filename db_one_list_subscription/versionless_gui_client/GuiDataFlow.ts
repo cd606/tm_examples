@@ -43,8 +43,8 @@ export interface LogicOutput {
 
 export const theKey : TMBasic.VoidStruct = 0;
 
-export async function guiDataFlow(logicInput : LogicInput) : Promise<LogicOutput> {
-    let r = new TMInfra.RealTimeApp.Runner<E>(new TMBasic.ClockEnv(null, "console_gui_client.log"));
+export async function guiDataFlow(logicInput : LogicInput, env : E = new TMBasic.ClockEnv()) : Promise<LogicOutput> {
+    let r = new TMInfra.RealTimeApp.Runner<E>(env);
 
     let heartbeat = await TMTransport.RemoteComponents.fetchTypedFirstUpdateAndDisconnect<TMTransport.RemoteComponents.Heartbeat>(
         (d) => cbor.decode(d) as TMTransport.RemoteComponents.Heartbeat

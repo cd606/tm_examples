@@ -2,9 +2,6 @@ import * as blessed from 'blessed'
 import * as GuiDataFlow from './GuiDataFlow'
 import * as TMInfra from '../../../tm_infra/node_lib/TMInfra'
 import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
-import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
-import * as cbor from 'cbor'
-import * as util from 'util'
 
 async function setup() {
     let screen = blessed.screen({
@@ -180,7 +177,7 @@ async function setup() {
             d.environment.log(TMInfra.LogLevel.Info, "Unsubscription confirmed, exiting");
             d.environment.exit();
         }
-    });
+    }, new TMBasic.ClockEnv(null, "console_gui_client.log"));
 
     form.focus();
     screen.key(['escape', 'q', 'C-c'], function(_ch, _key) {
