@@ -1,0 +1,43 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="styles.css">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <h3 id='value'>Value:</h3>
+        <canvas id='myChart' height="100"/>
+        <script type="text/javascript">
+        var ctx = document.getElementById('myChart').getContext('2d');
+        var myChart = new Chart(ctx, {
+            type: 'bar'
+            , data: {
+                labels: []
+                , datasets: [{
+                    label: 'Data Value'
+                    , data: []
+                    , backgroundColor: 'red'
+                    , borderColor: 'red'
+                }]
+            }
+            , options: {
+                tooltips: {
+                    enabled: false
+                }
+            }
+        });
+        window.api.receive(
+            "fromMain", (data) => {
+                document.getElementById('value').innerText = 'Value: '+data.value;
+                if (myChart.data.labels.length < 500) {
+                    myChart.data.labels.push('');
+                    myChart.data.datasets[0].data.push(parseFloat(data.value));
+                } else {
+                    myChart.data.datasets[0].data.push(parseFloat(data.value));
+                    myChart.data.datasets[0].data.shift(0);
+                }
+                myChart.update();
+            }
+        )
+        </script>
+    </body>
+</html>
