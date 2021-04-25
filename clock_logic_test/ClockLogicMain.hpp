@@ -5,6 +5,7 @@
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
 #include <tm_kit/basic/AppClockHelper.hpp>
+#include <tm_kit/basic/AppRunnerUtils.hpp>
 #include "FacilityLogic.hpp"
 #include <sstream>
 
@@ -66,8 +67,8 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             s.environment->log(LogLevel::Info, oss.str());
         });
 
-        using ClockFacilityInput = typename ClockOnOrderFacility::template FacilityInput<std::string>;
         /*
+        using ClockFacilityInput = typename ClockOnOrderFacility::template FacilityInput<std::string>;
         auto clockFacility = ClockOnOrderFacility::template createClockCallback<std::string, std::string>(
             [](typename TheEnvironment::TimePointType const &tp, std::size_t thisIdx, std::size_t total) -> std::string {
                 std::ostringstream oss;
@@ -75,9 +76,8 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
                 return oss.str();
             }
         );
-        */
         auto clockFacility = ClockOnOrderFacility::template createGenericClockCallback<std::string, std::string>(
-            [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total) -> std::vector<std::string> {
+            [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total, std::string &&inputStr) -> std::vector<std::string> {
                 std::ostringstream oss;
                 oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
                 return {oss.str()};
@@ -101,6 +101,33 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
                 return s2.key.key().inputData+" --- "+s2.data;
             }
         );
+        */
+        auto clockFacility = basic::AppRunnerUtilComponents<R>::template clockBasedFacility<std::string,std::string>(
+            [](std::string &&) -> std::vector<std::chrono::system_clock::duration> {
+                return {
+                    std::chrono::milliseconds(150)
+                    , std::chrono::seconds(1)
+                    , std::chrono::milliseconds(5250)
+                };
+            }
+            , [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total, std::string &&inputStr) -> std::vector<std::string> {
+                std::ostringstream oss;
+                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
+                return {oss.str()};
+            }
+            , "clockFacility"
+        );
+        auto genKey = M::template liftPure<std::string>(
+            [](std::string &&s) -> typename M::template Key<std::string> {
+                return M::keyify(std::move(s));
+            }
+        );
+        r.registerAction("genKey", genKey);
+        auto clockFacilityOutput = M::template liftPure<typename M::template KeyedData<std::string,std::string>>(
+            [](typename M::template KeyedData<std::string,std::string> &&s2) -> std::string {
+                return s2.key.key()+" --- "+s2.data;
+            }
+        );
 
         r.registerImporter("recurring", importer1);
         r.registerImporter("oneShot1", importer2);
@@ -109,8 +136,8 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         r.registerExporter("print2", exporter2);
         r.registerAction("converter", converter);
         r.registerLocalOnOrderFacility("facility", facility);
-        r.registerOnOrderFacility("clockFacility", clockFacility);
-        r.registerAction("clockFacilityInput", clockFacilityInput);
+        //r.registerOnOrderFacility("clockFacility", clockFacility);
+        //r.registerAction("clockFacilityInput", clockFacilityInput);
         r.registerAction("clockFacilityOutput", clockFacilityOutput);
 
         r.exportItem(exporter, r.importItem(importer1));
@@ -127,11 +154,14 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , facility
             , r.exporterAsSink(exporter2));
         r.feedItemToLocalFacility(facility, r.importItem(importer3));
+        /*
         r.placeOrderWithFacility(
             r.execute(clockFacilityInput, r.importItem(importer1))
             , clockFacility
             , r.actionAsSink(clockFacilityOutput)
         );
+        */
+        clockFacility(r, r.execute(genKey, r.importItem(importer1)), r.actionAsSink(clockFacilityOutput));
         r.exportItem(exporter, r.actionAsSource(clockFacilityOutput));
     }   
 
