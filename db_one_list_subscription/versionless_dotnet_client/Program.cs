@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using PeterO.Cbor;
 using Dev.CD606.TM.Infra.RealTimeApp;
 using Dev.CD606.TM.Infra;
@@ -52,11 +54,20 @@ namespace dotnet_client
             public string id;
         }
 
-        const string gsAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2";
-        const string tiAddress = "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2";
+        const string gsFacilityChannel = "transaction_server_components/subscription_handler";
+        const string tiFacilityChannel = "transaction_server_components/transaction_handler";
 
-        void runFacility<InT,OutT>(ClockEnv env, InT input, string address)
+        void runFacility<InT,OutT>(ClockEnv env, InT input, string facilityChannelName)
         {
+            var heartbeat = MultiTransportImporter<ClockEnv>.FetchTypedFirstUpdateAndDisconnect(
+                env : env 
+                , decoder : (b) => CborDecoder<Heartbeat>.Decode(CBORObject.DecodeFromBytes(b))
+                , address : "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+                , topicStr : "versionless_db_one_list_subscription_server.heartbeat"
+                , predicate : (h) => new Regex("versionless_db_one_list_subscription_server").IsMatch(h.sender_description) && h.facility_channels.ContainsKey(facilityChannelName)
+            ).GetAwaiter().GetResult();
+            string address = "";
+            heartbeat.content.facility_channels.TryGetValue(facilityChannelName, out address);
             var facility = MultiTransportFacility<ClockEnv>.CreateFacility<InT,OutT>(
                 encoder : (x) => CborEncoder<InT>.Encode(x).EncodeToBytes()
                 , decoder : (o) => CborDecoder<OutT>.Decode(CBORObject.DecodeFromBytes(o))
@@ -82,12 +93,12 @@ namespace dotnet_client
         }
         void runGS(ClockEnv env, GS.Input input)
         {
-            runFacility<GS.Input,GS.Output>(env, input, gsAddress);
+            runFacility<GS.Input,GS.Output>(env, input, gsFacilityChannel);
         }
 
         void runTI(ClockEnv env, TI.Transaction input)
         {
-            runFacility<TI.Transaction,TI.TransactionResponse>(env, input, tiAddress);
+            runFacility<TI.Transaction,TI.TransactionResponse>(env, input, tiFacilityChannel);
         }
         void Subscribe(ClockEnv env) {
             runGS(env, new GS.Input() {
