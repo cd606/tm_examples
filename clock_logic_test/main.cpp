@@ -62,6 +62,7 @@ void real_time_run(std::ostream &fileOutput) {
         )
     });
 }
+
 void single_pass_iteration_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
@@ -84,6 +85,7 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
 
     infra::terminationController(infra::ImmediatelyTerminate {});
 }
+
 void typecheck_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
@@ -114,7 +116,7 @@ int main(int argc, char **argv) {
     }
     std::string mode = argv[2];
     if (mode != "real_time" && mode != "single_pass_iteration" && mode != "typecheck") {
-        std::cerr << "Usage: clock_logic_test [real_time|single_pass_iteration|typecheck]\n";
+        std::cerr << "Usage: clock_logic_test fileName [real_time|single_pass_iteration|typecheck]\n";
         return 1;
     }  
     std::ofstream ofs(argv[1], std::ios::binary);

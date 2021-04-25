@@ -67,11 +67,20 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         });
 
         using ClockFacilityInput = typename ClockOnOrderFacility::template FacilityInput<std::string>;
+        /*
         auto clockFacility = ClockOnOrderFacility::template createClockCallback<std::string, std::string>(
             [](typename TheEnvironment::TimePointType const &tp, std::size_t thisIdx, std::size_t total) -> std::string {
                 std::ostringstream oss;
                 oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
                 return oss.str();
+            }
+        );
+        */
+        auto clockFacility = ClockOnOrderFacility::template createGenericClockCallback<std::string, std::string>(
+            [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total) -> std::vector<std::string> {
+                std::ostringstream oss;
+                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
+                return {oss.str()};
             }
         );
         auto clockFacilityInput = M::template liftPure<std::string>(
