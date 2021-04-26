@@ -10,6 +10,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/complex_key_value_store_components/PreloadAllReadonlyServer.hpp>
 #include <tm_kit/transport/complex_key_value_store_components/OnDemandReadonlyServer.hpp>
 
@@ -51,7 +52,11 @@ int main(int argc, char **argv) {
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
-        transport::HeartbeatAndAlertComponent
+        transport::HeartbeatAndAlertComponent/*,
+        transport::ServerSideSimpleIdentityCheckerComponent<
+            std::string
+            , DBQuery
+        >*/
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -91,7 +96,8 @@ int main(int argc, char **argv) {
     transport::MultiTransportFacilityWrapper<R>::wrap
         <DBQuery,DBQueryResult>(
         r
-        , queryFacility
+        , "queryFacility"
+        , transport::MultiTransportFacilityWrapper<R>::addIdentity(r, r.facilityConnector(queryFacility), "add_identity")
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
         , "server_wrapper/"
     );

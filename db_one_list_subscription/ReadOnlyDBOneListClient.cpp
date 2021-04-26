@@ -7,6 +7,7 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
+#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 
@@ -22,7 +23,11 @@ void graphBasedMain() {
         infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
-        transport::rabbitmq::RabbitMQComponent
+        transport::rabbitmq::RabbitMQComponent/*,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
+            , DBQuery
+        >*/
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
@@ -82,7 +87,11 @@ void directCallBasedMain() {
     using TheEnvironment = infra::Environment<
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
-        transport::rabbitmq::RabbitMQComponent
+        transport::rabbitmq::RabbitMQComponent/*,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
+            , DBQuery
+        >*/
     >;
 
     TheEnvironment env;
@@ -103,7 +112,11 @@ void heartbeatCallBasedMain() {
     using TheEnvironment = infra::Environment<
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
-        transport::rabbitmq::RabbitMQComponent
+        transport::rabbitmq::RabbitMQComponent/*,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
+            , DBQuery
+        >*/
     >;
 
     TheEnvironment env;
