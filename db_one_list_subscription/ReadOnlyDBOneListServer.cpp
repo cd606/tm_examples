@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
         <DBQuery,DBQueryResult>(
         r
         , "queryFacility"
-        , transport::MultiTransportFacilityWrapper<R>::addIdentity(r, r.facilityConnector(queryFacility), "add_identity")
+        , transport::MultiTransportFacilityWrapper<R>::addIdentityIfNeeded(r, r.facilityConnector(queryFacility), "add_identity")
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
         , "server_wrapper/"
     );
