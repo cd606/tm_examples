@@ -48,6 +48,7 @@ void dataDisplayFlow(
         , "input.data"
         , "inputDataSourceComponents"
     );
+    //auto name = *(r.findFirstControllableNodeAtOrAbove(inputDataSource.registeredNodeName()));
 
     auto snapshotTimer = basic::real_time_clock::ClockImporter<Env>
         ::template createRecurringClockConstImporter<basic::VoidStruct>(
@@ -59,7 +60,18 @@ void dataDisplayFlow(
     auto snapshotter = basic::CommonFlowUtilComponents<infra::RealTimeApp<Env>>
         ::template snapshotOnRight<simple_demo::InputData, basic::VoidStruct>
         (
-            [](simple_demo::InputData &&a, basic::VoidStruct &&b) -> simple_demo::InputData {
+            [/*&r, name*/](simple_demo::InputData &&a, basic::VoidStruct &&b) -> simple_demo::InputData {
+                /*
+                static unsigned count = 0;
+                ++count;
+                if (count == 30) {
+                    r.environment()->log(infra::LogLevel::Info, "Stopping");
+                    r.controlAll(name, "stop", {});
+                } else if (count == 100) {
+                    r.environment()->log(infra::LogLevel::Info, "Restarting");
+                    r.controlAll(name, "restart", {});
+                }
+                */
                 return std::move(a);
             }
         );
