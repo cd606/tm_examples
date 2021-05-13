@@ -140,6 +140,24 @@ namespace ClockLogicTestDotNet
             r.exportItem(feedItemToFacility, r.importItem(importer3));
             r.exportItem(exporter, r.actionAsSource(clockFacilityOutput));
 
+            var addTopicAndSerialize = RealTimeAppUtils<ClockEnv>.liftPure(
+                (string s) => new ByteDataWithTopic(
+                    "main.data"
+                    , System.Text.Encoding.UTF8.GetBytes(s)
+                )
+                , false
+            );
+            var fileSink = FileUtils<ClockEnv>.byteDataWithTopicOutput(
+                (args.Length>0? args[0] : "clockData.dat")
+                , new ByteData(
+                    new byte[] {0x01, 0x23, 0x45, 0x67}
+                )
+                , new ByteData(
+                    new byte[] {0x76, 0x54, 0x32, 0x10}
+                )
+            );
+            r.exportItem(fileSink, r.execute(addTopicAndSerialize, r.importItem(importer1)));
+
             r.finalize();
             RealTimeAppUtils<ClockEnv>.terminateAtTimePoint(
                 env
