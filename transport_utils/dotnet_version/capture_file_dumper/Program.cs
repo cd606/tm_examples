@@ -10,14 +10,14 @@ namespace capture_file_dumper
 {
     class Program
     {
-        static int run(string fileName, string printMode, FileUtils<ClockEnv>.TopicCaptureFileRecordReaderOption option)
+        static int run(string fileName, string printMode, RecordFileUtils.TopicCaptureFileRecordReaderOption option)
         {
             using (var f = new FileStream(fileName, FileMode.Open))
             using (var r = new BinaryReader(f))
             {
-                foreach (var x in FileUtils<ClockEnv>.GenericRecordDataSource<FileUtils<ClockEnv>.TopicCaptureFileRecord>(
+                foreach (var x in RecordFileUtils.GenericRecordDataSource<RecordFileUtils.TopicCaptureFileRecord>(
                     r
-                    , new FileUtils<ClockEnv>.TopicCaptureFileRecordReader(option)
+                    , new RecordFileUtils.TopicCaptureFileRecordReader(option)
                 ))
                 {
                     string dataPart;
@@ -104,7 +104,7 @@ namespace capture_file_dumper
                 }
                 var file = fileOption.Value();
                 var printMode = printModeOption.HasValue() ? printModeOption.Value() : "length";
-                var option = new FileUtils<ClockEnv>.TopicCaptureFileRecordReaderOption();
+                var option = new RecordFileUtils.TopicCaptureFileRecordReaderOption();
                 if (fileMagicLenOption.HasValue())
                 {
                     option.FileMagicLength = ushort.Parse(fileMagicLenOption.Value());
@@ -134,14 +134,14 @@ namespace capture_file_dumper
                     switch (timeUnitOption.Value())
                     {
                         case "second":
-                            option.TimePrecision = FileUtils<ClockEnv>.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Second;
+                            option.TimePrecision = RecordFileUtils.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Second;
                             break;
                         case "millisecond":
-                            option.TimePrecision = FileUtils<ClockEnv>.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Millisecond;
+                            option.TimePrecision = RecordFileUtils.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Millisecond;
                             break;
                         case "microsecond":
                         default:
-                            option.TimePrecision = FileUtils<ClockEnv>.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Microsecond;
+                            option.TimePrecision = RecordFileUtils.TopicCaptureFileRecordReaderOption.TimePrecisionLevel.Microsecond;
                             break;
                     }
                 }
