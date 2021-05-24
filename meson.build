@@ -32,6 +32,7 @@ if build_machine.system() == 'windows'
 endif
 
 subdir('clock_logic_test')
+subdir('common_flow_util_tests')
 subdir('transport_utils')
 subdir('simple_demo')
 subdir('db_subscription')
