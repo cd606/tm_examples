@@ -54,7 +54,6 @@ int main() {
         [](M::StateType *env) -> M::Data<int> {
             static int ii = -1;
             ++ii;
-            std::variant<int,int,std::string> x;
             return M::InnerData<int> {
                 env 
                 , {
