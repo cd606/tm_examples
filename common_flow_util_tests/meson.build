@@ -10,3 +10,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'two_runner_test'
+    , ['TwoRunnerTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
