@@ -2,7 +2,7 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/BasicWithTimeApp.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
-#include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/IntIDComponent.hpp>
@@ -159,10 +159,10 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
         infra::FlagExitControlComponent,
-        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>,false>,
+        basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::top_down_single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point,true>,false>,
         basic::IntIDComponent<>
     >;
-    using M = infra::SinglePassIterationApp<TheEnvironment>;
+    using M = infra::TopDownSinglePassIterationApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
 
     std::ifstream ifs(inputFile, std::ios::binary);
@@ -205,7 +205,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
     MainLogicInput<R> combinationInput {
         &(MockCalculatorCombination<
                 R
-                ,basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
+                ,basic::top_down_single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
             >::service)
         , std::nullopt
         , std::nullopt
