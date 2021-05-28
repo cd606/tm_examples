@@ -4,11 +4,13 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 
 #include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
 #include <tm_kit/basic/empty_clock/ClockComponent.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
@@ -86,6 +88,29 @@ void single_pass_iteration_run(std::ostream &fileOutput) {
     infra::terminationController(infra::ImmediatelyTerminate {});
 }
 
+void top_down_single_pass_iteration_run(std::ostream &fileOutput) {
+    using TheEnvironment = infra::Environment<
+        infra::CheckTimeComponent<true>,
+        infra::FlagExitControlComponent,
+        basic::TimeComponentEnhancedWithSpdLogging<
+            basic::top_down_single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
+            , false
+        >,
+        basic::IntIDComponent<uint32_t>
+    >;
+    using App = infra::TopDownSinglePassIterationApp<TheEnvironment>;
+
+    TheEnvironment env;
+    env.setLogFilePrefix("clock_logic_test", true);
+
+    infra::AppRunner<App> r(&env);
+    clock_logic_test_app::clockLogicMain(r, fileOutput);
+    r.writeGraphVizDescription(std::cout, "test");
+    r.finalize();
+
+    infra::terminationController(infra::ImmediatelyTerminate {});
+}
+
 void typecheck_run(std::ostream &fileOutput) {
     using TheEnvironment = infra::Environment<
         infra::CheckTimeComponent<true>,
@@ -111,12 +136,12 @@ void typecheck_run(std::ostream &fileOutput) {
 
 int main(int argc, char **argv) {
     if (argc != 3) {
-        std::cerr << "Usage: clock_logic_test fileName real_time|single_pass_iteration|typecheck\n";
+        std::cerr << "Usage: clock_logic_test fileName real_time|single_pass_iteration|top_down_single_pass_iteration|typecheck\n";
         return 1;
     }
     std::string mode = argv[2];
-    if (mode != "real_time" && mode != "single_pass_iteration" && mode != "typecheck") {
-        std::cerr << "Usage: clock_logic_test fileName [real_time|single_pass_iteration|typecheck]\n";
+    if (mode != "real_time" && mode != "single_pass_iteration" && mode != "top_down_single_pass_iteration" && mode != "typecheck") {
+        std::cerr << "Usage: clock_logic_test fileName [real_time|single_pass_iteration|top_down_single_pass_iteration|typecheck]\n";
         return 1;
     }  
     std::ofstream ofs(argv[1], std::ios::binary);
@@ -124,6 +149,8 @@ int main(int argc, char **argv) {
         real_time_run(ofs);
     } else if (mode == "single_pass_iteration") {
         single_pass_iteration_run(ofs);
+    } else if (mode == "top_down_single_pass_iteration") {
+        top_down_single_pass_iteration_run(ofs);
     } else if (mode == "typecheck") {
         typecheck_run(ofs);
     }
