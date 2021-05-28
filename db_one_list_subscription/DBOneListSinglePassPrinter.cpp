@@ -1,6 +1,6 @@
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
 
 #include <tm_kit/basic/ByteData.hpp>
@@ -8,9 +8,9 @@
 #include <tm_kit/basic/VoidStruct.hpp>
 #include <tm_kit/basic/TrivialBoostLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockImporter.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockImporter.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/transaction/v2/TransactionLogicCombination.hpp>
 #include <tm_kit/basic/transaction/v2/DataStreamClientCombination.hpp>
 #include <tm_kit/basic/transaction/named_value_store/DataModel.hpp>
@@ -139,14 +139,14 @@ void runSinglePass(std::string const &dbFile) {
         infra::CheckTimeComponent<false>,
         infra::FlagExitControlComponent,
         basic::TimeComponentEnhancedWithBoostTrivialLogging<
-            basic::single_pass_iteration_clock::ClockComponent<
+            basic::top_down_single_pass_iteration_clock::ClockComponent<
                 std::chrono::system_clock::time_point
             >
         >,
         basic::IntIDComponent<>
     >;
 
-    using M = infra::SinglePassIterationApp<TheEnvironment>;
+    using M = infra::TopDownSinglePassIterationApp<TheEnvironment>;
     using R = infra::AppRunner<M>;
 
     using GS = basic::transaction::v2::GeneralSubscriberTypes<
@@ -212,7 +212,7 @@ void runSinglePass(std::string const &dbFile) {
         , r.importItem("dbLoader", dbLoader)
     );
 
-    auto initialImporter = basic::single_pass_iteration_clock::template ClockImporter<TheEnvironment>
+    auto initialImporter = basic::top_down_single_pass_iteration_clock::template ClockImporter<TheEnvironment>
                     ::template createOneShotClockConstImporter<basic::VoidStruct>(
         infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00")
         , basic::VoidStruct {}
