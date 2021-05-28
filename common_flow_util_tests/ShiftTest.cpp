@@ -1,5 +1,6 @@
 #include <tm_kit/infra/WithTimeData.hpp>
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/basic/IntIDComponent.hpp>
@@ -34,7 +35,7 @@ struct FakeClockComponent {
 };
 
 int main() {
-    using M = SinglePassIterationApp<BasicEnvironment<FakeClockComponent>>;
+    using M = TopDownSinglePassIterationApp<BasicEnvironment<FakeClockComponent>>;
     using R = AppRunner<M>;
     M::EnvironmentType env;
     R r(&env);
@@ -58,7 +59,8 @@ int main() {
     );
     r.registerImporter("source", source);
 
-    auto action = CFU::leftShift<int>(2);
+    //auto action = CFU::leftShift<int>(2);
+    auto action = CFU::rightShift<int>(2);
     r.registerAction("action", action);
 
     auto bunch = CFU::bunch<int>();
