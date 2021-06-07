@@ -4,11 +4,11 @@
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
-#include <tm_kit/infra/SinglePassIterationApp.hpp>
+#include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockComponent.hpp>
-#include <tm_kit/basic/single_pass_iteration_clock/ClockOnOrderFacility.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
+#include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockOnOrderFacility.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
 
@@ -26,13 +26,13 @@ using TheEnvironment = infra::Environment<
     infra::TrivialExitControlComponent,
     //infra::TraceNodesComponent,
     basic::TimeComponentEnhancedWithSpdLogging<
-        basic::single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point>
+        basic::top_down_single_pass_iteration_clock::ClockComponent<std::chrono::system_clock::time_point,false>
         , false //don't log thread ID
     >,
     transport::CrossGuidComponent,
     transport::AllChainComponents
 >;
-using M = infra::SinglePassIterationApp<TheEnvironment>;
+using M = infra::TopDownSinglePassIterationApp<TheEnvironment>;
 using R = infra::AppRunner<M>;
 
 void run(std::string const &inputFile, std::string const &chainLocatorStr, bool printGraphOnly) {
@@ -40,11 +40,21 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr, bool 
     R r(&env);
     std::ifstream ifs(inputFile.c_str(), std::ios::binary);
 
-    auto byteDataImporter = basic::ByteDataWithTopicRecordFileImporterExporter<M>::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
-        ifs
-        , {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67}
-        , {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
-    );
+    auto byteDataImporterGen = [&ifs]() {
+        return basic::ByteDataWithTopicRecordFileImporterExporter<M>::createImporter<basic::ByteDataWithTopicRecordFileFormat<std::chrono::microseconds>>(
+            ifs
+            , {(std::byte) 0x01,(std::byte) 0x23,(std::byte) 0x45,(std::byte) 0x67}
+            , {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
+        );
+    };
+    auto firstUpdate = basic::AppRunnerUtilComponents<R>
+        ::singlePassTestRunOneUpdate<basic::ByteDataWithTopic>(
+            byteDataImporterGen
+        );
+    ifs.close();
+    ifs.open(inputFile.c_str(), std::ios::binary);
+
+    auto byteDataImporter = byteDataImporterGen();
     auto parser = basic::SerializationActions<M>::deserialize<InputData>();
     auto removeTopic = basic::SerializationActions<M>::removeTopic<InputData>();
     r.registerImporter("byteDataImporter", byteDataImporter);
@@ -68,6 +78,7 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr, bool 
         , "main_program"
     );
     
+    /*
     basic::AppRunnerUtilComponents<R>
         ::setupExitTimer(
         r 
@@ -78,9 +89,21 @@ void run(std::string const &inputFile, std::string const &chainLocatorStr, bool 
         }
         , "exitTimerPart"
     );
+    */
+    basic::AppRunnerUtilComponents<R>
+        ::setupBackgroundClockAndExiter(
+        r 
+        , firstUpdate->timePoint 
+        , firstUpdate->timePoint+std::chrono::hours(1)
+        , std::chrono::milliseconds(100)
+        , [](TheEnvironment *env) {
+            env->log(infra::LogLevel::Info, "Wrapping up!");
+        }
+        , "exitTimerPart"
+    );
 
     auto mockExternalFacility = calculator_logic::MockExternalCalculator<
-        R, basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
+        R, basic::top_down_single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
     >::connector("mockExternalFacility");
     auto calculatorChainFacilityFactory = sharedChainCreator.writerFactory<
         ChainData
