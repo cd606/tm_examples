@@ -67,12 +67,32 @@ int main(int argc, char **argv) {
 
     env.setLogFilePrefix("simple_demo_chain_version_data_source_");
     
-    transport::initializeHeartbeatAndAlertComponent
-        (&env, "simple_demo_chain_version DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
-    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
-
     using R = infra::AppRunner<M>;
     R r(&env);
+
+#ifdef _MSC_VER
+    transport::HeartbeatAndAlertComponentTouchup<R> _heartbeat {
+        r
+        , {
+            "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , "simple_demo_chain_version.data_source.heartbeat"
+            , "simple_demo_chain_version DataSource"
+            , std::chrono::seconds(10)
+            , "program"
+        }
+    };
+#else
+    transport::HeartbeatAndAlertComponentTouchup<R> _heartbeat {
+        r
+        , {
+            .channelDescriptor = "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+            , .topic = "simple_demo_chain_version.data_source.heartbeat"
+            , .identity = "simple_demo_chain_version DataSource"
+            , .period = std::chrono::seconds(10)
+            , .overallStatusEntry = "program"
+        }
+    };
+#endif
 
     auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
 
@@ -92,8 +112,6 @@ int main(int argc, char **argv) {
             , r.importItem("source", std::get<0>(importerPair)))
         , publisherSink
     );
-
-    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.data_source.heartbeat", std::chrono::seconds(10));
 
     std::ostringstream graphOss;
     r.writeGraphVizDescription(graphOss, "simple_demo_chain_version_data_source");
