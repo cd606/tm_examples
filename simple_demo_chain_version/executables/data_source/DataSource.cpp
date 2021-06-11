@@ -17,7 +17,7 @@
 #include <tm_kit/transport/shared_memory_broadcast/SharedMemoryBroadcastComponent.hpp>
 #include <tm_kit/transport/shared_memory_broadcast/SharedMemoryBroadcastImporterExporter.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
-#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportTouchups.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo_chain_version/external_logic/ExternalDataSource.hpp"
@@ -67,33 +67,37 @@ int main(int argc, char **argv) {
 
     env.setLogFilePrefix("simple_demo_chain_version_data_source_");
     
-    transport::initializeHeartbeatAndAlertComponent
-        (&env, "simple_demo_chain_version DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
-    env.setStatus("program", transport::HeartbeatMessage::Status::Good);
-
     using R = infra::AppRunner<M>;
     R r(&env);
 
-    auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
+    transport::HeartbeatAndAlertComponentTouchup<R>(r, {
+#ifdef _MSC_VER
+        "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , "simple_demo_chain_version.data_source.heartbeat"
+        , "simple_demo_chain_version DataSource"
+        , std::chrono::seconds(10)
+        , "program"
+#else
+        .channelDescriptor = "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
+        , .topic = "simple_demo_chain_version.data_source.heartbeat"
+        , .identity = "simple_demo_chain_version DataSource"
+        , .period = std::chrono::seconds(10)
+        , .overallStatusEntry = "program"
+#endif
+    });
+    transport::multi_transport_touchups::PublisherTouchup<R,InputData>(r, {
+#ifdef _MSC_VER
+        (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
+#else
+        .channelSpec = (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
+#endif
+    });
 
-    auto publisherSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
-        ::oneBroadcastPublisher<InputData>(
-            r
-            , "input data publisher"
-            //, (same_host?"zeromq://ipc::::/tmp/simple_demo_chain_version_input_data":"zeromq://localhost:12345")
-            , (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
-            /*, std::nullopt
-            , true*/
-        );
+    auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
     auto importerPair = M::triggerImporter<InputData>();
 
-    r.connect(
-        r.execute("addTopic", addTopic
-            , r.importItem("source", std::get<0>(importerPair)))
-        , publisherSink
-    );
-
-    transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.data_source.heartbeat", std::chrono::seconds(10));
+    r.execute("addTopic", addTopic
+        , r.importItem("source", std::get<0>(importerPair)));
 
     std::ostringstream graphOss;
     r.writeGraphVizDescription(graphOss, "simple_demo_chain_version_data_source");
