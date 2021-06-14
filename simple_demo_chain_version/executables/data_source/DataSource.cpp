@@ -88,8 +88,12 @@ int main(int argc, char **argv) {
     transport::multi_transport_touchups::PublisherTouchup<R,InputData>(r, {
 #ifdef _MSC_VER
         (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
+        , std::nullopt 
+        , false 
+        , "input data publisher"
 #else
         .channelSpec = (same_host?"shared_memory_broadcast://::::simple_demo_chain_version_input_data":"multicast://224.0.1.101:12345")
+        , .publisherName = "input data publisher"
 #endif
     });
 
