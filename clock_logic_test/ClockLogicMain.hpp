@@ -2,6 +2,7 @@
 #define CLOCK_LOGIC_TEST_CLOCK_LOGIC_MAIN_HPP_
 
 #include <tm_kit/infra/WithTimeData.hpp>
+#include <tm_kit/infra/DeclarativeGraph.hpp>
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/ByteDataWithTopicRecordFileImporterExporter.hpp>
 #include <tm_kit/basic/AppClockHelper.hpp>
@@ -43,9 +44,9 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
                 return "ONESHOT "+withtime_utils::localTimeString(tp);
             }
         );
-        auto converter = M::template liftPure<std::string>(withtime_utils::keyify<std::string, typename M::EnvironmentType>);
 
         auto facility = M::localOnOrderFacility(new Facility<M>());
+        r.registerLocalOnOrderFacility("facility", facility);
 
         auto addTopic = basic::SerializationActions<M>::template addConstTopic<std::string>("data.main");
         auto serialize = basic::SerializationActions<M>::template serialize<std::string>();
@@ -56,52 +57,6 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             {(std::byte) 0x76,(std::byte) 0x54,(std::byte) 0x32,(std::byte) 0x10}
         );
 
-        auto exporter = M::template simpleExporter<std::string>([](typename M::template InnerData<std::string> &&s) {
-            std::ostringstream oss;
-            oss << s.timedData;
-            s.environment->log(LogLevel::Info, oss.str());
-        });
-        auto exporter2 = M::template simpleExporter<typename M::template KeyedData<std::string,std::string>>([](typename M::template InnerData<typename M::template KeyedData<std::string,std::string>> &&s) {
-            std::ostringstream oss;
-            oss << s.timedData;
-            s.environment->log(LogLevel::Info, oss.str());
-        });
-
-        /*
-        using ClockFacilityInput = typename ClockOnOrderFacility::template FacilityInput<std::string>;
-        auto clockFacility = ClockOnOrderFacility::template createClockCallback<std::string, std::string>(
-            [](typename TheEnvironment::TimePointType const &tp, std::size_t thisIdx, std::size_t total) -> std::string {
-                std::ostringstream oss;
-                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
-                return oss.str();
-            }
-        );
-        auto clockFacility = ClockOnOrderFacility::template createGenericClockCallback<std::string, std::string>(
-            [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total, std::string &&inputStr) -> std::vector<std::string> {
-                std::ostringstream oss;
-                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
-                return {oss.str()};
-            }
-        );
-        auto clockFacilityInput = M::template liftPure<std::string>(
-            [](std::string &&s) -> typename M::template Key<ClockFacilityInput> {
-                return withtime_utils::keyify<ClockFacilityInput, typename M::EnvironmentType>(ClockFacilityInput {
-                    std::move(s)
-                    , {
-                        std::chrono::milliseconds(150)
-                        , std::chrono::seconds(1)
-                        , std::chrono::milliseconds(5250)
-                    }
-                });
-            }
-        );
-        using ClockFacilityOutput = typename M::template KeyedData<ClockFacilityInput,std::string>;
-        auto clockFacilityOutput = M::template liftPure<ClockFacilityOutput>(
-            [](ClockFacilityOutput &&s2) -> std::string {
-                return s2.key.key().inputData+" --- "+s2.data;
-            }
-        );
-        */
         auto clockFacility = basic::AppRunnerUtilComponents<R>::template clockBasedFacility<std::string,std::string>(
             [](std::string &&) -> std::vector<std::chrono::system_clock::duration> {
                 return {
@@ -117,52 +72,46 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             }
             , "clockFacility"
         );
-        auto genKey = M::template liftPure<std::string>(
-            [](std::string &&s) -> typename M::template Key<std::string> {
-                return M::keyify(std::move(s));
-            }
-        );
-        r.registerAction("genKey", genKey);
-        auto clockFacilityOutput = M::template liftPure<typename M::template KeyedData<std::string,std::string>>(
-            [](typename M::template KeyedData<std::string,std::string> &&s2) -> std::string {
+
+        infra::DeclarativeGraph<R>("", {
+            {"recurring", importer1}
+            , {"oneShot1", importer2}
+            , {"oneShot2", importer3}
+            , {"print", [](typename M::template InnerData<std::string> &&s) {
+                std::ostringstream oss;
+                oss << s.timedData;
+                s.environment->log(LogLevel::Info, oss.str());
+            } }
+            , {"print2", [](typename M::template InnerData<typename M::template KeyedData<std::string,std::string>> &&s) {
+                std::ostringstream oss;
+                oss << s.timedData;
+                s.environment->log(LogLevel::Info, oss.str());
+            } }
+            , {"converter", withtime_utils::keyify<std::string, typename M::EnvironmentType>}
+            , {"clockFacilityOutput", [](typename M::template KeyedData<std::string,std::string> &&s2) -> std::string {
                 return s2.key.key()+" --- "+s2.data;
-            }
-        );
-
-        r.registerImporter("recurring", importer1);
-        r.registerImporter("oneShot1", importer2);
-        r.registerImporter("oneShot2", importer3);
-        r.registerExporter("print", exporter);
-        r.registerExporter("print2", exporter2);
-        r.registerAction("converter", converter);
-        r.registerLocalOnOrderFacility("facility", facility);
-        //r.registerOnOrderFacility("clockFacility", clockFacility);
-        //r.registerAction("clockFacilityInput", clockFacilityInput);
-        r.registerAction("clockFacilityOutput", clockFacilityOutput);
-
-        r.exportItem(exporter, r.importItem(importer1));
-        r.exportItem(
-            "fileSink", fileSink
-            , r.execute(
-                "serialize", serialize
-                , r.execute(
-                    "addTopic", addTopic, r.importItem(importer1)
-                )
-            ));
-        r.placeOrderWithLocalFacility(
-            r.execute(converter, r.importItem(importer2))
-            , facility
-            , r.exporterAsSink(exporter2));
+            } }
+            , {"genKey", [](std::string &&s) -> typename M::template Key<std::string> {
+                return M::keyify(std::move(s));
+            } }
+            , {"fileSink", fileSink}
+            , {"serialize", serialize}
+            , {"addTopic", addTopic}
+            , {"recurring", "addTopic"}
+            , {"addTopic", "serialize"}
+            , {"serialize", "fileSink"}
+            , {"recurring", "print"}
+            , {"oneShot1", "converter"}
+            , {"converter", "facility", "print2"}
+            , {"clockFacilityOutput", "print"}
+            , {"recurring", "genKey"}
+        })(r);
         r.feedItemToLocalFacility(facility, r.importItem(importer3));
-        /*
-        r.placeOrderWithFacility(
-            r.execute(clockFacilityInput, r.importItem(importer1))
-            , clockFacility
-            , r.actionAsSink(clockFacilityOutput)
+        clockFacility(
+            r
+            , r.template sourceByName<typename M::template Key<std::string>>("genKey")
+            , r.template sinkByName<typename M::template KeyedData<std::string,std::string>>("clockFacilityOutput")
         );
-        */
-        clockFacility(r, r.execute(genKey, r.importItem(importer1)), r.actionAsSink(clockFacilityOutput));
-        r.exportItem(exporter, r.actionAsSource(clockFacilityOutput));
     }   
 
 } } } }
