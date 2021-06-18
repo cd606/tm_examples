@@ -46,7 +46,6 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         );
 
         auto facility = M::localOnOrderFacility(new Facility<M>());
-        r.registerLocalOnOrderFacility("facility", facility);
 
         auto addTopic = basic::SerializationActions<M>::template addConstTopic<std::string>("data.main");
         auto serialize = basic::SerializationActions<M>::template serialize<std::string>();
@@ -74,6 +73,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         );
 
         infra::DeclarativeGraph<R>("", {
+            //components
             {"recurring", importer1}
             , {"oneShot1", importer2}
             , {"oneShot2", importer3}
@@ -97,12 +97,11 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , {"fileSink", fileSink}
             , {"serialize", serialize}
             , {"addTopic", addTopic}
-            , {"recurring", "addTopic"}
-            , {"addTopic", "serialize"}
-            , {"serialize", "fileSink"}
+            , {"facility", facility}
+            //connections
+            , {"recurring", "addTopic"}, {"addTopic", "serialize"}, {"serialize", "fileSink"}
             , {"recurring", "print"}
-            , {"oneShot1", "converter"}
-            , {"converter", "facility", "print2"}
+            , {"oneShot1", "converter"}, {"converter", "facility", "print2"}
             , {"clockFacilityOutput", "print"}
             , {"recurring", "genKey"}
             , {"oneShot2", "facility"}
