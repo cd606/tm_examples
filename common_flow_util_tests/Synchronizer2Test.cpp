@@ -3,6 +3,7 @@
 #include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
+#include <tm_kit/infra/DeclarativeGraph.hpp>
 #include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/AppRunnerUtils.hpp>
@@ -51,66 +52,59 @@ int main() {
     using ARU = AppRunnerUtilComponents<R>;
     using KU = KleisliUtils<M>;
 
-    auto source = M::simpleImporter<int>(
-        [](M::StateType *env) -> M::Data<int> {
+    using IntP = std::shared_ptr<const int>;
+
+    DeclarativeGraph<R>("", {
+        {"source", [](M::StateType *env) -> std::tuple<bool, M::Data<int>> {
             static int ii = -1;
             ++ii;
-            return M::InnerData<int> {
+            return {(ii<10), {M::InnerData<int> {
                 env 
                 , {
                     (M::TimePoint) ii
                     , ii
                     , ii >= 10
                 }
-            };
-        }
-    );
-    r.registerImporter("source", source);
-
-    using IntP = std::shared_ptr<const int>;
-    
-    auto share = KU::action(CFU::shareBetweenDownstream<int>());
-    r.registerAction("share", share);
-
-    auto facility1 = M::liftPureOnOrderFacility<IntP>(
-        [](IntP &&a) -> SingleLayerWrapperWithID<1,int> {
-            return {*a+1};
-        }
-    );
-    auto facility2 = M::liftPureOnOrderFacility<IntP>(
-        [](IntP &&a) -> SingleLayerWrapperWithID<2,int> {
-            return {*a+2};
-        }
-    );
-    auto keyify = KU::action(CFU::keyifyThroughCounter<IntP>());
-    r.registerOnOrderFacility("facility1", facility1);
-    r.registerOnOrderFacility("facility2", facility2);
-    r.registerAction("keyify", keyify);
+            }}};
+        } }
+        , {"share", CFU::shareBetweenDownstream<int>()}
+        , {"facility1", M::liftPureOnOrderFacility<IntP>(
+            [](IntP &&a) -> SingleLayerWrapperWithID<1,int> {
+                return {*a+1};
+            }
+        ) }
+        , {"facility2", M::liftPureOnOrderFacility<IntP>(
+            [](IntP &&a) -> SingleLayerWrapperWithID<2,int> {
+                return {*a+2};
+            }
+        ) }
+        , {"keyify", CFU::keyifyThroughCounter<IntP>()}
+        , {"print", [&env](M::KeyedData<IntP,std::tuple<int,int>> &&d) {
+            std::ostringstream oss;
+            oss << d.key.id() << ' ' << *(d.key.key()) << ": " << std::get<0>(d.data) << ", " << std::get<1>(d.data);
+            env.log(LogLevel::Info, oss.str());
+        }}
+        , {"source", "share"}, {"share", "keyify"}
+    })(r);
 
     auto combinedFacility = ARU::facilitoidSynchronizer2<
         IntP
         , SingleLayerWrapperWithID<1,int>
         , SingleLayerWrapperWithID<2,int>
     >(
-        r.facilityConnector(facility1)
-        , r.facilityConnector(facility2)
+        r.facilitioidByName<IntP, SingleLayerWrapperWithID<1,int>>("facility1")        
+        , r.facilitioidByName<IntP, SingleLayerWrapperWithID<2,int>>("facility2")
         , [](auto &&key, auto &&x1, auto &&x2) -> std::tuple<int,int> {
             return {std::move(x1.value), std::move(x2.value)};
         }
         , "combined"
     );
 
-    auto keyedSource = r.execute(keyify, r.execute(share, r.importItem(source)));
-    auto print = M::pureExporter<M::KeyedData<IntP,std::tuple<int,int>>>(
-        [&env](M::KeyedData<IntP,std::tuple<int,int>> &&d) {
-            std::ostringstream oss;
-            oss << d.key.id() << ' ' << *(d.key.key()) << ": " << std::get<0>(d.data) << ", " << std::get<1>(d.data);
-            env.log(LogLevel::Info, oss.str());
-        }
+    combinedFacility(
+        r
+        , r.sourceByName<M::Key<IntP>>("keyify")
+        , r.sinkByName<M::KeyedData<IntP,std::tuple<int,int>>>("print")
     );
-    r.registerExporter("print", print);
-
-    combinedFacility(r, keyedSource.clone(), r.exporterAsSink(print));
 
     r.finalize();
 }

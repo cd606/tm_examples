@@ -2,6 +2,7 @@
 #include <tm_kit/infra/SinglePassIterationApp.hpp>
 #include <tm_kit/infra/TopDownSinglePassIterationApp.hpp>
 #include <tm_kit/infra/Environments.hpp>
+#include <tm_kit/infra/DeclarativeGraph.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/basic/IntIDComponent.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
@@ -42,32 +43,23 @@ int main() {
 
     using CFU = dev::cd606::tm::basic::CommonFlowUtilComponents<M>;
 
-    auto source = M::simpleImporter<int>(
-        [](M::StateType *env) -> M::Data<int> {
+    DeclarativeGraph<R>("", {
+        { "source", [](M::StateType *env) -> std::tuple<bool, M::Data<int>> {
             static int ii = -1;
             ++ii;
             std::variant<int,int,std::string> x;
-            return M::InnerData<int> {
+            return {(ii<10), {M::InnerData<int> {
                 env 
                 , {
                     (M::TimePoint) ii
                     , ii
                     , ii >= 10
                 }
-            };
-        }
-    );
-    r.registerImporter("source", source);
-
-    //auto action = CFU::leftShift<int>(2);
-    auto action = CFU::rightShift<int>(2);
-    r.registerAction("action", action);
-
-    auto bunch = CFU::bunch<int>();
-    r.registerAction("bunch", bunch);
-
-    auto print = M::simpleExporter<std::vector<int>>(
-        [](M::InnerData<std::vector<int>> &&d) {
+            }}};
+        } }
+        , {"action", CFU::rightShift<int>(2)}
+        , {"bunch", CFU::bunch<int>()}
+        , {"print", [](M::InnerData<std::vector<int>> &&d) {
             std::ostringstream oss;
             oss << "Time " << d.timedData.timePoint
                 << ", data [";
@@ -76,13 +68,10 @@ int main() {
             }
             oss << "]" << (d.timedData.finalFlag?", final":"");
             d.environment->log(LogLevel::Info, oss.str());
-        }
-    );
-    r.registerExporter("print", print);
-
-    r.execute(bunch, r.execute(action, r.importItem(source)));
-    r.execute(bunch, r.importItem(source));
-    r.exportItem(print, r.actionAsSource(bunch));
+        } }
+        , {"source", "action"}, {"action", "bunch"}, {"bunch", "print"}
+        , {"source", "bunch"}
+    })(r);
 
     r.finalize();
 }
