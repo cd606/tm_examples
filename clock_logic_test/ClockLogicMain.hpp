@@ -105,8 +105,8 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , {"converter", "facility", "print2"}
             , {"clockFacilityOutput", "print"}
             , {"recurring", "genKey"}
+            , {"oneShot2", "facility"}
         })(r);
-        r.feedItemToLocalFacility(facility, r.importItem(importer3));
         clockFacility(
             r
             , r.template sourceByName<typename M::template Key<std::string>>("genKey")
