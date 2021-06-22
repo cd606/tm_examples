@@ -69,7 +69,7 @@ int main() {
             oss << "]" << (d.timedData.finalFlag?", final":"");
             d.environment->log(LogLevel::Info, oss.str());
         } }
-        , {"source", "action"}, {"action", "bunch"}, {"bunch", "print"}
+        , DeclarativeGraphChain {{"source", "action", "bunch", "print"}}
         , {"source", "bunch"}
     })(r);
 

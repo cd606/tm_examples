@@ -99,7 +99,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , {"addTopic", addTopic}
             , {"facility", facility}
             //connections
-            , {"recurring", "addTopic"}, {"addTopic", "serialize"}, {"serialize", "fileSink"}
+            , DeclarativeGraphChain {{"recurring", "addTopic", "serialize", "fileSink"}}
             , {"recurring", "print"}
             , {"oneShot1", "converter"}, {"converter", "facility", "print2"}
             , {"clockFacilityOutput", "print"}

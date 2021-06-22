@@ -68,23 +68,23 @@ int main() {
             }}};
         } }
         , {"share", CFU::shareBetweenDownstream<int>()}
-        , {"facility1", M::liftPureOnOrderFacility<IntP>(
+        , {"facility1", LiftAsFacility {}, 
             [](IntP &&a) -> SingleLayerWrapperWithID<1,int> {
                 return {*a+1};
             }
-        ) }
-        , {"facility2", M::liftPureOnOrderFacility<IntP>(
+        }
+        , {"facility2", LiftAsFacility {}, 
             [](IntP &&a) -> SingleLayerWrapperWithID<2,int> {
                 return {*a+2};
             }
-        ) }
+        }
         , {"keyify", CFU::keyifyThroughCounter<IntP>()}
         , {"print", [&env](M::KeyedData<IntP,std::tuple<int,int>> &&d) {
             std::ostringstream oss;
             oss << d.key.id() << ' ' << *(d.key.key()) << ": " << std::get<0>(d.data) << ", " << std::get<1>(d.data);
             env.log(LogLevel::Info, oss.str());
         }}
-        , {"source", "share"}, {"share", "keyify"}
+        , DeclarativeGraphChain {{"source", "share", "keyify"}}
     })(r);
 
     auto combinedFacility = ARU::facilitoidSynchronizer2<
