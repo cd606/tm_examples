@@ -57,7 +57,8 @@ namespace DotNetServer
     }
     class Program
     {
-        private const string facilityLocator = "127.0.0.1:6379:::bcl_test_queue";
+        //private const string facilityLocator = "redis://127.0.0.1:6379:::bcl_test_queue";
+        private const string facilityLocator = "rabbitmq://127.0.0.1::guest:guest:bcl_test_queue";
         static void Main(string[] args)
         {
             var env = new ClockEnv();
@@ -65,19 +66,19 @@ namespace DotNetServer
             var facility = new Facility();
             Serializer.PrepareSerializer<Query>();
             Serializer.PrepareSerializer<Result>();
-            RedisComponent<ClockEnv>.WrapOnOrderFacility(
-                runner 
-                , facility 
-                , (byte[] x) => {
+            MultiTransportFacility<ClockEnv>.WrapOnOrderFacility(
+                r : runner 
+                , facility : facility 
+                , decoder: (byte[] x) => {
                     var q = Serializer.Deserialize<Query>(new MemoryStream(x));
                     return q;
                 }
-                , (Result r) => {
+                , encoder: (Result r) => {
                     var s = new MemoryStream();
                     Serializer.Serialize<Result>(s, r);
                     return s.ToArray();
                 }
-                , new ConnectionLocator(facilityLocator)
+                , address: facilityLocator
             );
             Console.WriteLine("Starting server");
             runner.finalize();

@@ -41,7 +41,8 @@ int main(int argc, char **argv) {
             , bcl_compat_test::Result
         >(
             &env
-            , "redis://127.0.0.1:6379:::bcl_test_queue"
+            //, "redis://127.0.0.1:6379:::bcl_test_queue"
+            , "rabbitmq://127.0.0.1::guest:guest:bcl_test_queue"
             , std::move(q)
         );
     resF.wait();

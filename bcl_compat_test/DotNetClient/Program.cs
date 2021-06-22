@@ -31,7 +31,8 @@ namespace DotNetClient
     }
     class Program
     {
-        private const string facilityLocator = "redis://127.0.0.1:6379:::bcl_test_queue";
+        //private const string facilityLocator = "redis://127.0.0.1:6379:::bcl_test_queue";
+        private const string facilityLocator = "rabbitmq://127.0.0.1::guest:guest:bcl_test_queue";
         static async Task Main(string[] args)
         {
             Query q = new Query {

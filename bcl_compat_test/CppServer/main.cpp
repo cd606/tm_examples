@@ -53,7 +53,8 @@ int main(int argc, char **argv) {
         bcl_compat_test::Query 
         , bcl_compat_test::Result
     >(
-        r, facility, "redis://127.0.0.1:6379:::bcl_test_queue", "wrapper/"
+        //r, facility, "redis://127.0.0.1:6379:::bcl_test_queue", "wrapper/"
+        r, facility, "rabbitmq://127.0.0.1::guest:guest:bcl_test_queue", "wrapper/"
     );
     
     r.finalize();
