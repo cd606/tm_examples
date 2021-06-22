@@ -1,0 +1,28 @@
+syntax = "proto3";
+package bcl_compat_test;
+
+//Guid and Decimal definitions are from
+// https://github.com/protobuf-net/protobuf-net/blob/main/src/Tools/bcl.proto
+
+message Guid {
+  fixed64 lo = 1; // the first 8 bytes of the guid (note:crazy-endian)
+  fixed64 hi = 2; // the second 8 bytes of the guid (note:crazy-endian)
+}
+
+message Decimal {
+  uint64 lo = 1; // the first 64 bits of the underlying value
+  uint32 hi = 2; // the last 32 bis of the underlying value
+  uint32 signScale = 3; // the number of decimal digits (bits 1-16), and the sign (bit 0)
+}
+
+message Query {
+   Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
+   Decimal Value = 2;
+   string Description = 3;
+}
+
+message Result {
+   Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
+   Decimal Value = 2;
+   repeated string Messages = 3;
+}
