@@ -223,7 +223,11 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
             }
         );
         r.execute(logic, r.actionAsSource("extractResult", extractResult));
+#ifdef _MSC_VER
+        auto keyify = GL::lift(&dev::cd606::tm::infra::withtime_utils::keyify<simple_demo::CalculateCommand, typename M::EnvironmentType>);
+#else
         auto keyify = GL::lift(dev::cd606::tm::infra::withtime_utils::keyify<simple_demo::CalculateCommand, typename M::EnvironmentType>);
+#endif
         input.commandConnector(
             r,
             r.execute("keyify", keyify, std::move(cmd)),
