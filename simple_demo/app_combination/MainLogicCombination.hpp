@@ -5,6 +5,7 @@
 #include <boost/hana/functional/curry.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/infra/KleisliSequence.hpp>
 #include "defs.pb.h"
 
 template <class R>
@@ -139,12 +140,6 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
         );
         r.preservePointer(mainLogicPtr);
 
-        auto extractDouble = dev::cd606::tm::infra::KleisliUtils<M>
-            ::template liftPure<simple_demo::InputData>(
-            [](simple_demo::InputData &&d) -> double {
-                return d.value();
-            }
-        );
         auto duplicator = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
             ::template duplicateInput<double>();
         auto exponentialAverage = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
@@ -161,6 +156,26 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
         );
         auto assembleMainLogicInput = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
             ::template dropRight<double,double>();
+
+        auto upToMainLogicInputKleisli = dev::cd606::tm::infra::KleisliSequence<M>
+            ::seq(
+                [](simple_demo::InputData &&d) -> double {
+                    return d.value();
+                }
+                , duplicator 
+                , exponentialAverageWithInputAttached
+                , filterValue
+                , assembleMainLogicInput
+            );
+
+        /*
+        auto extractDouble = dev::cd606::tm::infra::KleisliUtils<M>
+            ::template liftPure<simple_demo::InputData>(
+            [](simple_demo::InputData &&d) -> double {
+                return d.value();
+            }
+        );
+        
         auto upToMainLogicInputKleisli =
             dev::cd606::tm::infra::KleisliUtils<M>::template compose<simple_demo::InputData>(
                 std::move(extractDouble)
@@ -175,7 +190,12 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
                     )
                 )
             );
-        auto upToMainLogicInput = M::template kleisli<simple_demo::InputData>(std::move(upToMainLogicInputKleisli));
+        */
+        using GL = dev::cd606::tm::infra::GenericLift<M>;
+        auto upToMainLogicInput = GL::lift(std::move(upToMainLogicInputKleisli));
+        //GenericLift does not work with boost::hana::curry because 
+        //the generated operator() in boost::hana::curry objects are
+        //overloaded
         auto logic = M::template liftMaybe2<
                 double
                 , simple_demo::CalculateResult
@@ -194,12 +214,7 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
             );
         auto cmd = r.execute("logic", logic, r.actionAsSource("upToMainLogicInput", upToMainLogicInput));
 
-        auto extractResult = M::template liftPure<
-                typename M::template KeyedData<
-                    simple_demo::CalculateCommand
-                    , simple_demo::CalculateResult
-                >
-            >(
+        auto extractResult = GL::lift(
             [](typename M::template KeyedData<
                 simple_demo::CalculateCommand
                 , simple_demo::CalculateResult
@@ -208,12 +223,14 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
             }
         );
         r.execute(logic, r.actionAsSource("extractResult", extractResult));
-        auto keyify = M::template liftPure<simple_demo::CalculateCommand>(dev::cd606::tm::infra::withtime_utils::keyify<simple_demo::CalculateCommand, typename M::EnvironmentType>);
+        auto keyify = GL::lift(dev::cd606::tm::infra::withtime_utils::keyify<simple_demo::CalculateCommand, typename M::EnvironmentType>);
         input.commandConnector(
             r,
             r.execute("keyify", keyify, std::move(cmd)),
             r.actionAsSink(extractResult)
         );
+        //The following lifts also cannot be done with GL::lift
+        //because overloaded operator() in boost::hana::curry is involved
         if (input.configWrapper) {
             auto cfgFacility = M::template liftPureOnOrderFacility<
                 std::tuple<std::string, simple_demo::ConfigureCommand>
