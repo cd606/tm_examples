@@ -106,13 +106,13 @@ namespace simple_demo_chain_version { namespace main_program_logic {
         auto assembleOperationLogicInput = basic::CommonFlowUtilComponents<M>
             ::template dropRight<double,double>();
         auto upToOperationLogicInputKleisli =
-            infra::KleisliUtils<M>::template compose<InputData>(
+            infra::KleisliUtils<M>::compose(
                 std::move(extractDouble)
-                , infra::KleisliUtils<M>::template compose<double>(
+                , infra::KleisliUtils<M>::compose(
                     std::move(duplicator)
-                    , infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                    , infra::KleisliUtils<M>::compose(
                         std::move(exponentialAverageWithInputAttached)
-                        , infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                        , infra::KleisliUtils<M>::compose(
                             std::move(filterValue)
                             , std::move(assembleOperationLogicInput)
                         )
