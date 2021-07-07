@@ -3,6 +3,7 @@
 
 #include <simple_demo/program_logic/MainLogic.hpp>
 #include <boost/hana/functional/curry.hpp>
+#include <tm_kit/infra/KleisliSequence.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include "defs.pb.h"
@@ -162,13 +163,13 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
         auto assembleMainLogicInput = dev::cd606::tm::basic::CommonFlowUtilComponents<M>
             ::template dropRight<double,double>();
         auto upToMainLogicInputKleisli =
-            dev::cd606::tm::infra::KleisliUtils<M>::template compose<simple_demo::InputData>(
+            dev::cd606::tm::infra::KleisliUtils<M>::compose(
                 std::move(extractDouble)
-                , dev::cd606::tm::infra::KleisliUtils<M>::template compose<double>(
+                , dev::cd606::tm::infra::KleisliUtils<M>::compose(
                     std::move(duplicator)
-                    , dev::cd606::tm::infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                    , dev::cd606::tm::infra::KleisliUtils<M>::compose(
                         std::move(exponentialAverageWithInputAttached)
-                        , dev::cd606::tm::infra::KleisliUtils<M>::template compose<std::tuple<double,double>>(
+                        , dev::cd606::tm::infra::KleisliUtils<M>::compose(
                             std::move(filterValue)
                             , std::move(assembleMainLogicInput)
                         )
