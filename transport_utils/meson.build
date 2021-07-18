@@ -40,3 +40,9 @@ tm_byte_data_chain_transcriber_exe = executable(
     , link_args : byte_data_chain_transcriber_link_args
     , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('tclap')]
 )
+tm_rpc_delay_measurer_exe = executable(
+    'tm_rpc_delay_measurer'
+    , ['rpc_delay_measurer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
+)
