@@ -5,7 +5,6 @@
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
-#include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
@@ -62,6 +61,7 @@ void runClient(std::string const &serviceDescriptor, int repeatTimes) {
     Environment env;
     R r(&env);
     int64_t count = 0;
+    int64_t recvCount = 0;
 
     infra::DeclarativeGraph<R>("", {
         {"importer", [repeatTimes](Environment *e) -> std::tuple<bool, M::Data<int>> {
@@ -93,18 +93,12 @@ void runClient(std::string const &serviceDescriptor, int repeatTimes) {
             };
         }}
         , {"facility", transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility<FacilityInput,FacilityOutput>(r, serviceDescriptor)}
-        , {"exporter", [&count,repeatTimes](M::InnerData<M::KeyedData<FacilityInput,FacilityOutput>> &&data) {
+        , {"exporter", [&count,&recvCount,repeatTimes](M::InnerData<M::KeyedData<FacilityInput,FacilityOutput>> &&data) {
             auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
-            /*
-            std::ostringstream oss;
-            oss << "Input: " << data.timedData.value.key.key()
-                << ", Output: " << data.timedData.value.data
-                << ", Now: " << now;
-            data.environment->log(infra::LogLevel::Info, oss.str());
-            */
             count += (now-data.timedData.value.key.key().timestamp);
+            ++recvCount;
             if (data.timedData.value.key.key().data >= repeatTimes) {
-                data.environment->log(infra::LogLevel::Info, std::string("average delay is ")+std::to_string(count*1.0/repeatTimes)+" microseconds");
+                data.environment->log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
                 data.environment->exit();
             }
         }}
