@@ -70,7 +70,7 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
     int64_t count = 0;
     int64_t recvCount = 0;
 
-    auto facilitioid = transport::MultiTransportRemoteFacilityManagingUtils<R>
+    auto facilitioidAndTrigger = transport::MultiTransportRemoteFacilityManagingUtils<R>
         ::setupSimpleRemoteFacilitioid<FacilityInput, FacilityOutput>
         (
             r 
@@ -79,7 +79,7 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
         );
 
     infra::DeclarativeGraph<R>("", {
-        {"importer", [repeatTimes](Environment *e) -> std::tuple<bool, M::Data<int>> {
+        {"data", infra::DelayImporter<basic::VoidStruct>{}, [repeatTimes](Environment *e) -> std::tuple<bool, M::Data<int>> {
             static int count = 0;
             ++count;
             return std::tuple<bool, M::Data<int>> {
@@ -116,8 +116,9 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
                 data.environment->exit();
             }
         }}
-        , {"importer", "keyify"}
-        , {"keyify", facilitioid, "exporter"}
+        , {"data", "keyify"}
+        , {"keyify", facilitioidAndTrigger.facility, "exporter"}
+        , {facilitioidAndTrigger.facilityFirstReady.clone(), "data"}
     })(r);
     r.finalize();
     infra::terminationController(infra::RunForever {});
