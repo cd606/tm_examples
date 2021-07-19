@@ -10,6 +10,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
+#include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
 #include <tclap/CmdLine.h>
 
@@ -21,7 +22,8 @@ using Environment = infra::Environment<
     basic::SpdLoggingComponent,
     basic::real_time_clock::ClockComponent,
     transport::CrossGuidComponent,
-    transport::AllNetworkTransportComponents
+    transport::AllNetworkTransportComponents,
+    transport::HeartbeatAndAlertComponent
 >;
 using M = infra::RealTimeApp<Environment>;
 using R = infra::AppRunner<M>;
@@ -38,9 +40,14 @@ TM_BASIC_CBOR_CAPABLE_STRUCT(FacilityOutput, FACILITY_OUTPUT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(FacilityInput, FACILITY_INPUT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(FacilityOutput, FACILITY_OUTPUT_FIELDS);
 
-void runServer(std::string const &serviceDescriptor) {
+void runServer(std::string const &serviceDescriptor, transport::HeartbeatAndAlertComponentTouchupParameters const &heartbeatParam) {
     Environment env;
     R r(&env);
+
+    transport::HeartbeatAndAlertComponentTouchup<R> {
+        r 
+        , heartbeatParam
+    };
 
     infra::GenericComponentLiftAndRegistration<R> _(r);
     auto facility = _("facility", infra::LiftAsFacility{}, [](FacilityInput &&x) -> FacilityOutput {
@@ -57,11 +64,19 @@ void runServer(std::string const &serviceDescriptor) {
     infra::terminationController(infra::RunForever {});
 }
 
-void runClient(std::string const &serviceDescriptor, int repeatTimes) {
+void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes) {
     Environment env;
     R r(&env);
     int64_t count = 0;
     int64_t recvCount = 0;
+
+    auto facilitioid = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupSimpleRemoteFacilitioid<FacilityInput, FacilityOutput>
+        (
+            r 
+            , spec
+            , "remoteConnection"
+        );
 
     infra::DeclarativeGraph<R>("", {
         {"importer", [repeatTimes](Environment *e) -> std::tuple<bool, M::Data<int>> {
@@ -92,7 +107,6 @@ void runClient(std::string const &serviceDescriptor, int repeatTimes) {
                 }
             };
         }}
-        , {"facility", transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility<FacilityInput,FacilityOutput>(r, serviceDescriptor)}
         , {"exporter", [&count,&recvCount,repeatTimes](M::InnerData<M::KeyedData<FacilityInput,FacilityOutput>> &&data) {
             auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
             count += (now-data.timedData.value.key.key().timestamp);
@@ -103,7 +117,7 @@ void runClient(std::string const &serviceDescriptor, int repeatTimes) {
             }
         }}
         , {"importer", "keyify"}
-        , {"keyify", "facility", "exporter"}
+        , {"keyify", facilitioid, "exporter"}
     })(r);
     r.finalize();
     infra::terminationController(infra::RunForever {});
@@ -112,20 +126,49 @@ void runClient(std::string const &serviceDescriptor, int repeatTimes) {
 int main(int argc, char **argv) {
     TCLAP::CmdLine cmd("RPC Delay Measurer", ' ', "0.0.1");
     TCLAP::ValueArg<std::string> modeArg("m", "mode", "server or client", true, "", "string");
-    TCLAP::ValueArg<std::string> serviceDescriptorArg("d", "serviceDescriptor", "service descriptor", true, "", "string");
+    TCLAP::ValueArg<std::string> serviceDescriptorArg("d", "serviceDescriptor", "service descriptor", false, "", "string");
+    TCLAP::ValueArg<std::string> heartbeatDescriptorArg("H", "heartbeatDescriptor", "heartbeat descriptor", false, "", "string");
+    TCLAP::ValueArg<std::string> heartbeatTopicArg("T", "heartbeatTopic", "heartbeat topic", false, "tm.examples.heartbeats", "string");
+    TCLAP::ValueArg<std::string> heartbeatIdentityArg("I", "heartbeatIdentity", "heartbeat identity", false, "rpc_delay_measurer", "string");
     TCLAP::ValueArg<int> repeatTimesArg("r", "repeatTimes", "repeat times", false, 1000, "int");
     cmd.add(modeArg);
     cmd.add(serviceDescriptorArg);
+    cmd.add(heartbeatDescriptorArg);
+    cmd.add(heartbeatTopicArg);
+    cmd.add(heartbeatIdentityArg);
     cmd.add(repeatTimesArg);    
     
     cmd.parse(argc, argv);
 
     if (modeArg.getValue() == "server") {
-        runServer(serviceDescriptorArg.getValue());
+        if (!serviceDescriptorArg.isSet()) {
+            std::cerr << "Server mode requires descriptor\n";
+            return 1;
+        }
+        transport::HeartbeatAndAlertComponentTouchupParameters heartbeatParam {
+            heartbeatDescriptorArg.getValue()
+            , heartbeatTopicArg.getValue()
+            , heartbeatIdentityArg.getValue()
+            , std::chrono::seconds(2)
+        };
+        runServer(serviceDescriptorArg.getValue(), heartbeatParam);
         return 0;
     } else if (modeArg.getValue() == "client") {
-        runClient(serviceDescriptorArg.getValue(), repeatTimesArg.getValue());
-        return 0;
+        if (serviceDescriptorArg.isSet()) {
+            runClient(serviceDescriptorArg.getValue(), repeatTimesArg.getValue());
+            return 0;
+        } else if (heartbeatDescriptorArg.isSet()) {
+            runClient(transport::SimpleRemoteFacilitySpecByHeartbeat {
+                heartbeatDescriptorArg.getValue()
+                , heartbeatTopicArg.getValue()
+                , std::regex {heartbeatIdentityArg.getValue()}
+                , "facility"
+            }, repeatTimesArg.getValue());
+            return 0;
+        } else {
+            std::cerr << "Client mode requires either service descriptor or heartbeat descriptor\n";
+            return 1;
+        }
     } else {
         std::cerr << "Mode must be server or client\n";
         return 1;
