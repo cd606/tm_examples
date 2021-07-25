@@ -3,7 +3,6 @@ import * as TMBasic from '../../../tm_basic/node_lib/TMBasic'
 import * as TMTransport from '../../../tm_transport/node_lib/TMTransport'
 import * as yargs from 'yargs'
 import * as cbor from 'cbor'
-import * as microtime from 'microtime'
 
 type FacilityInput = [number, number];
 type FacilityOutput = [number];
