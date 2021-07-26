@@ -47,6 +47,7 @@ async function runClient(
     let env = new TMBasic.ClockEnv();
     let r = new TMInfra.RealTimeApp.Runner<TMBasic.ClockEnv>(env);
     r.finalize();
+    let firstTimeStamp = 0;
     let count = 0;
     let recvCount = 0;
     let importerCount = 0;
@@ -85,8 +86,12 @@ async function runClient(
             let now = x.timedData.timePoint.getTime();
             count += now-x.timedData.value.key.key[0];
             ++recvCount;
+            if (x.timedData.value.key.key[1] == 1) {
+                firstTimeStamp = x.timedData.value.key.key[0];
+            }
             if (x.timedData.value.key.key[1] >= repeatTimes) {
                 console.log(`average delay of ${recvCount} is ${count*1.0/recvCount} milliseconds`);
+                console.log(`total time for ${recvCount} is ${now-firstTimeStamp} milliseconds`);
                 process.exit(0);
             }
         }

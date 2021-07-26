@@ -56,6 +56,7 @@ namespace rpc_delay_measurer
         {
             var env = new ClockEnv();
             var r = new Runner<ClockEnv>(env);
+            Int64 firstTimeStamp = 0;
             Int64 count = 0;
             Int64 recvCount = 0;
             int importerCount = 0;
@@ -95,9 +96,13 @@ namespace rpc_delay_measurer
                     var now = data.timedData.timePoint;
                     count += now-data.timedData.value.key.key.timestamp;
                     ++recvCount;
+                    if (data.timedData.value.key.key.data == 1) {
+                        firstTimeStamp = data.timedData.value.key.key.timestamp;
+                    }
                     if (data.timedData.value.key.key.data >= repeatTimes)
                     {
                         env.log(LogLevel.Info, $"average delay of {recvCount} calls is {count*1.0/recvCount} milliseconds");
+                        env.log(LogLevel.Info, $"total time for {recvCount} calls is {now-firstTimeStamp} milliseconds");
                         env.exit();
                     }
                 }
