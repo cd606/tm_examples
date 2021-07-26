@@ -67,6 +67,7 @@ void runServer(std::string const &serviceDescriptor, transport::HeartbeatAndAler
 void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes) {
     Environment env;
     R r(&env);
+    int64_t firstTimeStamp = 0;
     int64_t count = 0;
     int64_t recvCount = 0;
 
@@ -107,12 +108,16 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
                 }
             };
         }}
-        , {"exporter", [&count,&recvCount,repeatTimes](M::InnerData<M::KeyedData<FacilityInput,FacilityOutput>> &&data) {
+        , {"exporter", [&firstTimeStamp,&count,&recvCount,repeatTimes](M::InnerData<M::KeyedData<FacilityInput,FacilityOutput>> &&data) {
             auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
             count += (now-data.timedData.value.key.key().timestamp);
+            if (data.timedData.value.key.key().data == 1) {
+                firstTimeStamp = data.timedData.value.key.key().timestamp;
+            }
             ++recvCount;
             if (data.timedData.value.key.key().data >= repeatTimes) {
                 data.environment->log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+                data.environment->log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
                 data.environment->exit();
             }
         }}
