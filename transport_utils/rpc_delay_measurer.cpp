@@ -149,16 +149,18 @@ void runClientSynchronousMode(transport::SimpleRemoteFacilitySpec const &spec, i
         auto data = r.placeOrderWithFacility(
             FacilityInput {infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now()), ii+1}
             , facility
-        )->front();
-        auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
-        count += (now-data.timedData.value.key.key().timestamp);
-        if (data.timedData.value.key.key().data == 1) {
-            firstTimeStamp = data.timedData.value.key.key().timestamp;
-        }
-        ++recvCount;
-        if (data.timedData.value.key.key().data >= repeatTimes) {
-            env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
-            env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+        )->front_with_time_out(std::chrono::milliseconds(500));
+        if (data) {
+            auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data->timedData.timePoint);
+            count += (now-data->timedData.value.key.key().timestamp);
+            if (data->timedData.value.key.key().data == 1) {
+                firstTimeStamp = data->timedData.value.key.key().timestamp;
+            }
+            ++recvCount;
+            if (data->timedData.value.key.key().data >= repeatTimes) {
+                env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+                env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+            }
         }
     }
     env.log(infra::LogLevel::Info, "done");
