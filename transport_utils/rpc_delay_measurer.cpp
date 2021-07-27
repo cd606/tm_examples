@@ -2,6 +2,7 @@
 #include <tm_kit/infra/TerminationController.hpp>
 #include <tm_kit/infra/RealTimeApp.hpp>
 #include <tm_kit/infra/DeclarativeGraph.hpp>
+#include <tm_kit/infra/SynchronousRunner.hpp>
 
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
@@ -9,6 +10,7 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils_SynchronousRunner.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 
@@ -27,6 +29,7 @@ using Environment = infra::Environment<
 >;
 using M = infra::RealTimeApp<Environment>;
 using R = infra::AppRunner<M>;
+using SR = infra::SynchronousRunner<M>;
 
 #define FACILITY_INPUT_FIELDS \
     ((int64_t, timestamp)) \
@@ -129,9 +132,41 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
     infra::terminationController(infra::RunForever {});
 }
 
+void runClientSynchronousMode(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes) {
+    Environment env;
+    SR r(&env);
+    int64_t firstTimeStamp = 0;
+    int64_t count = 0;
+    int64_t recvCount = 0;
+
+    auto facility =  transport::MultiTransportRemoteFacilityManagingUtils<SR>
+        ::setupSimpleRemoteFacility<FacilityInput, FacilityOutput>
+        (
+            r 
+            , spec
+        );
+    for (int ii=0; ii<repeatTimes; ++ii) {
+        auto data = r.placeOrderWithFacility(
+            FacilityInput {infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now()), ii+1}
+            , facility
+        )->front();
+        auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
+        count += (now-data.timedData.value.key.key().timestamp);
+        if (data.timedData.value.key.key().data == 1) {
+            firstTimeStamp = data.timedData.value.key.key().timestamp;
+        }
+        ++recvCount;
+        if (data.timedData.value.key.key().data >= repeatTimes) {
+            env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+            env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+        }
+    }
+    env.log(infra::LogLevel::Info, "done");
+}
+
 int main(int argc, char **argv) {
     TCLAP::CmdLine cmd("RPC Delay Measurer", ' ', "0.0.1");
-    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server or client", true, "", "string");
+    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server, client or client-sync", true, "", "string");
     TCLAP::ValueArg<std::string> serviceDescriptorArg("d", "serviceDescriptor", "service descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatDescriptorArg("H", "heartbeatDescriptor", "heartbeat descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatTopicArg("T", "heartbeatTopic", "heartbeat topic", false, "tm.examples.heartbeats", "string");
@@ -175,8 +210,24 @@ int main(int argc, char **argv) {
             std::cerr << "Client mode requires either service descriptor or heartbeat descriptor\n";
             return 1;
         }
+    } else if (modeArg.getValue() == "client-sync") {
+        if (serviceDescriptorArg.isSet()) {
+            runClientSynchronousMode(serviceDescriptorArg.getValue(), repeatTimesArg.getValue());
+            return 0;
+        } else if (heartbeatDescriptorArg.isSet()) {
+            runClientSynchronousMode(transport::SimpleRemoteFacilitySpecByHeartbeat {
+                heartbeatDescriptorArg.getValue()
+                , heartbeatTopicArg.getValue()
+                , std::regex {heartbeatIdentityArg.getValue()}
+                , "facility"
+            }, repeatTimesArg.getValue());
+            return 0;
+        } else {
+            std::cerr << "Client-sync mode requires either service descriptor or heartbeat descriptor\n";
+            return 1;
+        }
     } else {
-        std::cerr << "Mode must be server or client\n";
+        std::cerr << "Mode must be server, client or client-sync\n";
         return 1;
     }
 }
