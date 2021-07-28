@@ -46,7 +46,6 @@ async function runClient(
 ) {
     let env = new TMBasic.ClockEnv();
     let r = new TMInfra.RealTimeApp.Runner<TMBasic.ClockEnv>(env);
-    r.finalize();
     let firstTimeStamp = 0;
     let count = 0;
     let recvCount = 0;
@@ -143,11 +142,68 @@ async function runClient(
     r.finalize();
 }
 
+async function runClientSync(
+    serviceDescriptor : string 
+    , heartbeatDescriptor : string
+    , heartbeatTopic : string
+    , heartbeatIdentity : string
+    , repeatTimes : number
+) {
+    let env = new TMBasic.ClockEnv();
+    let r = new TMInfra.RealTimeApp.SynchronousRunner<TMBasic.ClockEnv>(env);
+    let firstTimeStamp = 0;
+    let count = 0;
+    let recvCount = 0;
+
+    let facility : TMInfra.RealTimeApp.OnOrderFacility<TMBasic.ClockEnv,FacilityInput,FacilityOutput>;
+    if (serviceDescriptor != '') {
+        facility = TMTransport.RemoteComponents.createFacilityProxy<TMBasic.ClockEnv,FacilityInput,FacilityOutput>(
+            (x) => cbor.encode(x) as Buffer 
+            , (d) => cbor.decode(d) as FacilityOutput 
+            , {
+                address : serviceDescriptor
+            }
+        );
+    } else {
+        facility = await TMTransport.RemoteComponents.createRemoteFacilityFromHeartbeatSynchronously<TMBasic.ClockEnv,FacilityInput,FacilityOutput>(
+            r
+            , heartbeatDescriptor
+            , heartbeatTopic
+            , new RegExp(heartbeatIdentity)
+            , 'facility'
+            , (x) => cbor.encode(x) as Buffer 
+            , (d) => cbor.decode(d) as FacilityOutput 
+        );
+    }
+    for (let ii=0; ii<repeatTimes; ++ii) {
+        for await (const d of r.placeOrderWithFacility(
+            TMInfra.pureTimedDataWithEnvironment(
+                env, TMInfra.keyify<FacilityInput>(
+                    [env.now().getTime(), (ii+1)]
+                )
+            )
+            , facility
+        )) {
+            let now = d.timedData.timePoint.getTime();
+            count += now-d.timedData.value.key.key[0];
+            ++recvCount;
+            if (d.timedData.value.key.key[1] == 1) {
+                firstTimeStamp = d.timedData.value.key.key[0];
+            }
+            if (d.timedData.value.key.key[1] >= repeatTimes) {
+                console.log(`average delay of ${recvCount} is ${count*1.0/recvCount} milliseconds`);
+                console.log(`total time for ${recvCount} is ${now-firstTimeStamp} milliseconds`);
+                process.exit(0);
+            }
+        }
+    }
+}
+
 yargs
     .scriptName('rpc_delay_measurer')
     .usage('$0 <options>')
     .option('mode', {
-        describe : 'server or client'
+        describe : 'server or client or client-sync'
         , type : 'string'
         , nargs : 1
         , demandOption : true
@@ -190,7 +246,7 @@ yargs
     ;
 
 enum Mode {
-    Server, Client
+    Server, Client, ClientSync
 };
 
 let mode : Mode;
@@ -199,8 +255,10 @@ if (modeStr == 'server') {
     mode = Mode.Server;
 } else if (modeStr == 'client') {
     mode = Mode.Client;
+} else if (modeStr == 'client-sync') {
+    mode = Mode.ClientSync;
 } else {
-    console.error(`Unknown mode string '${mode}', must be server or client`);
+    console.error(`Unknown mode string '${mode}', must be server, client or client-sync`);
     process.exit(0);
 }
 let serviceDescriptor = yargs.argv.serviceDescriptor as string;
@@ -208,7 +266,7 @@ let heartbeatDescriptor = yargs.argv.heartbeatDescriptor as string;
 if (mode == Mode.Server && serviceDescriptor == '') {
     console.error("In server mode, service descriptor must be provided");
     process.exit(0);
-} else if (mode == Mode.Client && serviceDescriptor == '' && heartbeatDescriptor == '') {
+} else if ((mode == Mode.Client || mode == Mode.ClientSync) && serviceDescriptor == '' && heartbeatDescriptor == '') {
     console.error("In client mode, either service descriptor or heartbeat descriptor must be provided");
     process.exit(0);
 }
@@ -218,6 +276,8 @@ let repeatTimes = yargs.argv.repeatTimes as number;
 
 if (mode == Mode.Server) {
     runServer(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity);
-} else {
+} else if (mode == Mode.Client) {
     runClient(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity, repeatTimes);
+} else if (mode == Mode.ClientSync) {
+    runClientSync(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity, repeatTimes);
 }
