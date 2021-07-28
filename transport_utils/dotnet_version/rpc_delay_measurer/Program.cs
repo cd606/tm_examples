@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Dev.CD606.TM.Infra;
 using Dev.CD606.TM.Infra.RealTimeApp;
 using Dev.CD606.TM.Basic;
@@ -23,6 +24,7 @@ namespace rpc_delay_measurer
     {
         Server 
         , Client
+        , ClientSync
     }
     class Program
     {
@@ -158,6 +160,62 @@ namespace rpc_delay_measurer
             r.finalize();
             RealTimeAppUtils<ClockEnv>.runForever(env);
         }
+        static async Task runClientSync(string serviceDescriptor, string heartbeatDescriptor, string heartbeatTopic, string heartbeatIdentity, int repeatTimes)
+        {
+            var env = new ClockEnv();
+            var r = new SynchronousRunner<ClockEnv>(env);
+            Int64 firstTimeStamp = 0;
+            Int64 count = 0;
+            Int64 recvCount = 0;
+
+            AbstractOnOrderFacility<ClockEnv,FacilityInput,FacilityOutput> facility;
+            if (serviceDescriptor == null)
+            {
+                facility = await MultiTransportFacility<ClockEnv>.CreateRemoteFacilityFromHeartbeatSynchronously<FacilityInput,FacilityOutput>(
+                    r 
+                    , heartbeatDescriptor
+                    , heartbeatTopic
+                    , new System.Text.RegularExpressions.Regex(heartbeatIdentity)
+                    , "facility"
+                    , (x) => CborEncoder<FacilityInput>.Encode(x).EncodeToBytes()
+                    , (b) => CborDecoder<FacilityOutput>.Decode(CBORObject.DecodeFromBytes(b))
+                );
+            }
+            else 
+            {
+                facility = MultiTransportFacility<ClockEnv>.CreateFacility<FacilityInput,FacilityOutput>(
+                    (x) => CborEncoder<FacilityInput>.Encode(x).EncodeToBytes()
+                    , (b) => CborDecoder<FacilityOutput>.Decode(CBORObject.DecodeFromBytes(b))
+                    , serviceDescriptor
+                );
+            }
+            for (var ii=0; ii<repeatTimes; ++ii)
+            {
+                await foreach (var res in r.placeOrderWithFacility(
+                    new FacilityInput() {timestamp=env.now().ToUnixTimeMilliseconds(), data=(ii+1)}
+                    , facility
+                ))
+                {
+                    var now = res.timedData.timePoint;
+                    var data = res.timedData.value;
+                    if (data.key.key.data == 1)
+                    {
+                        firstTimeStamp = data.key.key.timestamp;
+                    }
+                    count += now-data.key.key.timestamp;
+                    ++recvCount;
+                    if (data.key.key.data >= repeatTimes)
+                    {
+                        env.log(LogLevel.Info, $"average delay of {recvCount} calls is {count*1.0/recvCount} milliseconds");
+                        env.log(LogLevel.Info, $"total time for {recvCount} calls is {now-firstTimeStamp} milliseconds");
+                        if (serviceDescriptor == null)
+                        {
+                            env.exit();
+                        }
+                    }
+                }
+            }
+        }
         static void Main(string[] args)
         {
             CommandLineApplication app = new CommandLineApplication(
@@ -165,7 +223,7 @@ namespace rpc_delay_measurer
             );
             CommandOption modeOption = app.Option(
                 "-m|--mode <mode>"
-                , "Mode of operation (server|client)"
+                , "Mode of operation (server|client|client-sync)"
                 , CommandOptionType.SingleValue
             );
             CommandOption serviceDescriptorOption = app.Option(
@@ -209,6 +267,10 @@ namespace rpc_delay_measurer
                 else if (modeStr.Equals("client"))
                 {
                     mode = Mode.Client;
+                }
+                else if (modeStr.Equals("client-sync"))
+                {
+                    mode = Mode.ClientSync;
                 }
                 else 
                 {
@@ -262,9 +324,13 @@ namespace rpc_delay_measurer
                 {
                     runServer(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity);
                 }
-                else 
+                else if (mode == Mode.Client)
                 {
                     runClient(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity, repeatTimes);
+                }
+                else if (mode == Mode.ClientSync)
+                {
+                    runClientSync(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity, repeatTimes).Wait();
                 }
                 return 0;
             }); 
