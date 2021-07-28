@@ -250,7 +250,7 @@ enum Mode {
 };
 
 let mode : Mode;
-let modeStr = yargs.argv.mode as string;
+let modeStr = yargs.argv['mode'] as string;
 if (modeStr == 'server') {
     mode = Mode.Server;
 } else if (modeStr == 'client') {
@@ -261,8 +261,8 @@ if (modeStr == 'server') {
     console.error(`Unknown mode string '${mode}', must be server, client or client-sync`);
     process.exit(0);
 }
-let serviceDescriptor = yargs.argv.serviceDescriptor as string;
-let heartbeatDescriptor = yargs.argv.heartbeatDescriptor as string;
+let serviceDescriptor = yargs.argv['serviceDescriptor'] as string;
+let heartbeatDescriptor = yargs.argv['heartbeatDescriptor'] as string;
 if (mode == Mode.Server && serviceDescriptor == '') {
     console.error("In server mode, service descriptor must be provided");
     process.exit(0);
@@ -270,9 +270,9 @@ if (mode == Mode.Server && serviceDescriptor == '') {
     console.error("In client mode, either service descriptor or heartbeat descriptor must be provided");
     process.exit(0);
 }
-let heartbeatTopic = yargs.argv.heartbeatTopic as string;
-let heartbeatIdentity = yargs.argv.heartbeatIdentity as string;
-let repeatTimes = yargs.argv.repeatTimes as number;
+let heartbeatTopic = yargs.argv['heartbeatTopic'] as string;
+let heartbeatIdentity = yargs.argv['heartbeatIdentity'] as string;
+let repeatTimes = yargs.argv['repeatTimes'] as number;
 
 if (mode == Mode.Server) {
     runServer(serviceDescriptor, heartbeatDescriptor, heartbeatTopic, heartbeatIdentity);
