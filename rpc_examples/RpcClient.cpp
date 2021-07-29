@@ -25,69 +25,43 @@ int main() {
     Environment env;
     SR r(&env);
 
-    {
-        std::cout << "=============SIMPLE RPC====================\n";
-        auto simpleCallRes = r.placeOrderWithFacility(
-            rpc_examples::Input {5, "abc"}
-            , transport::MultiTransportRemoteFacilityManagingUtils<SR>
-                ::setupSimpleRemoteFacility<rpc_examples::Input, rpc_examples::Output>(
-                "redis://127.0.0.1:6379:::rpc_example_simple"
-            )
-        )->front();
-        std::cout << simpleCallRes << '\n';
-    }
+    std::vector<std::tuple<
+        std::string, std::string, bool
+    >> descriptors {
+        {"redis://127.0.0.1:6379:::rpc_example_simple", "SIMPLE RPC", false}
+        , {"redis://127.0.0.1:6379:::rpc_example_client_stream", "CLIENT STREAM RPC", true}
+        , {"redis://127.0.0.1:6379:::rpc_example_server_stream", "SERVER STREAM RPC", false}
+        , {"redis://127.0.0.1:6379:::rpc_example_both_stream", "BOTH STREAM RPC", true}
+    };
 
-    {
-        std::cout << "=============CLIENT STREAM RPC====================\n";
+    for (auto const &desc : descriptors) {
+        std::cout << "=============" << std::get<1>(desc) << "====================\n";
         auto streamer = r.facilityStreamer(
             transport::MultiTransportRemoteFacilityManagingUtils<SR>
                 ::setupSimpleRemoteFacility<rpc_examples::Input, rpc_examples::Output>(
-                "redis://127.0.0.1:6379:::rpc_example_client_stream"
+                std::get<0>(desc)
             )
         );
         streamer << rpc_examples::Input {5, "abc"};
-        streamer << rpc_examples::Input {-1, "bcd"};
-        streamer << rpc_examples::Input {-2, "cde"};
-        streamer << rpc_examples::Input {-3, "def"};
-        streamer << rpc_examples::Input {-4, "efg"}; //total 5 inputs (as indicated by the first input)
-        std::cout << streamer->front() << '\n';
-    }
-
-    {
-        std::cout << "=============SERVER STREAM RPC====================\n";
-        auto serverStreamCallRes = r.placeOrderWithFacility(
-            rpc_examples::Input {5, "abc"}
-            , transport::MultiTransportRemoteFacilityManagingUtils<SR>
-                ::setupSimpleRemoteFacility<rpc_examples::Input, rpc_examples::Output>(
-                "redis://127.0.0.1:6379:::rpc_example_server_stream"
-            )
-        );
-        for (auto const &r : *serverStreamCallRes) {
-            std::cout << r << '\n';
+        if (std::get<2>(desc)) {
+            streamer << rpc_examples::Input {-1, "bcd"};
+            streamer << rpc_examples::Input {-2, "cde"};
+            streamer << rpc_examples::Input {-3, "def"};
+            streamer << rpc_examples::Input {-4, "efg"}; //total 5 inputs for the ones 
+                                                         //requiring client-side streaming
+                                                         //(as indicated by the first input)
         }
-    }
-
-    {
-        std::cout << "=============BOTH STREAM RPC====================\n";
-        auto streamer = r.facilityStreamer(
-            transport::MultiTransportRemoteFacilityManagingUtils<SR>
-                ::setupSimpleRemoteFacility<rpc_examples::Input, rpc_examples::Output>(
-                "redis://127.0.0.1:6379:::rpc_example_both_stream"
-            )
-        );
-        streamer << rpc_examples::Input {5, "abc"};
-        streamer << rpc_examples::Input {-1, "bcd"};
-        streamer << rpc_examples::Input {-2, "cde"};
-        streamer << rpc_examples::Input {-3, "def"};
-        streamer << rpc_examples::Input {-4, "efg"}; //total 5 inputs (as indicated by the first input)
+        //The two ways of accessing the result below are equivalent in this case.
+        //The first way would be more useful if more control (e.g. timeout, 
+        //interleaving read/write) is desired, while the second way is more straightforward.
         /*
         while (!streamer->empty()) {
-            std::cout << streamer->front() << '\n';
+            std::cout << streamer->front().timedData.value.data << '\n';
             streamer->pop_front();
         }
         */
-        for (auto const &r : *streamer) {
-            std::cout << r << '\n';
+        for (auto const &d : *streamer) {
+            std::cout << d.timedData.value.data << '\n';
         }
     }
 }
