@@ -22,7 +22,7 @@ namespace rpc_examples {
         -> typename R::template OnOrderFacilityPtr<Input,Output>
     {
         using M = typename R::AppType;
-        class Facility : public M::template AbstractOnOrderFacility<Input,Output> {
+        class Facility final : public M::template AbstractOnOrderFacility<Input,Output> {
         private:
             struct PerIDData {
                 std::string res;
@@ -31,9 +31,10 @@ namespace rpc_examples {
             std::unordered_map<typename M::EnvironmentType::IDType, PerIDData> remainingInputs_;
         public:
             Facility() : remainingInputs_() {}
-            void handle(typename M::template InnerData<
+            virtual ~Facility() = default;
+            virtual void handle(typename M::template InnerData<
                 typename M::template Key<Input>
-            > &&input) {
+            > &&input) override final {
                 auto id = input.timedData.value.id();
                 auto const &realInput = input.timedData.value.key();
                 auto iter = remainingInputs_.find(id);
@@ -67,12 +68,13 @@ namespace rpc_examples {
         -> typename R::template OnOrderFacilityPtr<Input,Output>
     {
         using M = typename R::AppType;
-        class Facility : public M::template AbstractOnOrderFacility<Input,Output> {
+        class Facility final : public M::template AbstractOnOrderFacility<Input,Output> {
         public:
             Facility() {}
-            void handle(typename M::template InnerData<
+            virtual ~Facility() = default;
+            virtual void handle(typename M::template InnerData<
                 typename M::template Key<Input>
-            > &&input) {
+            > &&input) override final {
                 auto id = input.timedData.value.id();
                 auto const &realInput = input.timedData.value.key();
                 int resultCount = std::max(1,realInput.x);
@@ -95,7 +97,7 @@ namespace rpc_examples {
         -> typename R::template OnOrderFacilityPtr<Input,Output>
     {
         using M = typename R::AppType;
-        class Facility : public M::template AbstractOnOrderFacility<Input,Output> {
+        class Facility final : public M::template AbstractOnOrderFacility<Input,Output> {
         private:
             struct PerIDData {
                 std::vector<Output> res;
@@ -104,9 +106,10 @@ namespace rpc_examples {
             std::unordered_map<typename M::EnvironmentType::IDType, PerIDData> remainingInputs_;
         public:
             Facility() : remainingInputs_() {}
-            void handle(typename M::template InnerData<
+            virtual ~Facility() = default;
+            virtual void handle(typename M::template InnerData<
                 typename M::template Key<Input>
-            > &&input) {
+            > &&input) override final {
                 auto id = input.timedData.value.id();
                 auto const &realInput = input.timedData.value.key();
                 auto iter = remainingInputs_.find(id);
