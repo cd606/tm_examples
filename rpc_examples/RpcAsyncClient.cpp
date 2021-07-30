@@ -81,31 +81,6 @@ int main() {
             , {"id", (std::get<1>(desc)+"/keyify"), 1}
         })(r);
     }
-    /*
-    for (auto const &desc : descriptors) {
-        infra::DeclarativeGraph<R>("", {
-            infra::DeclarativeGraph<R>(std::get<1>(desc), {
-
-            })
-            
-            {(std::get<1>(desc)+" passthrough"), CFU::idFunc<rpc_examples::Input>(), infra::LiftParameters<M::TimePoint>().FireOnceOnly(!std::get<2>(desc))}
-            , {(std::get<1>(desc)+" keyify"), CFU::keyifyWithProvidedID<rpc_examples::Input>()}
-            , {(std::get<1>(desc)+" facility"), transport::MultiTransportRemoteFacilityManagingUtils<R>
-                ::setupSimpleRemoteFacility<rpc_examples::Input, rpc_examples::Output>(
-                std::get<0>(desc)
-            )}
-            , {(std::get<1>(desc)+" print"), [&env,nm=std::get<1>(desc)](M::KeyedData<rpc_examples::Input,rpc_examples::Output> &&x) {
-                std::ostringstream oss;
-                oss << nm << ": " << x.data;
-                env.log(infra::LogLevel::Info, oss.str());
-            }}
-            , {"source", (std::get<1>(desc)+" passthrough")}
-            , {"id", (std::get<1>(desc)+" keyify"), 1}
-            , {(std::get<1>(desc)+" passthrough"), (std::get<1>(desc)+" keyify"), 0}
-            , {(std::get<1>(desc)+" keyify"), (std::get<1>(desc)+" facility"), (std::get<1>(desc)+" print")}
-        })(r);
-    }
-    */
 
     r.finalize();
     infra::terminationController(infra::TerminateAfterDuration {std::chrono::seconds(2)});
