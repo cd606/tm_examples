@@ -16,3 +16,9 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
+executable(
+    'rpc_example_async_client'
+    , ['RpcAsyncClient.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
