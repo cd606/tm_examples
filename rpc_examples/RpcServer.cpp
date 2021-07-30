@@ -28,49 +28,28 @@ int main() {
     Environment env;
     R r(&env);
 
-    auto simple = rpc_examples::simpleFacility<R>();
-    infra::DeclarativeGraph<R>("", {
-        {"simple", simple}
-    })(r);
-    transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
-        r 
-        , simple
-        , "redis://127.0.0.1:6379:::rpc_example_simple"
-        , "simple_wrapper"
-    );
+    using FacilityCreator = R::OnOrderFacilityPtr<rpc_examples::Input,rpc_examples::Output> (*)();
+    std::vector<std::tuple<
+        FacilityCreator,std::string
+    >> specs {
+        {&rpc_examples::simpleFacility<R>, "simple"}
+        , {&rpc_examples::clientStreamFacility<R>, "client_stream"}
+        , {&rpc_examples::serverStreamFacility<R>, "server_stream"}
+        , {&rpc_examples::bothStreamFacility<R>, "both_stream"}
+    };
 
-    auto clientStream = rpc_examples::clientStreamFacility<R>();
-    infra::DeclarativeGraph<R>("", {
-        {"clientStream", clientStream}
-    })(r);
-    transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
-        r 
-        , clientStream
-        , "redis://127.0.0.1:6379:::rpc_example_client_stream"
-        , "client_stream_wrapper"
-    );
-
-    auto serverStream = rpc_examples::serverStreamFacility<R>();
-    infra::DeclarativeGraph<R>("", {
-        {"serverStream", serverStream}
-    })(r);
-    transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
-        r 
-        , serverStream
-        , "redis://127.0.0.1:6379:::rpc_example_server_stream"
-        , "server_stream_wrapper"
-    );
-
-    auto bothStream = rpc_examples::bothStreamFacility<R>();
-    infra::DeclarativeGraph<R>("", {
-        {"bothStream", bothStream}
-    })(r);
-    transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
-        r 
-        , bothStream
-        , "redis://127.0.0.1:6379:::rpc_example_both_stream"
-        , "both_stream_wrapper"
-    );
+    for (auto const &spec : specs) {
+        auto f = std::get<0>(spec)();
+        infra::DeclarativeGraph<R>("", {
+            {std::get<1>(spec), f}
+        })(r);
+        transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
+            r 
+            , f
+            , "redis://127.0.0.1:6379:::rpc_example_"+std::get<1>(spec)
+            , std::get<1>(spec)+"_wrapper"
+        );
+    }
 
     r.finalize();
     infra::terminationController(infra::RunForever {});
