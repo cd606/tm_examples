@@ -30,7 +30,7 @@ int main() {
     R r(&env);
 
     infra::DeclarativeGraph<R>("", {
-        {"source", [](Environment *env) -> std::tuple<bool, M::Data<rpc_examples::Input>> {
+        {"source", [](Environment *env) -> std::tuple<bool, rpc_examples::Input> {
             static int ii = -1;
             static const std::vector<rpc_examples::Input> values {
                 {5, "abc"}
@@ -40,14 +40,7 @@ int main() {
                 , {-4, "efg"}
             };
             ++ii;
-            return {ii < 4, M::InnerData<rpc_examples::Input> {
-                env 
-                , {
-                    env->now()
-                    , values[ii]
-                    , (ii>=4)
-                }
-            }};
+            return {ii < values.size()-1, values[ii]};
         }}
         , {"id", M::constFirstPushImporter<Environment::IDType>(env.new_id())}
     })(r);
