@@ -6,7 +6,7 @@ import * as util from 'util'
 import * as proto from 'protobufjs'
 
 yargs
-    .scriptName("cbor_data_chain_dumper")
+    .scriptName("chain_data_dumper")
     .usage("$0 <options>")
     .option('chain', {
         describe: 'chain locator'
