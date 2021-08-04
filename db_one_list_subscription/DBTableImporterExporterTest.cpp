@@ -36,7 +36,7 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(test_data, TestDataFields)
 
 int main(int argc, char **argv) {
     if (argc == 1) {
-        std::cerr << "Usage: db_table_importer_exporter_test DB_FILE [importer|exporter|exporter-batch|importer-sync|exporter-sync|exporter-batch-sync]\n";
+        std::cerr << "Usage: db_table_importer_exporter_test DB_FILE [importer|importer-repeated|importer-repeated-with-key|exporter|exporter-batch|importer-sync|exporter-sync|exporter-batch-sync]\n";
         return -1;
     }
     auto session = std::make_shared<soci::session>(
@@ -62,6 +62,49 @@ int main(int argc, char **argv) {
         })(r);
         r.finalize();
         infra::terminationController(infra::TerminateAfterDuration(std::chrono::seconds(1)));
+    } else if (std::string_view(argv[2]) == "importer-repeated") {
+        Env env; 
+        R r(&env);
+        infra::DeclarativeGraph<R>("", {
+            {"importer", transport::db_table_importer_exporter::DBTableImporterFactory<M>::createRepeatedImporter<test_data>(session, "test_table", std::chrono::seconds(1))}
+            , {"print", [&env](std::vector<test_data> &&x) {
+                env.log(infra::LogLevel::Info, "=============================");
+                std::ostringstream oss;
+                for (auto const &r : x) {
+                    oss.str("");
+                    oss << r;
+                    env.log(infra::LogLevel::Info, oss.str());
+                }
+            }}
+            , {"importer", "print"}
+        })(r);
+        r.finalize();
+        infra::terminationController(infra::RunForever {});
+    } else if (std::string_view(argv[2]) == "importer-repeated-with-key") {
+        Env env; 
+        R r(&env);
+        infra::DeclarativeGraph<R>("", {
+            {"importer", transport::db_table_importer_exporter::DBTableImporterFactory<M>::createRepeatedImporterWithKeyCheck<test_data>(
+                session
+                , "test_table"
+                , std::chrono::seconds(1)
+                , [](test_data const &x) {
+                    return x.name;
+                }
+            )}
+            , {"print", [&env](std::vector<test_data> &&x) {
+                env.log(infra::LogLevel::Info, "=============================");
+                std::ostringstream oss;
+                for (auto const &r : x) {
+                    oss.str("");
+                    oss << r;
+                    env.log(infra::LogLevel::Info, oss.str());
+                }
+            }}
+            , {"importer", "print"}
+        })(r);
+        r.finalize();
+        infra::terminationController(infra::RunForever {});
     } else if (std::string_view(argv[2]) == "exporter") {
         Env env; 
         R r(&env);
@@ -83,7 +126,7 @@ int main(int argc, char **argv) {
                 {"test1", 1, 1.2}, {"test2", 2, 2.3}
             })}
             , {"insert", transport::db_table_importer_exporter::DBTableExporterFactory<M>::createBatchExporter<test_data>(session, "test_table")}
-            , infra::DeclarativeGraphChain({"importer", "insert"})
+            , {"importer", "insert"}
         })(r);
         r.finalize();
         infra::terminationController(infra::TerminateAfterDuration(std::chrono::seconds(1)));
