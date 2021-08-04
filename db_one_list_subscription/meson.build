@@ -54,5 +54,10 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps, soci_dep, tm_db_one_list_subscription_boost_dep]
 )
+executable(
+    'db_table_importer_exporter_test'
+    , ['DBTableImporterExporterTest.cpp']
+    , dependencies: [common_deps, soci_dep]
+)
 subdir('gui_client')
 subdir('versionless_gui_client')
