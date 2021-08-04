@@ -40,6 +40,20 @@ tm_byte_data_chain_transcriber_exe = executable(
     , link_args : byte_data_chain_transcriber_link_args
     , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('tclap')]
 )
+tm_byte_data_chain_publisher_exe = executable(
+    'tm_byte_data_chain_publisher'
+    , ['byte_data_chain_publisher.cpp']
+    , include_directories: [inc]
+    , link_args : byte_data_chain_transcriber_link_args
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('tclap')]
+)
+tm_byte_data_chain_append_from_broadcast_exe = executable(
+    'tm_byte_data_chain_append_from_broadcast'
+    , ['byte_data_chain_append_from_broadcast.cpp']
+    , include_directories: [inc]
+    , link_args : byte_data_chain_transcriber_link_args
+    , dependencies: [common_deps, dependency('libetcdcpp'), dependency('hiredis'), dependency('tclap')]
+)
 tm_rpc_delay_measurer_exe = executable(
     'tm_rpc_delay_measurer'
     , ['rpc_delay_measurer.cpp']
