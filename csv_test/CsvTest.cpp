@@ -19,7 +19,7 @@ int main() {
     O::writeHeader(ss);
     test_data d;
     basic::struct_field_info_utils::StructFieldInfoBasedInitializer<test_data>::initialize(d);
-    d.name = "abc\"\\test";
+    d.name = "abc\"\\,,t,est";
     d.amount = 1;
     d.stat = 2.3;
     d.moreData[2] = 0.5f;
