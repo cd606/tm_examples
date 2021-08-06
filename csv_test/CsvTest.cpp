@@ -6,12 +6,21 @@
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
 #include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
 
-#define TestDataFields \
-    ((std::string, name)) \
-    ((int32_t, amount)) \
-    ((double, stat)) \
-    (((std::array<float, 5>), moreData)) \
-    ((std::tm, theTime))
+#ifdef _MSC_VER
+    #define TestDataFields \
+        ((std::string, name)) \
+        ((int32_t, amount)) \
+        ((double, stat)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<float, 5>), moreData)) \
+        ((std::tm, theTime))
+#else
+    #define TestDataFields \
+        ((std::string, name)) \
+        ((int32_t, amount)) \
+        ((double, stat)) \
+        (((std::array<float, 5>), moreData)) \
+        ((std::tm, theTime))
+#endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(test_data, TestDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(test_data, TestDataFields);
@@ -58,7 +67,6 @@ int main() {
 
     std::cout << ss.str() << "\n";
 
-    /*
     auto im = basic::struct_field_info_utils::StructFieldInfoBasedCsvImporterFactory<M>
         ::createImporter<test_data>(
             ss
@@ -68,11 +76,11 @@ int main() {
     for (auto const &d1 : *r.importItem(im)) {
         std::cout << d1.timedData.value << '\n';
     }
-    */
+    /*
     std::vector<test_data> x;
     basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<test_data>
         ::readInto(ss, std::back_inserter(x));
     for (auto const &d1 : x) {
         std::cout << d1 << '\n';
-    }
+    }*/
 }
