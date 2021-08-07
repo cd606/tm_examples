@@ -6,22 +6,29 @@
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
 #include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
 
+#define InsideDataFields \
+    ((std::string, s)) \
+    ((double, stat)) \
+    ((std::optional<int16_t>, i)) 
+
 #ifdef _MSC_VER
     #define TestDataFields \
         ((std::string, name)) \
         ((int32_t, amount)) \
-        ((std::optional<double>, stat)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<float, 5>), moreData)) \
+        ((std::optional<inside_data>, stat)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime))
 #else
     #define TestDataFields \
         ((std::string, name)) \
         ((int32_t, amount)) \
-        ((std::optional<double>, stat)) \
-        (((std::array<float, 5>), moreData)) \
+        ((std::optional<inside_data>, stat)) \
+        (((std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime))
 #endif
 
+TM_BASIC_CBOR_CAPABLE_STRUCT(inside_data, InsideDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(inside_data, InsideDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT(test_data, TestDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(test_data, TestDataFields);
 
@@ -50,9 +57,15 @@ int main() {
     basic::struct_field_info_utils::StructFieldInfoBasedInitializer<test_data>::initialize(d);
     d.name = "abc\"\\,,t,est";
     d.amount = 1;
-    d.moreData[2] = 0.5f;
+    d.moreData[2].stat = 0.5;
     d.theTime.tm_year=102;
 
+    std::cout << basic::struct_field_info_utils::internal::StructFieldInfoCsvSupportChecker<test_data>::IsGoodForCsv << '\n';
+    std::cout << basic::struct_field_info_utils::internal::StructFieldInfoCsvSupportChecker<test_data>::CsvFieldCount << '\n';
+
+    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<test_data>::writeHeader(std::cout);
+    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<test_data>::writeData(std::cout, d);
+#if 0
     std::stringstream ss;
     auto ex = basic::struct_field_info_utils::StructFieldInfoBasedCsvExporterFactory<M>
         ::createExporter<test_data>(ss);
@@ -83,4 +96,5 @@ int main() {
     for (auto const &d1 : x) {
         std::cout << d1 << '\n';
     }*/
+#endif
 }
