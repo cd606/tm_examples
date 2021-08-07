@@ -73,7 +73,8 @@ int main() {
             , [](BasicEnvironment *e, test_data const &) {return e->now();}
             , basic::struct_field_info_utils::StructFieldInfoBasedCsvInputOption::UseHeaderAsDict
         );
-    for (auto const &d1 : *r.importItem(im)) {
+    auto res = r.importItem(im);
+    for (auto const &d1 : *res) {
         std::cout << d1.timedData.value << '\n';
     }
     /*
