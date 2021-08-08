@@ -15,16 +15,18 @@
     #define TestDataFields \
         ((std::string, name)) \
         ((int32_t, amount)) \
-        ((std::optional<inside_data>, stat)) \
+        ((std::optional<inside_data>, inside)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
-        ((std::tm, theTime))
+        ((std::tm, theTime)) \
+        ((std::chrono::system_clock::time_point, tp))
 #else
     #define TestDataFields \
         ((std::string, name)) \
         ((int32_t, amount)) \
-        ((std::optional<inside_data>, stat)) \
+        ((std::optional<inside_data>, inside)) \
         (((std::array<inside_data, 5>), moreData)) \
-        ((std::tm, theTime))
+        ((std::tm, theTime)) \
+        ((std::chrono::system_clock::time_point, tp))
 #endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(inside_data, InsideDataFields);
@@ -59,13 +61,8 @@ int main() {
     d.amount = 1;
     d.moreData[2].stat = 0.5;
     d.theTime.tm_year=102;
+    d.tp = std::chrono::system_clock::now();
 
-    std::cout << basic::struct_field_info_utils::internal::StructFieldInfoCsvSupportChecker<test_data>::IsGoodForCsv << '\n';
-    std::cout << basic::struct_field_info_utils::internal::StructFieldInfoCsvSupportChecker<test_data>::CsvFieldCount << '\n';
-
-    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<test_data>::writeHeader(std::cout);
-    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<test_data>::writeData(std::cout, d);
-#if 0
     std::stringstream ss;
     auto ex = basic::struct_field_info_utils::StructFieldInfoBasedCsvExporterFactory<M>
         ::createExporter<test_data>(ss);
@@ -73,12 +70,15 @@ int main() {
 
     d.name="bcd\"   ,cd";
     d.amount = 2;
-    d.stat = 3.4;
-    d.moreData[1] = 0.2f;
+    d.inside = inside_data {"abc", 3.4, {1}};
+    d.moreData[1].s = "test";
+    d.moreData[1].i = 2;
+    d.tp = std::chrono::system_clock::now();
     r.exportItem(ex, std::move(d));
 
-    std::cout << ss.str() << "\n";
+    std::cout << ss.str() << '\n';
 
+    /*
     auto im = basic::struct_field_info_utils::StructFieldInfoBasedCsvImporterFactory<M>
         ::createImporter<test_data>(
             ss
@@ -89,12 +89,14 @@ int main() {
     for (auto const &d1 : *res) {
         std::cout << d1.timedData.value << '\n';
     }
-    /*
+    */
     std::vector<test_data> x;
     basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<test_data>
         ::readInto(ss, std::back_inserter(x));
-    for (auto const &d1 : x) {
-        std::cout << d1 << '\n';
-    }*/
-#endif
+    for (auto const &y : x) {
+        std::cout << y << '\n';
+    }
+    std::cout << '\n';
+    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<test_data>
+        ::writeDataCollection(std::cout, x.begin(), x.end());
 }
