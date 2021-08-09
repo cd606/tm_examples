@@ -34,21 +34,39 @@
 #define SmallInsideDataFields \
     ((double, i)) \
     ((std::string, s))
-#define SmallTestDataFields \
-    ((small_inside_data, inside)) \
-    ((std::string, name)) \
-    (((std::array<std::optional<small_inside_data>,3>), moreData)) \
-    ((std::tm, tp))
-#define TestData2Fields \
-    ((std::string, name)) \
-    ((int32_t, amount)) \
-    ((std::optional<inside_data>, inside)) \
-    ((std::string, inside2_s)) \
-    ((double, inside2_stat)) \
-    ((std::optional<int16_t>, inside2_i)) \
-    (((std::array<inside_data, 5>), moreData)) \
-    ((std::tm, theTime)) \
-    ((std::chrono::system_clock::time_point, tp))
+#ifdef _MSC_VER
+    #define SmallTestDataFields \
+        ((small_inside_data, inside)) \
+        ((std::string, name)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<std::optional<small_inside_data>,3>), moreData)) \
+        ((std::tm, tp))
+    #define TestData2Fields \
+        ((std::string, name)) \
+        ((int32_t, amount)) \
+        ((std::optional<inside_data>, inside)) \
+        ((std::string, inside2_s)) \
+        ((double, inside2_stat)) \
+        ((std::optional<int16_t>, inside2_i)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
+        ((std::tm, theTime)) \
+        ((std::chrono::system_clock::time_point, tp))
+#else
+    #define SmallTestDataFields \
+        ((small_inside_data, inside)) \
+        ((std::string, name)) \
+        (((std::array<std::optional<small_inside_data>,3>), moreData)) \
+        ((std::tm, tp))
+    #define TestData2Fields \
+        ((std::string, name)) \
+        ((int32_t, amount)) \
+        ((std::optional<inside_data>, inside)) \
+        ((std::string, inside2_s)) \
+        ((double, inside2_stat)) \
+        ((std::optional<int16_t>, inside2_i)) \
+        (((std::array<inside_data, 5>), moreData)) \
+        ((std::tm, theTime)) \
+        ((std::chrono::system_clock::time_point, tp))
+#endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(inside_data, InsideDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(inside_data, InsideDataFields);
