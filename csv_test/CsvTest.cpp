@@ -18,6 +18,7 @@
         ((std::string, name)) \
         ((int32_t, amount)) \
         ((std::optional<inside_data>, inside)) \
+        ((inside_data, inside2)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime)) \
         ((std::chrono::system_clock::time_point, tp))
