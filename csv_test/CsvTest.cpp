@@ -105,7 +105,7 @@ int main() {
     small_test_data sd;
     basic::struct_field_info_utils::StructuralCopy::copy(sd, d);
     test_data_2 d2;
-    basic::struct_field_info_utils::FlatCopy::copy(d2, d);
+    basic::struct_field_info_utils::OneLevelFlatCopy::copy(d2, d);
     std::cout << d << '\n';
     std::cout << sd << '\n';
     std::cout << d2 << '\n';
