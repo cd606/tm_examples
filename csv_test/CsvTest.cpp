@@ -122,11 +122,15 @@ int main() {
 
     small_test_data sd;
     basic::struct_field_info_utils::StructuralCopy::copy(sd, d);
+#ifndef _MSC_VER
     test_data_2 d2;
     basic::struct_field_info_utils::OneLevelFlatCopy::copy(d2, d);
+#endif
     std::cout << d << '\n';
     std::cout << sd << '\n';
+#ifndef _MSC_VER
     std::cout << d2 << '\n';
+#endif
 
     r.exportItem(ex, std::move(d));
 
