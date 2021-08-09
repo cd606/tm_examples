@@ -4,6 +4,7 @@
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
+#include <tm_kit/basic/StructFieldFlattenedInfo.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
 #include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
 
@@ -116,21 +117,18 @@ int main() {
     d.name="bcd\"   ,cd";
     d.amount = 2;
     d.inside = inside_data {"abc", 3.4, {1}};
+    d.inside2 = inside_data {"in2", 2.3, {3}};
     d.moreData[1].s = "test";
     d.moreData[1].i = 2;
     d.tp = std::chrono::system_clock::now();
 
     small_test_data sd;
     basic::struct_field_info_utils::StructuralCopy::copy(sd, d);
-#ifndef _MSC_VER
     test_data_2 d2;
-    basic::struct_field_info_utils::OneLevelFlatCopy::copy(d2, d);
-#endif
+    basic::struct_field_info_utils::FlatCopy::copy(d2, d);
     std::cout << d << '\n';
     std::cout << sd << '\n';
-#ifndef _MSC_VER
     std::cout << d2 << '\n';
-#endif
 
     r.exportItem(ex, std::move(d));
 
