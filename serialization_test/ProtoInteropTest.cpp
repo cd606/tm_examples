@@ -3,46 +3,59 @@
 #include <tm_kit/basic/PrintHelper.hpp>
 #include <iostream>
 #include <iomanip>
+#include <valarray>
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/ProtoInterop.hpp>
 
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
 
-/*
-TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING(TestEnum, (Item1) (Item2) (Item3) (Item4) (Item5));
-TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_SERIALIZE(TestEnum, (Item1) (Item2) (Item3) (Item4) (Item5));
-*/
-TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
-TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_SERIALIZE(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
+#define INNER_TEST_STRUCT_FIELDS \
+    ((int32_t, a)) \
+    ((double, b)) \
+    (((SingleLayerWrapperWithID<5,std::vector<std::string>>), c)) \
+    ((std::string, d)) 
 
-/*
-#define TEST_STRUCT_FIELDS \
-    ((int, a)) \
-    ((std::vector<std::string>, bTest)) \
-    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<std::string,2>), c))
+#define OUTER_TEST_STRUCT_FIELDS \
+    ((std::valarray<float>, f)) \
+    ((InnerTestStruct, g)) \
+    ((bool, h))
 
-TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(TestStruct, TEST_STRUCT_FIELDS);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(TestStruct, TEST_STRUCT_FIELDS);
-TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_DEF(TestStruct2);
-TM_BASIC_CBOR_CAPABLE_EMPTY_STRUCT_SERIALIZE(TestStruct2);
-
-#define TEST_STRUCT_3_FIELDS \
-    ((int, a)) \
-    ((std::vector<T>, bTest)) \
-    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<T,2>), c))
-
-#define L \
-    ((typename, T)) \
-    ((typename, T2))
-
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_DEF(L, TestStruct3, TEST_STRUCT_3_FIELDS);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT_SERIALIZE(L, TestStruct3, TEST_STRUCT_3_FIELDS);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_EMPTY_STRUCT_DEF(L, TestStruct4);
-TM_BASIC_CBOR_CAPABLE_TEMPLATE_EMPTY_STRUCT_SERIALIZE(L, TestStruct4);
-*/
+TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_PRINT(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_DEF(OuterTestStruct, OUTER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_PRINT(OuterTestStruct, OUTER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(OuterTestStruct, OUTER_TEST_STRUCT_FIELDS);
 
 int main(int argc, char **argv) {
+    OuterTestStruct s {
+        {1.0f, 2.0f, 3.0f}
+        , InnerTestStruct {
+            1, 10.0, 
+            {{"abc", "bcd", "cde"}}
+            , "xyz"
+        }
+        , false
+    };
+    std::cout << s << '\n';
+    std::stringstream oss;
+    proto_interop::ProtoEncoder<OuterTestStruct>::write(std::nullopt, s, oss);
+    std::string encoded = oss.str();
+    bytedata_utils::printByteDataDetails(std::cout, ByteDataView {encoded});
+    std::cout << '\n';
+    OuterTestStruct s1;
+    proto_interop::ProtoDecoder<OuterTestStruct> dec(&s1);
+    proto_interop::internal::FieldHeader fh;
+    auto res = proto_interop::internal::FieldHeaderSupport::readHeader(fh, encoded, 0);
+    if (res) {
+        std::cout << "fh success " << *res << '\n';
+    } else {
+        std::cout << "fh fail\n";
+    }
+}
+#if 0
     /*
     TestStruct s1;
     auto p = StructFieldTypeInfo<TestStruct, StructFieldInfo<TestStruct>::getFieldIndex("bTest")>::fieldPointer();
@@ -235,3 +248,4 @@ int main(int argc, char **argv) {
         std::cout << "Decode failure\n";
     }
 }
+#endif
