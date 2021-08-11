@@ -5,6 +5,7 @@
 #include <iomanip>
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/ProtoInterop.hpp>
 
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
