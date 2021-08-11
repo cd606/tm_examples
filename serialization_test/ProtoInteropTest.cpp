@@ -12,7 +12,7 @@ using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
 
 #define INNER_TEST_STRUCT_FIELDS \
-    ((int32_t, a)) \
+    (((SingleLayerWrapperWithTypeMark<proto_interop::ZigZag,int32_t>), a)) \
     ((double, b)) \
     (((SingleLayerWrapperWithID<1001,std::vector<std::string>>), c)) \
     ((std::string, d)) 
