@@ -13,6 +13,33 @@
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
 
+#ifdef _MSC_VER
+#define INNER_TEST_STRUCT_FIELDS \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(SingleLayerWrapperWithTypeMark<proto_interop::ZigZag,int32_t>), a)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(SingleLayerWrapperWithTypeMark<proto_interop::Fixed,int64_t>), a1)) \
+    ((int32_t, a2)) \
+    ((double, b)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(SingleLayerWrapperWithID<1001,std::vector<std::string>>), c)) \
+    ((std::string, d)) 
+
+#define SIMPLE_INNER_TEST_STRUCT_FIELDS \
+    ((int32_t, a)) \
+    ((int64_t, a1)) \
+    ((int32_t, a2)) \
+    ((double, b)) \
+    ((std::vector<std::string>, c)) \
+    ((std::string, d)) 
+
+#define OUTER_TEST_STRUCT_FIELDS \
+    ((std::list<float>, f)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(SingleLayerWrapperWithID<101,InnerTestStruct>), g)) \
+    ((bool, h))
+
+#define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
+    ((std::list<float>, f)) \
+    ((SimpleInnerTestStruct, g)) \
+    ((bool, h))
+#else
 #define INNER_TEST_STRUCT_FIELDS \
     (((SingleLayerWrapperWithTypeMark<proto_interop::ZigZag,int32_t>), a)) \
     (((SingleLayerWrapperWithTypeMark<proto_interop::Fixed,int64_t>), a1)) \
@@ -38,6 +65,7 @@ using namespace dev::cd606::tm::infra;
     ((std::list<float>, f)) \
     ((SimpleInnerTestStruct, g)) \
     ((bool, h))
+#endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);

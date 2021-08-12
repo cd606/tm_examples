@@ -11,6 +11,7 @@
 #define InsideDataFields \
     ((std::string, s)) \
     ((double, stat)) \
+    ((dev::cd606::tm::basic::ConstType<1>, emptyField)) \
     ((std::optional<int16_t>, i)) 
 
 #ifdef _MSC_VER
@@ -48,6 +49,7 @@
         ((std::optional<inside_data>, inside)) \
         ((std::string, inside2_s)) \
         ((double, inside2_stat)) \
+        ((dev::cd606::tm::basic::ConstType<1>, inside2_emptyField)) \
         ((std::optional<int16_t>, inside2_i)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime)) \
@@ -64,6 +66,7 @@
         ((std::optional<inside_data>, inside)) \
         ((std::string, inside2_s)) \
         ((double, inside2_stat)) \
+        ((dev::cd606::tm::basic::ConstType<1>, inside2_emptyField)) \
         ((std::optional<int16_t>, inside2_i)) \
         (((std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime)) \
@@ -117,8 +120,8 @@ int main() {
 
     d.name="bcd\"   ,cd";
     d.amount = 2;
-    d.inside = inside_data {"abc", 3.4, {1}};
-    d.inside2 = inside_data {"in2", 2.3, {3}};
+    d.inside = inside_data {"abc", 3.4, {}, {1}};
+    d.inside2 = inside_data {"in2", 2.3, {}, {3}};
     d.moreData[1].s = "test";
     d.moreData[1].i = 2;
     d.tp = std::chrono::system_clock::now();
