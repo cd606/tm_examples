@@ -8,6 +8,7 @@
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/basic/ProtoInterop.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
+#include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
 
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
@@ -17,24 +18,25 @@ using namespace dev::cd606::tm::infra;
     (((SingleLayerWrapperWithTypeMark<proto_interop::Fixed,int64_t>), a1)) \
     ((int32_t, a2)) \
     ((double, b)) \
-    (((SingleLayerWrapperWithID<1001,std::vector<std::string>>), c)) \
+    (((SingleLayerWrapperWithID<1001,std::array<std::string,3>>), c)) \
+    (((SingleLayerWrapperWithID<1002,std::array<std::string,3>>), c1)) \
     ((std::string, d)) 
 
 #define SIMPLE_INNER_TEST_STRUCT_FIELDS \
+    ((double, b)) \
     ((int32_t, a)) \
     ((int64_t, a1)) \
     ((int32_t, a2)) \
-    ((double, b)) \
-    ((std::vector<std::string>, c)) \
+    (((std::array<std::string,3>), c)) \
     ((std::string, d)) 
 
 #define OUTER_TEST_STRUCT_FIELDS \
-    ((std::valarray<float>, f)) \
+    (((std::array<float,3>), f)) \
     ((InnerTestStruct, g)) \
     ((bool, h))
 
 #define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
-    ((std::valarray<float>, f)) \
+    (((std::array<float,3>), f)) \
     ((SimpleInnerTestStruct, g)) \
     ((bool, h))
 
@@ -51,8 +53,9 @@ int main(int argc, char **argv) {
     OuterTestStruct s {
         {1.0f, 2.0f, 3.0f}
         , InnerTestStruct {
-            {-37}, {-50}, {-70}, 10.2525, 
-            {{"abcde", "bcd", "cde"}}
+            {-37}, {-50}, {-70}, 10.2525
+            , {{"abcde", "bcd", "cde"}}
+            , {{"ggggg", "hhhh", "iii"}}
             , "xyz"
         }
         , false
@@ -69,6 +72,10 @@ int main(int argc, char **argv) {
         SimpleOuterTestStruct aCopy;
         struct_field_info_utils::StructuralCopy::copy(aCopy, p1.value());
         std::cout << aCopy << '\n';
+
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<OuterTestStruct>::writeHeader(std::cout);
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<OuterTestStruct>::writeData(std::cout, p1.value());
+        std::cout << '\n';
     } else {
         std::cout << "fail\n";
     }
