@@ -13,6 +13,8 @@ using namespace dev::cd606::tm::infra;
 
 #define INNER_TEST_STRUCT_FIELDS \
     (((SingleLayerWrapperWithTypeMark<proto_interop::ZigZag,int32_t>), a)) \
+    (((SingleLayerWrapperWithTypeMark<proto_interop::Fixed,int64_t>), a1)) \
+    ((int32_t, a2)) \
     ((double, b)) \
     (((SingleLayerWrapperWithID<1001,std::vector<std::string>>), c)) \
     ((std::string, d)) 
@@ -31,7 +33,7 @@ int main(int argc, char **argv) {
     OuterTestStruct s {
         {1.0f, 2.0f, 3.0f}
         , InnerTestStruct {
-            -37, 10.2525, 
+            {-37}, {-50}, {-70}, 10.2525, 
             {{"abcde", "bcd", "cde"}}
             , "xyz"
         }
