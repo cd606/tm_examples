@@ -7,6 +7,7 @@
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/basic/ProtoInterop.hpp>
+#include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
 
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
@@ -19,15 +20,32 @@ using namespace dev::cd606::tm::infra;
     (((SingleLayerWrapperWithID<1001,std::vector<std::string>>), c)) \
     ((std::string, d)) 
 
+#define SIMPLE_INNER_TEST_STRUCT_FIELDS \
+    ((int32_t, a)) \
+    ((int64_t, a1)) \
+    ((int32_t, a2)) \
+    ((double, b)) \
+    ((std::vector<std::string>, c)) \
+    ((std::string, d)) 
+
 #define OUTER_TEST_STRUCT_FIELDS \
     ((std::valarray<float>, f)) \
     ((InnerTestStruct, g)) \
+    ((bool, h))
+
+#define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
+    ((std::valarray<float>, f)) \
+    ((SimpleInnerTestStruct, g)) \
     ((bool, h))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT(OuterTestStruct, OUTER_TEST_STRUCT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(OuterTestStruct, OUTER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT(SimpleInnerTestStruct, SIMPLE_INNER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(SimpleInnerTestStruct, SIMPLE_INNER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT(SimpleOuterTestStruct, SIMPLE_OUTER_TEST_STRUCT_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(SimpleOuterTestStruct, SIMPLE_OUTER_TEST_STRUCT_FIELDS);
 
 int main(int argc, char **argv) {
     OuterTestStruct s {
@@ -48,6 +66,9 @@ int main(int argc, char **argv) {
     proto_interop::Proto<OuterTestStruct> p1;
     if (p1.ParseFromString(encoded)) {
         std::cout << p1.value() << '\n';
+        SimpleOuterTestStruct aCopy;
+        struct_field_info_utils::StructuralCopy::copy(aCopy, p1.value());
+        std::cout << aCopy << '\n';
     } else {
         std::cout << "fail\n";
     }
