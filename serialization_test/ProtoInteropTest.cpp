@@ -31,7 +31,7 @@ using namespace dev::cd606::tm::infra;
 
 #define OUTER_TEST_STRUCT_FIELDS \
     ((std::valarray<float>, f)) \
-    ((InnerTestStruct, g)) \
+    (((SingleLayerWrapperWithID<101,InnerTestStruct>), g)) \
     ((bool, h))
 
 #define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
@@ -51,11 +51,11 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(SimpleOuterTestStruct, SIMPLE_OUTER_TEST_
 int main(int argc, char **argv) {
     OuterTestStruct s {
         {1.0f, 2.0f, 3.0f}
-        , InnerTestStruct {
+        , {InnerTestStruct {
             {-37}, {-50}, {-70}, 10.2525
             , {{"abcde", "bcd", "cde"}}
             , "xyz"
-        }
+        }}
         , false
     };
     std::cout << s << '\n';
