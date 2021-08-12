@@ -8,8 +8,6 @@
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
-#include <tm_kit/transport/bcl_compat/Decimal.hpp>
-#include <tm_kit/transport/bcl_compat/Guid.hpp>
 
 #include "../CppNoCodeGenShare/CppNoCodeGenStruct.hpp"
 
