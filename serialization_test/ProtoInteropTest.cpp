@@ -22,20 +22,20 @@ using namespace dev::cd606::tm::infra;
     ((std::string, d)) 
 
 #define SIMPLE_INNER_TEST_STRUCT_FIELDS \
-    ((double, b)) \
     ((int32_t, a)) \
     ((int64_t, a1)) \
     ((int32_t, a2)) \
+    ((double, b)) \
     ((std::vector<std::string>, c)) \
     ((std::string, d)) 
 
 #define OUTER_TEST_STRUCT_FIELDS \
-    ((std::valarray<float>, f)) \
+    ((std::list<float>, f)) \
     (((SingleLayerWrapperWithID<101,InnerTestStruct>), g)) \
     ((bool, h))
 
 #define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
-    ((std::valarray<float>, f)) \
+    ((std::list<float>, f)) \
     ((SimpleInnerTestStruct, g)) \
     ((bool, h))
 
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
             , {{"abcde", "bcd", "cde"}}
             , "xyz"
         }}
-        , false
+        , true
     };
     std::cout << s << '\n';
     proto_interop::Proto<OuterTestStruct> p(std::move(s));
@@ -68,8 +68,17 @@ int main(int argc, char **argv) {
     if (p1.ParseFromString(encoded)) {
         std::cout << *p1 << '\n';
         SimpleOuterTestStruct aCopy;
-        struct_field_info_utils::StructuralCopy::copy(aCopy, *p1);
+        struct_field_info_utils::FlatCopy::copy(aCopy, *p1);
         std::cout << aCopy << '\n';
+        /*
+        std::stringstream ss;
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<OuterTestStruct>::writeHeader(ss);
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput<OuterTestStruct>::writeData(ss, *p1);
+        std::cout << ss.str();
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<OuterTestStruct>::readHeader(ss);
+        struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<OuterTestStruct>::readOne(ss, *p1);
+        std::cout << *p1 << '\n';
+        */
     } else {
         std::cout << "fail\n";
     }
