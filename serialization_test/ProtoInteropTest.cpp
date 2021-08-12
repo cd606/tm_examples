@@ -66,9 +66,9 @@ int main(int argc, char **argv) {
     std::cout << '\n';
     proto_interop::Proto<OuterTestStruct> p1;
     if (p1.ParseFromString(encoded)) {
-        std::cout << p1.value() << '\n';
+        std::cout << *p1 << '\n';
         SimpleOuterTestStruct aCopy;
-        struct_field_info_utils::StructuralCopy::copy(aCopy, p1.value());
+        struct_field_info_utils::StructuralCopy::copy(aCopy, *p1);
         std::cout << aCopy << '\n';
     } else {
         std::cout << "fail\n";
