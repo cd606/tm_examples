@@ -38,17 +38,14 @@ int main(int argc, char **argv) {
         , false
     };
     std::cout << s << '\n';
-    std::stringstream oss;
-    proto_interop::ProtoEncoder<OuterTestStruct>::write(std::nullopt, s, oss);
-    std::string encoded = oss.str();
+    proto_interop::Proto<OuterTestStruct> p(std::move(s));
+    std::string encoded;
+    p.SerializeToString(&encoded);
     bytedata_utils::printByteDataDetails(std::cout, ByteDataView {encoded});
     std::cout << '\n';
-    OuterTestStruct s1;
-    proto_interop::ProtoDecoder<OuterTestStruct> dec(&s1);
-    auto res = dec.handle(proto_interop::internal::ProtoWireType::LengthDelimited, encoded, 0);
-    if (res) {
-        std::cout << "success " << *res << '\n';
-        std::cout << s1 << '\n';
+    proto_interop::Proto<OuterTestStruct> p1;
+    if (p1.ParseFromString(encoded)) {
+        std::cout << p1.value() << '\n';
     } else {
         std::cout << "fail\n";
     }
