@@ -152,11 +152,7 @@ int main() {
     std::stringstream ss;
     auto ex = basic::struct_field_info_utils::StructFieldInfoBasedCsvExporterFactory<M>
         ::createExporter<test_data>(ss);
-#if !defined(_MSC_VER) && !defined(__llvm__) && defined(__GNUC__) && (__GNUC__ <= 9)
-    r.exportItem<test_data>(ex, std::move(d));
-#else
     r.exportItem(ex, std::move(d));
-#endif
 
     d.name="bcd\"   ,cd";
     d.amount = 2;
@@ -174,11 +170,7 @@ int main() {
     std::cout << sd << '\n';
     std::cout << d2 << '\n';
 
-#if !defined(_MSC_VER) && !defined(__llvm__) && defined(__GNUC__) && (__GNUC__ <= 9)
-    r.exportItem<test_data>(ex, std::move(d));
-#else
     r.exportItem(ex, std::move(d));
-#endif
 
     std::cout << ss.str() << '\n';
 
@@ -188,11 +180,7 @@ int main() {
             , [](BasicEnvironment *e, test_data const &) {return e->now();}
             , basic::struct_field_info_utils::StructFieldInfoBasedCsvInputOption::UseHeaderAsDict
         );
-#if !defined(_MSC_VER) && !defined(__llvm__) && defined(__GNUC__) && (__GNUC__ <= 9)
-    auto res = r.importItem<test_data>(im);
-#else
     auto res = r.importItem(im);
-#endif
     for (auto const &d1 : *res) {
         std::cout << d1.timedData.value << '\n';
     }
