@@ -4,6 +4,7 @@
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
+#include <tm_kit/basic/StructFieldInfoBasedFlatPackUtils.hpp>
 #include <tm_kit/basic/StructFieldFlattenedInfo.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
 #include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
@@ -14,6 +15,11 @@
     ((dev::cd606::tm::basic::ConstType<1>, emptyField)) \
     ((std::optional<int16_t>, i)) 
 
+#define FlatPackInsideDataFields \
+    ((double, stat)) \
+    ((dev::cd606::tm::basic::ConstType<1>, emptyField)) \
+    ((int16_t, i)) 
+
 #ifdef _MSC_VER
     #define TestDataFields \
         ((std::string, name)) \
@@ -23,6 +29,10 @@
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime)) \
         ((std::chrono::system_clock::time_point, tp))
+    #define FlatPackTestDataFields \
+        ((int32_t, amount)) \
+        ((flatpack_inside_data, inside)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<flatpack_inside_data, 5>), moreData)) 
 #else
     #define TestDataFields \
         ((std::string, name)) \
@@ -32,6 +42,10 @@
         (((std::array<inside_data, 5>), moreData)) \
         ((std::tm, theTime)) \
         ((std::chrono::system_clock::time_point, tp))
+    #define FlatPackTestDataFields \
+        ((int32_t, amount)) \
+        ((flatpack_inside_data, inside)) \
+        (((std::array<flatpack_inside_data, 5>), moreData)) 
 #endif
 
 #define SmallInsideDataFields \
@@ -83,6 +97,10 @@ TM_BASIC_CBOR_CAPABLE_STRUCT(small_test_data, SmallTestDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(small_test_data, SmallTestDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT(test_data_2, TestData2Fields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(test_data_2, TestData2Fields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(flatpack_inside_data, FlatPackInsideDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(flatpack_inside_data, FlatPackInsideDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT(flatpack_test_data, FlatPackTestDataFields);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(flatpack_test_data, FlatPackTestDataFields);
 
 using namespace dev::cd606::tm;
 
@@ -105,6 +123,24 @@ int main() {
     BasicEnvironment env;
     SR r(&env);
 
+    basic::struct_field_info_utils::FlatPack<flatpack_test_data> fd;
+    basic::struct_field_info_utils::StructFieldInfoBasedInitializer<flatpack_test_data>::initialize(*fd);
+    fd->amount = 1;
+    fd->inside.i = -10;
+    fd->moreData[2].stat = 0.5;
+    std::cout << *fd << '\n';
+
+    std::string flatStr;
+    fd.SerializeToString(&flatStr);
+
+    basic::bytedata_utils::printByteDataDetails(std::cout, basic::ByteDataView {flatStr});
+    std::cout << '\n';
+
+    basic::struct_field_info_utils::FlatPack<flatpack_test_data> fd1;
+    if (fd1.ParseFromString(flatStr)) {
+        std::cout << *fd1 << '\n';
+    }
+   
     test_data d;
     basic::struct_field_info_utils::StructFieldInfoBasedInitializer<test_data>::initialize(d);
     d.name = "abc\"\\,,t,est";
@@ -137,6 +173,7 @@ int main() {
     std::cout << d << '\n';
     std::cout << sd << '\n';
     std::cout << d2 << '\n';
+
 #if !defined(_MSC_VER) && !defined(__llvm__) && defined(__GNUC__) && (__GNUC__ <= 9)
     r.exportItem<test_data>(ex, std::move(d));
 #else
