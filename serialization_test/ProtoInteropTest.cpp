@@ -33,12 +33,14 @@ using namespace dev::cd606::tm::infra;
 #define OUTER_TEST_STRUCT_FIELDS \
     ((std::list<float>, f)) \
     ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(SingleLayerWrapperWithID<101,InnerTestStruct>), g)) \
-    ((bool, h))
+    ((bool, h)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<char,10>), s))
 
 #define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
     ((std::list<float>, f)) \
     ((SimpleInnerTestStruct, g)) \
-    ((bool, h))
+    ((bool, h)) \
+    ((std::string, s))
 #else
 #define INNER_TEST_STRUCT_FIELDS \
     (((SingleLayerWrapperWithTypeMark<proto_interop::ZigZag,int32_t>), a)) \
@@ -59,12 +61,14 @@ using namespace dev::cd606::tm::infra;
 #define OUTER_TEST_STRUCT_FIELDS \
     ((std::list<float>, f)) \
     (((SingleLayerWrapperWithID<101,InnerTestStruct>), g)) \
-    ((bool, h))
+    ((bool, h)) \
+    (((std::array<char,10>), s))
 
 #define SIMPLE_OUTER_TEST_STRUCT_FIELDS \
     ((std::list<float>, f)) \
     ((SimpleInnerTestStruct, g)) \
-    ((bool, h))
+    ((bool, h)) \
+    ((std::string, s))
 #endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(InnerTestStruct, INNER_TEST_STRUCT_FIELDS);
@@ -85,6 +89,7 @@ int main(int argc, char **argv) {
             , "xyz"
         }}
         , true
+        , "test1234"
     };
     std::cout << s << '\n';
     proto_interop::Proto<OuterTestStruct> p(std::move(s));

@@ -61,13 +61,13 @@
         ((std::string, name)) \
         ((int32_t, amount)) \
         ((std::optional<inside_data>, inside)) \
-        ((std::string, inside2_s)) \
-        ((double, inside2_stat)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<char,10>), inside2_s)) \
+        ((std::optional<double>, inside2_stat)) \
         ((dev::cd606::tm::basic::ConstType<1>, inside2_emptyField)) \
-        ((std::optional<int16_t>, inside2_i)) \
+        ((int16_t, inside2_i)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::array<inside_data, 5>), moreData)) \
-        ((std::tm, theTime)) \
-        ((std::chrono::system_clock::time_point, tp))
+        ((std::chrono::system_clock::time_point, theTime)) \
+        ((std::tm, tp))
 #else
     #define SmallTestDataFields \
         ((small_inside_data, inside)) \
@@ -78,13 +78,13 @@
         ((std::string, name)) \
         ((int32_t, amount)) \
         ((std::optional<inside_data>, inside)) \
-        ((std::string, inside2_s)) \
-        ((double, inside2_stat)) \
+        (((std::array<char,10>), inside2_s)) \
+        ((std::optional<double>, inside2_stat)) \
         ((dev::cd606::tm::basic::ConstType<1>, inside2_emptyField)) \
-        ((std::optional<int16_t>, inside2_i)) \
+        ((int16_t, inside2_i)) \
         (((std::array<inside_data, 5>), moreData)) \
-        ((std::tm, theTime)) \
-        ((std::chrono::system_clock::time_point, tp))
+        ((std::chrono::system_clock::time_point, theTime)) \
+        ((std::tm, tp))
 #endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(inside_data, InsideDataFields);
@@ -173,6 +173,19 @@ int main() {
     r.exportItem(ex, std::move(d));
 
     std::cout << ss.str() << '\n';
+
+    std::stringstream ss2;
+    auto ex2 = basic::struct_field_info_utils::StructFieldInfoBasedCsvExporterFactory<M>
+        ::createExporter<test_data_2>(ss2);
+    r.exportItem(ex2, std::move(d2));
+    std::cout << ss2.str() << '\n';
+    std::vector<test_data_2> x2;
+    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<test_data_2>
+        ::readInto(ss2, std::back_inserter(x2));
+    for (auto const &y2 : x2) {
+        std::cout << y2 << '\n';
+    }
+    std::cout << '\n';
 
     auto im = basic::struct_field_info_utils::StructFieldInfoBasedCsvImporterFactory<M>
         ::createImporter<test_data>(
