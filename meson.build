@@ -12,12 +12,13 @@ nng_dep = [dependency('nngpp')]
 boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread', 'filesystem'])
 spd_dep = dependency('spdlog')
 crossguid_dep = dependency('crossguid')
+nlohmann_json_dep = dependency('nlohmann-json')
 rt_link_args = ['-lrt']
 if build_machine.system() == 'windows'
   rt_link_args += ['-lws2_32']
 endif
 rt_dep = declare_dependency(link_args: rt_link_args)
-common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep, rt_dep]
+common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep, nlohmann_json_dep, rt_dep]
 
 
 protobuf_gen = generator(protoc, \

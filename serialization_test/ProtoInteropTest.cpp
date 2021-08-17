@@ -7,6 +7,7 @@
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/basic/ProtoInterop.hpp>
+#include <tm_kit/basic/BoostPropertyTreeInterop.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
 

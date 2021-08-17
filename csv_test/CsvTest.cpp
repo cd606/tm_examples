@@ -7,6 +7,7 @@
 #include <tm_kit/basic/StructFieldInfoBasedFlatPackUtils.hpp>
 #include <tm_kit/basic/StructFieldFlattenedInfo.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCopy.hpp>
+#include <tm_kit/basic/NlohmannJsonInterop.hpp>
 #include <tm_kit/basic/top_down_single_pass_iteration_clock/ClockComponent.hpp>
 
 #define InsideDataFields \
@@ -161,6 +162,14 @@ int main() {
     d.moreData[1].s = "test";
     d.moreData[1].i = 2;
     d.tp = std::chrono::system_clock::now();
+
+    std::stringstream jsonSS;
+    basic::nlohmann_json_interop::Json<test_data *>(&d).SerializeToStream(jsonSS);
+    std::string jsonStr = jsonSS.str();
+    std::cout << jsonStr << '\n';
+    test_data dj;
+    basic::nlohmann_json_interop::Json<test_data *>(&dj).ParseFromString(jsonStr);
+    std::cout << dj << '\n';
 
     small_test_data sd;
     basic::struct_field_info_utils::StructuralCopy::copy(sd, d);
