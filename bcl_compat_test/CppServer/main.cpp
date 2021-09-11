@@ -37,6 +37,9 @@ int main(int argc, char **argv) {
             std::cout << id << '\n';
             auto value = transport::bcl_compat::DecimalConverter::read(q.value());
             std::cout << value << '\n';
+            for (auto ii=0; ii<q.floatarr_size(); ++ii) {
+                std::cout << '\t' << q.floatarr(ii) << '\n';
+            }
             
             value *= 2.0;
             

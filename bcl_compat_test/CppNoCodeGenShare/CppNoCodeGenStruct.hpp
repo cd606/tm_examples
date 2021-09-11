@@ -10,7 +10,8 @@ namespace bcl_compat_test{
     #define QUERY_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
-        ((std::string, description)) 
+        ((std::string, description)) \
+        ((std::vector<float>, floatArr))
 
     #define RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \

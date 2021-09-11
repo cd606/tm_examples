@@ -18,6 +18,8 @@ namespace DotNetClient
         public Decimal Value {get; set;}
         [ProtoMember(3)]
         public string Description {get; set;}
+        [ProtoMember(4)]
+        public List<float> FloatArr {get; set;}
     }
     [ProtoContract]
     public class Result
@@ -39,6 +41,7 @@ namespace DotNetClient
                 ID = Guid.NewGuid()
                 , Value = -0.00000000123m
                 , Description = "Test Query"
+                , FloatArr = new List<float> {1.0f, 2.0f}
             };
             Result r = await MultiTransportFacility<ClockEnv>.OneShot<Query,Result>(
                 env: new ClockEnv()

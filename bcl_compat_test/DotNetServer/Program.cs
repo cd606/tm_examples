@@ -18,6 +18,8 @@ namespace DotNetServer
         public Decimal Value {get; set;}
         [ProtoMember(3)]
         public string Description {get; set;}
+        [ProtoMember(4)]
+        public List<float> FloatArr {get; set;}
     }
     [ProtoContract]
     public class Result
@@ -38,6 +40,10 @@ namespace DotNetServer
         {
             Console.WriteLine(data.timedData.value.key.ID);
             Console.WriteLine(data.timedData.value.key.Value);
+            foreach (var f in data.timedData.value.key.FloatArr)
+            {
+                Console.WriteLine($"\t{f}");
+            }
             publish(new TimedDataWithEnvironment<ClockEnv, Key<Result>>(
                 data.environment
                 , new WithTime<Key<Result>>(

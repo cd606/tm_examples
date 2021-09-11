@@ -19,6 +19,7 @@ message Query {
    Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
    Decimal Value = 2;
    string Description = 3;
+   repeated float FloatArr = 4;
 }
 
 message Result {

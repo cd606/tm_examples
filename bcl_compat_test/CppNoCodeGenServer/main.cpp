@@ -32,6 +32,9 @@ int main(int argc, char **argv) {
             std::cout << q->id << '\n';
             auto value = *(q->value);
             std::cout << value << '\n';
+            for (auto const &f : q->floatArr) {
+                std::cout << '\t' << f << '\n';
+            }
             
             value *= 2.0;
             

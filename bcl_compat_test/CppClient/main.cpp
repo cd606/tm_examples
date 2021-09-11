@@ -34,6 +34,8 @@ int main(int argc, char **argv) {
     boost::multiprecision::cpp_dec_float_100 value("-0.00000000123");
     transport::bcl_compat::DecimalConverter::write(*q.mutable_value(), value);
     q.set_description("cpp_client_test");
+    q.add_floatarr(1.0f);
+    q.add_floatarr(2.0f);
 
     auto resF = transport::OneShotMultiTransportRemoteFacilityCall<Environment>
         ::call<
