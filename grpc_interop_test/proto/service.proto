@@ -1,0 +1,20 @@
+syntax = "proto3";
+package grpc_interop_test;
+
+service TestService {
+    rpc Test(TestRequest) returns (stream TestResponse);
+    rpc SimpleTest(SimpleRequest) returns (SimpleResponse);
+}
+message TestRequest {
+    uint32 IntParam = 1;
+    repeated double DoubleListParam = 2;
+}
+message TestResponse {
+    repeated string StringResp = 1;
+}
+message SimpleRequest {
+    uint32 Input = 1;
+}
+message SimpleResponse {
+    uint32 Resp = 1;
+}
