@@ -7,16 +7,29 @@
 using namespace dev::cd606::tm;
 
 namespace bcl_compat_test{
+#ifdef _MSC_VER
     #define QUERY_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
-        ((std::string, description)) \
-        ((std::vector<float>, floatArr))
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<6,std::string>), description)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr))
 
     #define RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages))
+#else
+    #define QUERY_FIELDS \
+        ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
-        ((std::vector<std::string>, messages))
+        (((basic::SingleLayerWrapperWithID<6,std::string>), description)) \
+        (((basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr))
+
+    #define RESULT_FIELDS \
+        ((transport::bcl_compat::BclGuid<Env>, id)) \
+        (((basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
+        (((basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages))
+#endif
 
     TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Env)), QueryNoCodeGen, QUERY_FIELDS);
     TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Env)), ResultNoCodeGen, RESULT_FIELDS);

@@ -16,9 +16,9 @@ namespace DotNetClient
         public Guid ID {get; set;}
         [ProtoMember(2)]
         public Decimal Value {get; set;}
-        [ProtoMember(3)]
+        [ProtoMember(6)]
         public string Description {get; set;}
-        [ProtoMember(4)]
+        [ProtoMember(5)]
         public List<float> FloatArr {get; set;}
     }
     [ProtoContract]
@@ -26,9 +26,9 @@ namespace DotNetClient
     {
         [ProtoMember(1)]
         public Guid ID {get; set;}
-        [ProtoMember(2)]
-        public Decimal Value {get; set;}
         [ProtoMember(3)]
+        public Decimal Value {get; set;}
+        [ProtoMember(2)]
         public List<string> Messages {get; set;}
     }
     class Program

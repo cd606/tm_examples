@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
             std::cout << q->id << '\n';
             auto value = *(q->value);
             std::cout << value << '\n';
-            for (auto const &f : q->floatArr) {
+            for (auto const &f : q->floatArr.value) {
                 std::cout << '\t' << f << '\n';
             }
             
@@ -40,8 +40,8 @@ int main(int argc, char **argv) {
             
             basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>> r;
             r->id = q->id;
-            r->value = value;
-            r->messages.push_back(q->description);
+            r->value.value = value;
+            r->messages.value.push_back(q->description.value);
 
             return r;
         }

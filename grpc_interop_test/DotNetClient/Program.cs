@@ -23,6 +23,15 @@ namespace DotNetClient
             }
             var simpleReq = new SimpleRequest();
             simpleReq.Input = 1;
+            simpleReq.Name = "abc";
+            simpleReq.Name2 = "def";
+            simpleReq.AnotherInput = 0;
+            Console.WriteLine(client.SimpleTest(simpleReq));
+            simpleReq = new SimpleRequest();
+            simpleReq.Input = 2;
+            simpleReq.Val = 0.1f;
+            simpleReq.Name2 = "ghi";
+            simpleReq.AnotherInput = 1;
             Console.WriteLine(client.SimpleTest(simpleReq));
         }
     }

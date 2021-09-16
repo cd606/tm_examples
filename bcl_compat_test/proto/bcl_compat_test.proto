@@ -18,12 +18,12 @@ message Decimal {
 message Query {
    Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
    Decimal Value = 2;
-   string Description = 3;
-   repeated float FloatArr = 4;
+   string Description = 6;
+   repeated float FloatArr = 5;
 }
 
 message Result {
    Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
-   Decimal Value = 2;
-   repeated string Messages = 3;
+   Decimal Value = 3;
+   repeated string Messages = 2;
 }

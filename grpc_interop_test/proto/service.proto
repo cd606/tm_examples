@@ -14,7 +14,18 @@ message TestResponse {
 }
 message SimpleRequest {
     uint32 Input = 1;
+    oneof req_oneof {
+        string Name = 2;
+        float Val = 3;
+    }
+    string Name2 = 4;
+    uint32 AnotherInput = 5;
 }
 message SimpleResponse {
     uint32 Resp = 1;
+    oneof resp_oneof {
+        string NameResp = 5;
+        float ValResp = 3;
+    }
+    string Name2Resp = 2;
 }

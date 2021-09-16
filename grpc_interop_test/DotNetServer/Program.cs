@@ -35,7 +35,19 @@ namespace DotNetServer
         public override async Task<SimpleResponse> SimpleTest(SimpleRequest req, ServerCallContext context) {
             var resp = new SimpleResponse();
             resp.Resp = req.Input*2;
+            switch (req.ReqOneofCase) {
+            case SimpleRequest.ReqOneofOneofCase.Name:
+                resp.NameResp = req.Name+":resp";
+                break;
+            case SimpleRequest.ReqOneofOneofCase.Val:
+                resp.ValResp = req.Val*2.0f;
+                break;
+            default:
+                break;
+            }
+            resp.Name2Resp = req.Name2+":resp";
             await Task.Delay(1);
+            Console.WriteLine($"Req={req},Resp={resp}");
             return resp;
         }
     }

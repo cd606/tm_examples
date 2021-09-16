@@ -151,6 +151,16 @@ int main(int argc, char **argv) {
             ++counter;
             SimpleReq req;
             req->input = counter;
+            if (counter%2 == 0) {
+                req->reqOneOf.emplace<1>(std::string("abc"));
+            } else {
+                req->reqOneOf.emplace<2>(0.1f*counter);
+            }
+            req->name2 = std::string(counter, 'x');
+            req->anotherInput = (uint32_t) counter-1;
+            std::ostringstream oss;
+            oss << "SimpleReq: " << *req;
+            env->log(infra::LogLevel::Info, oss.str());
             return {
                 (counter < 3)
                 , M::InnerData<SimpleReq> {

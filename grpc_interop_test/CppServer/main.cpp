@@ -80,6 +80,16 @@ int main(int argc, char **argv) {
     auto simpleTestFacility = GL::lift(infra::LiftAsFacility {}, [](SimpleReq &&req) {
         SimpleResp resp;
         resp->resp = 2*(req->input);
+        std::visit([&resp](auto const &x) {
+            using T = std::decay_t<decltype(x)>;
+            if constexpr (std::is_same_v<T, std::string>) {
+                resp->respOneOf.emplace<1>(x+":resp");
+            } else if constexpr (std::is_same_v<T, float>) {
+                resp->respOneOf.emplace<2>(x*2.0f);
+            }
+        }, req->reqOneOf);
+        resp->name2Resp = req->name2+":resp";
+        std::cerr << "Got " << *req << ", returning " << *resp << '\n';
         return resp;
     });
 

@@ -26,8 +26,8 @@ int main(int argc, char **argv) {
 
     basic::proto_interop::Proto<bcl_compat_test::QueryNoCodeGen<Environment>> q;
     q->value = boost::multiprecision::cpp_dec_float_100("-0.00000000123");
-    q->description = "cpp_client_test";
-    q->floatArr = {1.0f, 2.0f};
+    q->description.value = "cpp_client_test";
+    q->floatArr.value = {1.0f, 2.0f};
 
     std::cout << q->id << '\n';
     std::cout << q->value << '\n';
@@ -46,5 +46,5 @@ int main(int argc, char **argv) {
     auto res = resF.get();
 
     std::cout << res->id << '\n';
-    std::cout << res->value << '\n';
+    std::cout << res->value.value << '\n';
 }
