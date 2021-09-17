@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
                         uint32_t jj = 0;
                         for (; jj<chunkSize && ii+jj<totalSize; ++jj) {
                             resp->stringResp.push_back(std::to_string(reqData->doubleListParam[ii+jj]));
+                            resp->stringResp.push_back("");
                         }
                         this->publish(req.environment, M::Key<Resp> {id, std::move(resp)}, (ii+jj)>=totalSize);
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));

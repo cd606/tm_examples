@@ -27,6 +27,7 @@ namespace DotNetServer
                 for (uint jj=0; jj<chunkSize && ii+jj<request.DoubleListParam.Count; ++jj)
                 {
                     resp.StringResp.Add(request.DoubleListParam[(int) (ii+jj)].ToString());
+                    resp.StringResp.Add("");
                 }
                 await responseStream.WriteAsync(resp);
                 await Task.Delay(100);
