@@ -40,6 +40,10 @@ int main(int argc, char **argv) {
     Env env;
     R r(&env);
 
+    const std::string sslSpec = 
+        "[ssl=true,server_cert=../grpc_interop_test/DotNetServer/server.crt,server_key=../grpc_interop_test/DotNetServer/server.key]";
+    bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
+
     transport::HeartbeatAndAlertComponentTouchup<R>(
         r
         , {
@@ -102,14 +106,14 @@ int main(int argc, char **argv) {
         (
             r
             , testFacility
-            , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/Test"
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:"")
             , "testService"
         );
     transport::MultiTransportFacilityWrapper<R>::wrap<SimpleReq,SimpleResp>
         (
             r
             , simpleTestFacility
-            , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/SimpleTest"
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
             , "simpleTestService"
         );
 

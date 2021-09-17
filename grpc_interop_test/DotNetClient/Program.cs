@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.IO;
 using Grpc.Core;
 using GrpcInteropTest;
 
@@ -10,7 +11,20 @@ namespace DotNetClient
     {
         static async Task Main(string[] args)
         {
-            var channel = new Channel("127.0.0.1:34567", ChannelCredentials.Insecure);
+            var channel = new Channel("localhost:34567", 
+                (
+                    (args.Length >= 1 && args[0].Equals("ssl"))
+                    ?
+                    (new SslCredentials(
+                        File.ReadAllText("../DotNetServer/server.crt")
+                        , new KeyCertificatePair(
+                            File.ReadAllText("./client.crt")
+                            , File.ReadAllText("./client.key")
+                        )
+                    ))
+                    : ChannelCredentials.Insecure
+                )
+            );
             var client = new TestService.TestServiceClient(channel);
             var request = new TestRequest();
             request.IntParam = 2;

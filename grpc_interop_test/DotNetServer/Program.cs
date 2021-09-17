@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.IO;
 using GrpcInteropTest;
 using Grpc.Core;
 
@@ -60,7 +62,22 @@ namespace DotNetServer
             var server = new Server()
             {
                 Services = { TestService.BindService(new TestServiceImpl()) },
-                Ports = { new ServerPort("127.0.0.1", 34567, ServerCredentials.Insecure)} 
+                Ports = { new ServerPort("0.0.0.0", 34567, 
+                    (
+                        (args.Length >= 1 && args[0].Equals("ssl"))
+                        ?
+                        (new SslServerCredentials(
+                            new List<KeyCertificatePair> {
+                                new KeyCertificatePair(
+                                    File.ReadAllText("./server.crt")
+                                    , File.ReadAllText("./server.key")
+                                )
+                            }
+                        ))
+                        :
+                        ServerCredentials.Insecure
+                    )
+                )} 
             };
             server.Start();
             Console.ReadKey();

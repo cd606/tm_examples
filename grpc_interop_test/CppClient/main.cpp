@@ -38,6 +38,10 @@ int main(int argc, char **argv) {
     Env env;
     R r(&env);
 
+    const std::string sslSpec = 
+        "[ssl=true,ca_cert=../grpc_interop_test/DotNetServer/server.crt,client_cert=../grpc/interop_test/DotNetClient/client.crt,client_key=../grpc/interop_test/DotNetClient/client.key]";
+    bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
+
     //synchronous call first
     //Please note that we don't use the same OneShotCall methods
     //as in other transports.
@@ -55,7 +59,7 @@ int main(int argc, char **argv) {
     auto result = transport::grpc_interop::GrpcClientFacilityFactory<M>
         ::runSyncClient<Req, Resp>(
             &env
-            , transport::ConnectionLocator::parse("127.0.0.1:34567:::grpc_interop_test/TestService/Test")
+            , transport::ConnectionLocator::parse("localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:""))
             , req
         );
     for (auto const &resp : result) {
@@ -66,7 +70,7 @@ int main(int argc, char **argv) {
     auto result2 = transport::OneShotMultiTransportRemoteFacilityCall<Env>
         ::call<SimpleReq, SimpleResp>(
             &env 
-            , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/SimpleTest"
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
             , std::move(req2)
         ).get();
     std::cout << *result2 << '\n';
@@ -79,6 +83,11 @@ int main(int argc, char **argv) {
     //the cpp server, but since the dotnet server is not publishing
     //heartbeat, it will fail with the dotnet server.
 
+    //(if using SSL, then since the server is publishing a locator with
+    //server certificate info, and the client is requiring a locator with
+    //client certificate info, the heartbeat spec will NOT work. This is
+    //particular to grpc_interop SSL because the server/client are asymmetric)
+
     //for direct specification, it is also possible to use the
     //simpler setupSimpleRemoteFacility instead of setupSimpleRemoteFacilitioid
     //(the latter supports heartbeat spec).
@@ -87,9 +96,9 @@ int main(int argc, char **argv) {
         Req, Resp
     >(
         r
-        , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/Test"
+        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:"")
         /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
-            "zeromq://127.0.0.1:12345"
+            "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
             , std::regex("grpc_interop_test_server")
             , "testFacility"
@@ -100,9 +109,9 @@ int main(int argc, char **argv) {
         SimpleReq, SimpleResp
     >(
         r
-        , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/SimpleTest"
+        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
         /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
-            "zeromq://127.0.0.1:12345"
+            "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
             , std::regex("grpc_interop_test_server")
             , "simpleTestFacility"
