@@ -20,7 +20,7 @@ namespace grpc_interop_test {
         ((uint32_t, input)) \
         ((grpc_interop_test::ReqOneOf, reqOneOf)) \
         ((std::string, name2)) \
-        ((uint32_t, anotherInput))
+        ((std::vector<uint32_t>, anotherInput))
 
     using RespOneOf = std::variant<
         std::monostate
@@ -31,12 +31,14 @@ namespace grpc_interop_test {
     #define SIMPLE_RESPONSE_FIELDS \
         ((uint32_t, resp)) \
         ((grpc_interop_test::RespOneOf, respOneOf)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp))
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack))
 #else
     #define SIMPLE_RESPONSE_FIELDS \
         ((uint32_t, resp)) \
         ((grpc_interop_test::RespOneOf, respOneOf)) \
-        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp))
+        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp)) \
+        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack))
 #endif
 
     TM_BASIC_CBOR_CAPABLE_STRUCT(TestRequest, TEST_REQUEST_FIELDS);

@@ -89,6 +89,7 @@ int main(int argc, char **argv) {
             }
         }, req->reqOneOf);
         resp->name2Resp = req->name2+":resp";
+        std::copy(req->anotherInput.begin(), req->anotherInput.end(), std::back_inserter(resp->anotherInputBack.value));
         std::cerr << "Got " << *req << ", returning " << *resp << '\n';
         return resp;
     });

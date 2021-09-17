@@ -25,13 +25,13 @@ namespace DotNetClient
             simpleReq.Input = 1;
             simpleReq.Name = "abc";
             simpleReq.Name2 = "def";
-            simpleReq.AnotherInput = 0;
+            simpleReq.AnotherInput.AddRange(new uint[] {0,1,0,0,1});
             Console.WriteLine(client.SimpleTest(simpleReq));
             simpleReq = new SimpleRequest();
             simpleReq.Input = 2;
             simpleReq.Val = 0.1f;
             simpleReq.Name2 = "ghi";
-            simpleReq.AnotherInput = 1;
+            simpleReq.AnotherInput.AddRange(new uint[] {1,2,3,0,1,0});
             Console.WriteLine(client.SimpleTest(simpleReq));
         }
     }

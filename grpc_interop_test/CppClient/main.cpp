@@ -63,15 +63,13 @@ int main(int argc, char **argv) {
     }
     SimpleReq req2;
     req2->input = 1;
-    auto result2 = transport::grpc_interop::GrpcClientFacilityFactory<M>
-        ::runSyncClient<SimpleReq, SimpleResp>(
-            &env
-            , transport::ConnectionLocator::parse("127.0.0.1:34567:::grpc_interop_test/TestService/SimpleTest")
-            , req2
-        );
-    for (auto const &resp : result2) {
-        std::cout << *resp << '\n';
-    }
+    auto result2 = transport::OneShotMultiTransportRemoteFacilityCall<Env>
+        ::call<SimpleReq, SimpleResp>(
+            &env 
+            , "grpc_interop://127.0.0.1:34567:::grpc_interop_test/TestService/SimpleTest"
+            , std::move(req2)
+        ).get();
+    std::cout << *result2 << '\n';
 
     //then asynchronous call
 
@@ -157,7 +155,9 @@ int main(int argc, char **argv) {
                 req->reqOneOf.emplace<2>(0.1f*counter);
             }
             req->name2 = std::string(counter, 'x');
-            req->anotherInput = (uint32_t) counter-1;
+            req->anotherInput.push_back((uint32_t) counter-1);
+            req->anotherInput.push_back((uint32_t) counter);
+            req->anotherInput.push_back((uint32_t) counter+1);
             std::ostringstream oss;
             oss << "SimpleReq: " << *req;
             env->log(infra::LogLevel::Info, oss.str());

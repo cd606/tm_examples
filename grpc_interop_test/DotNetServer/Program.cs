@@ -46,6 +46,7 @@ namespace DotNetServer
                 break;
             }
             resp.Name2Resp = req.Name2+":resp";
+            resp.AnotherInputBack.AddRange(req.AnotherInput);
             await Task.Delay(1);
             Console.WriteLine($"Req={req},Resp={resp}");
             return resp;

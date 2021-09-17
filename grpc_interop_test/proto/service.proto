@@ -19,7 +19,7 @@ message SimpleRequest {
         float Val = 3;
     }
     string Name2 = 4;
-    uint32 AnotherInput = 5;
+    repeated uint32 AnotherInput = 5;
 }
 message SimpleResponse {
     uint32 Resp = 1;
@@ -28,4 +28,5 @@ message SimpleResponse {
         float ValResp = 3;
     }
     string Name2Resp = 2;
+    repeated uint32 AnotherInputBack=6;
 }
