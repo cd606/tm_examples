@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
         {1.0f, 2.0f, 3.0f}
         , {InnerTestStruct {
             {-37}, {-50}, {-70}, 10.2525
-            , {{"abcde", "bcd", "cde"}}
+            , {{"", "abcde", "", "bcd", "", "", "cde", ""}}
             , "xyz"
         }}
         , true
