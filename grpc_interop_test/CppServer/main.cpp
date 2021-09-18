@@ -12,6 +12,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
+#include <tm_kit/transport/TLSConfigurationComponent.hpp>
 
 #include "../CppShare/CppNoCodeGenStruct.hpp"
 
@@ -29,6 +30,7 @@ using Env = infra::Environment<
         basic::real_time_clock::ClockComponent
     >
     , transport::CrossGuidComponent
+    , transport::TLSServerConfigurationComponent
     , transport::AllNetworkTransportComponents
     , transport::HeartbeatAndAlertComponent
 >;
@@ -38,11 +40,19 @@ using GL = infra::GenericLift<M>;
 
 int main(int argc, char **argv) {
     Env env;
-    R r(&env);
-
-    const std::string sslSpec = 
-        "[ssl=true,server_cert=../grpc_interop_test/DotNetServer/server.crt,server_key=../grpc_interop_test/DotNetServer/server.key]";
     bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
+    if (useSsl) {
+        env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+            transport::TLSServerInfoKey {
+                34567
+            }
+            , transport::TLSServerInfo {
+                "../grpc_interop_test/DotNetServer/server.crt"
+                , "../grpc_interop_test/DotNetServer/server.key"
+            }
+        );
+    }
+    R r(&env);
 
     transport::HeartbeatAndAlertComponentTouchup<R>(
         r
@@ -106,14 +116,14 @@ int main(int argc, char **argv) {
         (
             r
             , testFacility
-            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:"")
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"
             , "testService"
         );
     transport::MultiTransportFacilityWrapper<R>::wrap<SimpleReq,SimpleResp>
         (
             r
             , simpleTestFacility
-            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
             , "simpleTestService"
         );
 

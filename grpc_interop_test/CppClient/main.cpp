@@ -11,6 +11,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/grpc_interop/GrpcClientFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/TLSConfigurationComponent.hpp>
 
 #include "../CppShare/CppNoCodeGenStruct.hpp"
 
@@ -28,6 +29,7 @@ using Env = infra::Environment<
         basic::real_time_clock::ClockComponent
     >
     , transport::CrossGuidComponent
+    , transport::TLSClientConfigurationComponent
     , transport::AllNetworkTransportComponents
 >;
 using M = infra::RealTimeApp<Env>;
@@ -36,11 +38,21 @@ using CFU = basic::CommonFlowUtilComponents<M>;
 
 int main(int argc, char **argv) {
     Env env;
-    R r(&env);
-
-    const std::string sslSpec = 
-        "[ssl=true,ca_cert=../grpc_interop_test/DotNetServer/server.crt,client_cert=../grpc/interop_test/DotNetClient/client.crt,client_key=../grpc/interop_test/DotNetClient/client.key]";
     bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
+    if (useSsl) {
+        env.transport::TLSClientConfigurationComponent::setConfigurationItem(
+            transport::TLSClientInfoKey {
+                "localhost"
+                , 34567
+            }
+            , transport::TLSClientInfo {
+                "../grpc_interop_test/DotNetServer/server.crt"
+                , "../grpc/interop_test/DotNetClient/client.crt"
+                , "../grpc/interop_test/DotNetClient/client.key"
+            }
+        );
+    }
+    R r(&env);
 
     //synchronous call first
     //Please note that we don't use the same OneShotCall methods
@@ -59,7 +71,7 @@ int main(int argc, char **argv) {
     auto result = transport::grpc_interop::GrpcClientFacilityFactory<M>
         ::runSyncClient<Req, Resp>(
             &env
-            , transport::ConnectionLocator::parse("localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:""))
+            , transport::ConnectionLocator::parse("localhost:34567:::grpc_interop_test/TestService/Test")
             , req
         );
     for (auto const &resp : result) {
@@ -70,7 +82,7 @@ int main(int argc, char **argv) {
     auto result2 = transport::OneShotMultiTransportRemoteFacilityCall<Env>
         ::call<SimpleReq, SimpleResp>(
             &env 
-            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
+            , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
             , std::move(req2)
         ).get();
     std::cout << *result2 << '\n';
@@ -96,7 +108,7 @@ int main(int argc, char **argv) {
         Req, Resp
     >(
         r
-        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"+(useSsl?sslSpec:"")
+        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"
         /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
             "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
@@ -109,7 +121,7 @@ int main(int argc, char **argv) {
         SimpleReq, SimpleResp
     >(
         r
-        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"+(useSsl?sslSpec:"")
+        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
         /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
             "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
