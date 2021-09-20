@@ -1,8 +1,8 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/screen/string.hpp>
-#if defined(_has_include)
-    #if _has_include(<ftxui/component/button.hpp>) && _has_include(<ftxui/component/container.hpp>)
+#if defined(__has_include)
+    #if __has_include(<ftxui/component/button.hpp>) && __has_include(<ftxui/component/container.hpp>)
         #include <ftxui/component/button.hpp>
         #include <ftxui/component/container.hpp>
         #define FTXUI_OLD_STYLE_COMPONENT 1
