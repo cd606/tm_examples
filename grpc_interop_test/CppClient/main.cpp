@@ -95,11 +95,6 @@ int main(int argc, char **argv) {
     //the cpp server, but since the dotnet server is not publishing
     //heartbeat, it will fail with the dotnet server.
 
-    //(if using SSL, then since the server is publishing a locator with
-    //server certificate info, and the client is requiring a locator with
-    //client certificate info, the heartbeat spec will NOT work. This is
-    //particular to grpc_interop SSL because the server/client are asymmetric)
-
     //for direct specification, it is also possible to use the
     //simpler setupSimpleRemoteFacility instead of setupSimpleRemoteFacilitioid
     //(the latter supports heartbeat spec).
