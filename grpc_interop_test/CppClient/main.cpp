@@ -17,10 +17,10 @@
 
 using namespace dev::cd606::tm;
 
-using Req = basic::proto_interop::Proto<grpc_interop_test::TestRequest>;
-using Resp = basic::proto_interop::Proto<grpc_interop_test::TestResponse>;
-using SimpleReq = basic::proto_interop::Proto<grpc_interop_test::SimpleRequest>;
-using SimpleResp = basic::proto_interop::Proto<grpc_interop_test::SimpleResponse>;
+using Req = grpc_interop_test::TestRequest;
+using Resp = grpc_interop_test::TestResponse;
+using SimpleReq = grpc_interop_test::SimpleRequest;
+using SimpleResp = grpc_interop_test::SimpleResponse;
 
 using Env = infra::Environment<
     infra::CheckTimeComponent<false>
@@ -66,26 +66,26 @@ int main(int argc, char **argv) {
     //Therefore it is better to just use grpc-specific method for
     //synchronous calls
     Req req;
-    req->intParam = 2;
-    req->doubleListParam = std::vector<double> {1.0, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6};
+    req.intParam = 2;
+    req.doubleListParam = std::vector<double> {1.0, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6};
     auto result = transport::grpc_interop::GrpcClientFacilityFactory<M>
-        ::runSyncClient<Req, Resp>(
+        ::runSyncClient<basic::proto_interop::Proto<Req>, basic::proto_interop::Proto<Resp>>(
             &env
             , transport::ConnectionLocator::parse("localhost:34567:::grpc_interop_test/TestService/Test")
-            , req
+            , {req}
         );
     for (auto const &resp : result) {
         std::cout << *resp << '\n';
     }
     SimpleReq req2;
-    req2->input = 1;
+    req2.input = 1;
     auto result2 = transport::OneShotMultiTransportRemoteFacilityCall<Env>
         ::call<SimpleReq, SimpleResp>(
             &env 
             , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
             , std::move(req2)
         ).get();
-    std::cout << *result2 << '\n';
+    std::cout << result2 << '\n';
 
     //then asynchronous call
 
@@ -103,26 +103,26 @@ int main(int argc, char **argv) {
         Req, Resp
     >(
         r
-        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"
-        /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
+        //, "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"
+        , transport::SimpleRemoteFacilitySpecByHeartbeat {
             "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
             , std::regex("grpc_interop_test_server")
             , "testFacility"
-        }*/
+        }
         , "facility"
     );
     auto facility2 = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilitioid<
         SimpleReq, SimpleResp
     >(
         r
-        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
-        /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
+        //, "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
+        , transport::SimpleRemoteFacilitySpecByHeartbeat {
             "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
             , std::regex("grpc_interop_test_server")
             , "simpleTestFacility"
-        }*/
+        }
         , "facility2"
     );
     
@@ -134,8 +134,8 @@ int main(int argc, char **argv) {
             }
             ++counter;
             Req req;
-            req->intParam = counter;
-            req->doubleListParam = std::vector<double> {1.0, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6};
+            req.intParam = counter;
+            req.doubleListParam = std::vector<double> {1.0, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6};
             return {
                 (counter < 3)
                 , M::InnerData<Req> {
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
         , {"keyify", CFU::keyify<Req>()}
         , {"exporter", [&env](M::KeyedData<Req, Resp> &&data) {
             std::ostringstream oss;
-            oss << *(data.data);
+            oss << data.data;
             env.log(infra::LogLevel::Info, oss.str());
         }}
         , {facility.facilityFirstReady.clone(), "importer"}
@@ -164,18 +164,18 @@ int main(int argc, char **argv) {
             }
             ++counter;
             SimpleReq req;
-            req->input = counter;
+            req.input = counter;
             if (counter%2 == 0) {
-                req->reqOneOf.emplace<1>(std::string("abc"));
+                req.reqOneOf.emplace<1>(std::string("abc"));
             } else {
-                req->reqOneOf.emplace<2>(0.1f*counter);
+                req.reqOneOf.emplace<2>(0.1f*counter);
             }
-            req->name2 = std::string(counter, 'x');
-            req->anotherInput.push_back((uint32_t) counter-1);
-            req->anotherInput.push_back((uint32_t) counter);
-            req->anotherInput.push_back((uint32_t) counter+1);
+            req.name2 = std::string(counter, 'x');
+            req.anotherInput.push_back((uint32_t) counter-1);
+            req.anotherInput.push_back((uint32_t) counter);
+            req.anotherInput.push_back((uint32_t) counter+1);
             std::ostringstream oss;
-            oss << "SimpleReq: " << *req;
+            oss << "SimpleReq: " << req;
             env->log(infra::LogLevel::Info, oss.str());
             return {
                 (counter < 3)
@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
         , {"keyify2", CFU::keyify<SimpleReq>()}
         , {"exporter2", [&env](M::KeyedData<SimpleReq, SimpleResp> &&data) {
             std::ostringstream oss;
-            oss << *(data.data);
+            oss << data.data;
             env.log(infra::LogLevel::Info, oss.str());
         }}
         , {facility2.facilityFirstReady.clone(), "importer2"}
