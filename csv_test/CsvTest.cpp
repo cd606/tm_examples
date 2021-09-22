@@ -164,11 +164,11 @@ int main() {
     d.tp = std::chrono::system_clock::now();
 
     std::stringstream jsonSS;
-    basic::nlohmann_json_interop::Json<test_data *>(&d).SerializeToStream(jsonSS);
+    basic::nlohmann_json_interop::Json<test_data *>(&d).writeToStream(jsonSS);
     std::string jsonStr = jsonSS.str();
     std::cout << jsonStr << '\n';
     test_data dj;
-    basic::nlohmann_json_interop::Json<test_data *>(&dj).ParseFromString(jsonStr);
+    basic::nlohmann_json_interop::Json<test_data *>(&dj).fromString(jsonStr);
     std::cout << dj << '\n';
 
     small_test_data sd;
