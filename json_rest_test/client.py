@@ -1,13 +1,15 @@
-from urllib import request
+import requests
 import json
 
-req = request.Request("http://localhost:34567/test_facility", json.dumps({
-    'request': {
-        'x': ['abc', 'def']
-        , 'y': 2.0
-    }
-}).encode('utf-8'))
-resp = request.urlopen(req)
-print(resp.read())
-resp = request.urlopen(req)
-print(resp.read())
+resp = requests.post(
+    "https://localhost:34567/test_facility"
+    , data=json.dumps({
+        'request': {
+            'x': ['abc', 'def']
+            , 'y': 2.0
+        }
+    })
+    , verify='../grpc_interop_test/DotNetServer/server.crt'
+    , cert=('../grpc_interop_test/DotNetClient/client.crt','../grpc_interop_test/DotNetClient/client.key')
+);
+print(resp.text)

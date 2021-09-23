@@ -8,6 +8,7 @@
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
+#include <tm_kit/transport/TLSConfigurationComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #define REQ_FIELDS \
@@ -36,15 +37,29 @@ using Env = infra::Environment<
         , false
     >
     , transport::CrossGuidComponent
+    , transport::TLSServerConfigurationComponent
     , transport::AllNetworkTransportComponents
 >;
 using M = infra::RealTimeApp<Env>;
 using R = infra::AppRunner<M>;
 using GL = infra::GenericLift<M>;
 
-int main() {
+int main(int argc, char **argv) {
     Env env;
     R r(&env);
+
+    bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
+    if (useSsl) {
+        env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+            transport::TLSServerInfoKey {
+                34567
+            }
+            , transport::TLSServerInfo {
+                "../grpc_interop_test/DotNetServer/server.crt"
+                , "../grpc_interop_test/DotNetServer/server.key"
+            }
+        );
+    }
 
     auto facility = GL::liftFacility([](Req &&r) -> Resp {
         return Resp {

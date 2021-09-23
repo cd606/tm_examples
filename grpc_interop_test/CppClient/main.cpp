@@ -47,8 +47,8 @@ int main(int argc, char **argv) {
             }
             , transport::TLSClientInfo {
                 "../grpc_interop_test/DotNetServer/server.crt"
-                , "../grpc/interop_test/DotNetClient/client.crt"
-                , "../grpc/interop_test/DotNetClient/client.key"
+                , "../grpc_interop_test/DotNetClient/client.crt"
+                , "../grpc_interop_test/DotNetClient/client.key"
             }
         );
     }
