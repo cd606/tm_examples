@@ -10,6 +10,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
+#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 
 #define REQ_FIELDS \
     ((std::vector<std::string>, x)) \
@@ -39,6 +40,9 @@ using Env = infra::Environment<
     , transport::CrossGuidComponent
     , transport::TLSServerConfigurationComponent
     , transport::AllNetworkTransportComponents
+    , transport::ServerSideSimpleIdentityCheckerComponent<
+        std::string, Req
+    >
 >;
 using M = infra::RealTimeApp<Env>;
 using R = infra::AppRunner<M>;
@@ -63,7 +67,9 @@ int main(int argc, char **argv) {
     env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user1", std::nullopt);
     env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user2", "abcde");
 
-    auto facility = GL::liftFacility([](Req &&r) -> Resp {
+    auto facility = GL::liftFacility([&env](std::tuple<std::string,Req> &&reqWithIdentity) -> Resp {
+        env.log(infra::LogLevel::Info, "Got request from '"+std::get<0>(reqWithIdentity)+"'");
+        auto &r = std::get<1>(reqWithIdentity);
         return Resp {
             (uint32_t) r.x.size()
             , r.y*2.0
