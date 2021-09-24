@@ -60,6 +60,8 @@ int main(int argc, char **argv) {
             }
         );
     }
+    env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user1", std::nullopt);
+    env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user2", "abcde");
 
     auto facility = GL::liftFacility([](Req &&r) -> Resp {
         return Resp {

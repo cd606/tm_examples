@@ -11,5 +11,6 @@ resp = requests.post(
     })
     , verify='../grpc_interop_test/DotNetServer/server.crt'
     , cert=('../grpc_interop_test/DotNetClient/client.crt','../grpc_interop_test/DotNetClient/client.key')
+    , auth=('user2', 'abcde')
 );
 print(resp.text)
