@@ -21,7 +21,7 @@
     (((std::tuple<bool,int>), tupleData))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(Data, DATA_FIELDS);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(Data, DATA_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(Data, DATA_FIELDS);
 
 #undef DATA_FIELDS
 
@@ -44,18 +44,15 @@ int main(int argc, char **argv) {
     Env env; 
     R r(&env);
 
-    bool useSsl = (argc>=2 && std::string_view(argv[1]) == "ssl");
-    if (useSsl) {
-        env.transport::TLSServerConfigurationComponent::setConfigurationItem(
-            transport::TLSServerInfoKey {
-                34567
-            }
-            , transport::TLSServerInfo {
-                "../grpc_interop_test/DotNetServer/server.crt"
-                , "../grpc_interop_test/DotNetServer/server.key"
-            }
-        );
-    }
+    env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+        transport::TLSServerInfoKey {
+            34567
+        }
+        , transport::TLSServerInfo {
+            "../grpc_interop_test/DotNetServer/server.crt"
+            , "../grpc_interop_test/DotNetServer/server.key"
+        }
+    );
 
     transport::multi_transport_touchups::PublisherTouchupWithProtocol<
         R, basic::nlohmann_json_interop::Json, Data
@@ -65,6 +62,20 @@ int main(int argc, char **argv) {
             "websocket://localhost:34567[ignoreTopic=true]"
         }
     );
+
+    
+    transport::multi_transport_touchups::PublisherTouchupWithProtocol<
+        R, std::void_t, Data
+    >(
+        r 
+        , {
+            "websocket://localhost:45678"
+            , std::nullopt 
+            , false 
+            , "cbor_websocket"
+        }
+    );
+
 
     auto timerInput = basic::real_time_clock::ClockImporter<Env>
         ::createRecurringClockImporter<basic::TypedDataWithTopic<Data>>
@@ -82,7 +93,7 @@ int main(int argc, char **argv) {
                 v.emplace<1>(ii+0.5f);
             }
             return {
-                ""
+                "test"
                 , {
                     t 
                     , "abc"
