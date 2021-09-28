@@ -1,5 +1,4 @@
 import asyncio
-import pathlib
 import ssl
 import websockets
 import cbor2
