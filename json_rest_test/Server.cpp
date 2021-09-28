@@ -14,11 +14,13 @@
 
 #define REQ_FIELDS \
     ((std::vector<std::string>, x)) \
-    ((double, y))
+    ((double, y)) \
+    (((std::variant<int,float>), tChoice))
 #define RESP_FIELDS \
     ((uint32_t, xCount)) \
     ((double, yTimesTwo)) \
-    ((std::list<std::string>, xCopy))
+    ((std::list<std::string>, xCopy)) \
+    (((std::tuple<int,float>), t))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(Req, REQ_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(Req, REQ_FIELDS);
@@ -70,10 +72,25 @@ int main(int argc, char **argv) {
     auto facility = GL::liftFacility([&env](std::tuple<std::string,Req> &&reqWithIdentity) -> Resp {
         env.log(infra::LogLevel::Info, "Got request from '"+std::get<0>(reqWithIdentity)+"'");
         auto &r = std::get<1>(reqWithIdentity);
+        /*
+        std::variant<int, float> tChoice;
+        if (std::get<0>(r.t) > std::get<1>(r.t)) {
+            tChoice.emplace<0>(std::get<0>(r.t));
+        } else {
+            tChoice.emplace<1>(std::get<1>(r.t));
+        }
+        */
+        std::tuple<int, float> t;
+        if (r.tChoice.index() == 0) {
+            t = {std::get<0>(r.tChoice), -1.0f};
+        } else {
+            t = {-1, std::get<1>(r.tChoice)};
+        }
         return Resp {
             (uint32_t) r.x.size()
             , r.y*2.0
             , std::list<std::string> {r.x.begin(), r.x.end()}
+            , std::move(t) //, std::move(tChoice)
         };
     });
     r.registerOnOrderFacility("facility", facility);

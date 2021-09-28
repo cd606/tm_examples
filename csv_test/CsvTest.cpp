@@ -132,13 +132,13 @@ int main() {
     std::cout << *fd << '\n';
 
     std::string flatStr;
-    fd.SerializeToString(&flatStr);
+    fd.writeToString(&flatStr);
 
     basic::bytedata_utils::printByteDataDetails(std::cout, basic::ByteDataView {flatStr});
     std::cout << '\n';
 
     basic::struct_field_info_utils::FlatPack<flatpack_test_data> fd1;
-    if (fd1.ParseFromString(flatStr)) {
+    if (fd1.fromString(flatStr)) {
         std::cout << *fd1 << '\n';
     }
    

@@ -7,6 +7,8 @@ resp = requests.post(
         'request': {
             'x': ['abc', 'def']
             , 'y': 2.0
+            #, 't' : [1, 0.2]
+            , 'tChoice': {'index': 1, 'content': 1}
         }
     })
     , verify='../grpc_interop_test/DotNetServer/server.crt'
