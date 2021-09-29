@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
     }
     env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user1", std::nullopt);
     env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(34567, "user2", "abcde");
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(34567, "../json_rest_test");
 
     auto facility = GL::liftFacility([&env](std::tuple<std::string,Req> &&reqWithIdentity) -> Resp {
         env.log(infra::LogLevel::Info, "Got request from '"+std::get<0>(reqWithIdentity)+"'");

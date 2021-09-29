@@ -1,6 +1,14 @@
 import requests
 import json
 
+resp = requests.get(
+    "https://localhost:34567/test.html"
+    , verify='../grpc_interop_test/DotNetServer/server.crt'
+    , cert=('../grpc_interop_test/DotNetClient/client.crt','../grpc_interop_test/DotNetClient/client.key')
+    , auth=('user2', 'abcde')
+)
+print(resp.text)
+
 resp = requests.post(
     "https://localhost:34567/test_facility"
     , data=json.dumps({
