@@ -12,6 +12,17 @@
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 
+#ifdef _MSC_VER
+#define REQ_FIELDS \
+    ((std::vector<std::string>, x)) \
+    ((double, y)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::variant<int,float>), tChoice))
+#define RESP_FIELDS \
+    ((uint32_t, xCount)) \
+    ((double, yTimesTwo)) \
+    ((std::list<std::string>, xCopy)) \
+    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::tuple<int,float>), t))
+#else
 #define REQ_FIELDS \
     ((std::vector<std::string>, x)) \
     ((double, y)) \
@@ -21,6 +32,7 @@
     ((double, yTimesTwo)) \
     ((std::list<std::string>, xCopy)) \
     (((std::tuple<int,float>), t))
+#endif
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(Req, REQ_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(Req, REQ_FIELDS);
