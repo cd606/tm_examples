@@ -20,10 +20,12 @@
 #include <tm_kit/transport/BoostUUIDComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/security/SignatureBasedIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/security/SignatureAndVerifyHookFactoryComponents.hpp>
+#include <tm_kit/transport/TLSConfigurationComponent.hpp>
 
 #include "defs.pb.h"
 #include "simple_demo/program_logic/MainLogic.hpp"
@@ -56,6 +58,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
+        transport::TLSServerConfigurationComponent,
         EncAndSignHookFactoryComponent<transport::HeartbeatMessage>,
         DecHookFactoryComponent<InputData>
     >;
@@ -122,6 +125,35 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
             std::get<0>(clientItem), std::get<1>(clientItem)
         );
     }
+
+    env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+        transport::TLSServerInfoKey {
+            34567
+        }
+        , transport::TLSServerInfo {
+            "../grpc_interop_test/DotNetServer/server.crt"
+            , "../grpc_interop_test/DotNetServer/server.key"
+        }
+    );
+    env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+        transport::TLSServerInfoKey {
+            45678
+        }
+        , transport::TLSServerInfo {
+            "../grpc_interop_test/DotNetServer/server.crt"
+            , "../grpc_interop_test/DotNetServer/server.key"
+        }
+    );
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(
+        34567 
+        , "../simple_demo/secure_executables/web_enabler"
+    );
+    env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(
+        34567, "user1", std::nullopt
+    );
+    env.transport::json_rest::JsonRESTComponent::addBasicAuthentication(
+        34567, "user2", "abcde"
+    );
 
     //env.setLogFilePrefix("simple_demo_secure_main", true);
     R r(&env);
@@ -250,11 +282,18 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     
     MainLogicInput<R> combinationInput {
         calc
-        , {transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
-            <basic::proto_interop::Proto, ConfigureCommandPOCO, ConfigureResultPOCO>(
-            "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
-            , "cfg_wrapper_"
-        )}
+        , {
+            transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
+                <basic::proto_interop::Proto, ConfigureCommandPOCO, ConfigureResultPOCO>(
+                "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
+                , "cfg_wrapper_"
+            )
+            , transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
+                <basic::nlohmann_json_interop::Json, ConfigureCommandPOCO, ConfigureResultPOCO>(
+                "json_rest://0.0.0.0:34567:::/configureMainLogic"
+                , "cfg_wrapper_2_"
+            )
+        }
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
             "rabbitmq://127.0.0.1::guest:guest:test_query_queue"
@@ -277,6 +316,26 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     }
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.main_logic.heartbeat", std::chrono::seconds(1));
+
+    auto heartbeatForPubSource = transport::addHeartbeatSource(r);
+    auto extractEnabled = M::liftPure<transport::HeartbeatMessage>(
+        [](transport::HeartbeatMessage &&msg) -> basic::TypedDataWithTopic<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>> {
+            auto st = msg.status("calculation_status");
+            simple_demo::ConfigureResultPOCO res {
+                st && st->status == transport::HeartbeatMessage::Status::Good
+            };
+            return {"", {std::move(res)}};
+        }
+    );
+    r.registerAction("extractEnabled", extractEnabled);
+    r.connect(heartbeatForPubSource.clone(), r.actionAsSink(extractEnabled));
+    auto enabledPubSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+        ::oneBroadcastPublisher<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>>
+        (
+            r, "enabledPub"
+            , "websocket://0.0.0.0:45678[ignoreTopic=true]"
+        );
+    r.connect(r.actionAsSource(extractEnabled), enabledPubSink);
 
     r.finalize();
 
