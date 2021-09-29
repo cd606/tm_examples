@@ -19,6 +19,7 @@
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 
 #include "defs.pb.h"
@@ -42,7 +43,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         basic::TimeComponentEnhancedWithBoostTrivialLogging<basic::real_time_clock::ClockComponent>,
         transport::BoostUUIDComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>,
-        transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommand>,
+        transport::ServerSideSimpleIdentityCheckerComponent<std::string,ConfigureCommandPOCO>,
         transport::ServerSideSimpleIdentityCheckerComponent<std::string,ClearCommands>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent
@@ -51,6 +52,10 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(
+        34567 
+        , "../simple_demo/plain_executables/web_enabler"
+    );
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>::operator=(
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,CalculateCommand>(
             "my_identity"
@@ -112,11 +117,18 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     
     MainLogicInput<R> combinationInput {
         calc
-        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
-            <ConfigureCommand, ConfigureResult>(
-            "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
-            , "cfg_wrapper_"
-        )
+        , {
+            transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
+                <basic::proto_interop::Proto, ConfigureCommandPOCO, ConfigureResultPOCO>(
+                "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
+                , "cfg_wrapper_"
+            )
+            , transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
+                <basic::nlohmann_json_interop::Json, ConfigureCommandPOCO, ConfigureResultPOCO>(
+                "json_rest://0.0.0.0:34567:::/configureMainLogic"
+                , "cfg_wrapper_2_"
+            )
+        }
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
             "rabbitmq://127.0.0.1::guest:guest:test_query_queue"
@@ -139,6 +151,26 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     }
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.main_logic.heartbeat", std::chrono::seconds(1));
+
+    auto heartbeatForPubSource = transport::addHeartbeatSource(r);
+    auto extractEnabled = M::liftPure<transport::HeartbeatMessage>(
+        [](transport::HeartbeatMessage &&msg) -> basic::TypedDataWithTopic<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>> {
+            auto st = msg.status("calculation_status");
+            simple_demo::ConfigureResultPOCO res {
+                st && st->status == transport::HeartbeatMessage::Status::Good
+            };
+            return {"", {std::move(res)}};
+        }
+    );
+    r.registerAction("extractEnabled", extractEnabled);
+    r.connect(heartbeatForPubSource.clone(), r.actionAsSink(extractEnabled));
+    auto enabledPubSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+        ::oneBroadcastPublisher<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>>
+        (
+            r, "enabledPub"
+            , "websocket://0.0.0.0:45678[ignoreTopic=true]"
+        );
+    r.connect(r.actionAsSource(extractEnabled), enabledPubSink);
 
     r.finalize();
 
@@ -207,7 +239,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
                 R
                 ,basic::top_down_single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
             >::service)
-        , std::nullopt
+        , {}
         , std::nullopt
         , std::nullopt
     };
@@ -256,7 +288,7 @@ void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateG
 
     MainLogicInput<R> combinationInput {
         r.facilityConnector(facility)
-        , std::nullopt
+        , {}
         , std::nullopt
         , std::nullopt
     };

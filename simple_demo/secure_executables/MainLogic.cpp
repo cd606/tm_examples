@@ -52,7 +52,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         ClientSideSignatureAndEncBasedIdentityAttacherComponent<CalculateCommand>,
         transport::security::ClientSideSignatureBasedIdentityAttacherComponent<DHHelperCommand>,
         transport::security::VerifyHookFactoryComponent<DHHelperReply>,
-        transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>,
+        transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommandPOCO>,
         transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ClearCommands>,
         transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
@@ -113,7 +113,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
         }
     };
     for (auto const &clientItem : client_pub_keys) {
-        env.transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommand>
+        env.transport::security::ServerSideSignatureBasedIdentityCheckerComponent<ConfigureCommandPOCO>
             ::add_identity_and_key(
             std::get<0>(clientItem), std::get<1>(clientItem)
         );
@@ -250,11 +250,11 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
     
     MainLogicInput<R> combinationInput {
         calc
-        , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
-            <ConfigureCommand, ConfigureResult>(
+        , {transport::MultiTransportFacilityWrapper<R>::facilityWrapperWithProtocol
+            <basic::proto_interop::Proto, ConfigureCommandPOCO, ConfigureResultPOCO>(
             "rabbitmq://127.0.0.1::guest:guest:test_config_queue"
             , "cfg_wrapper_"
-        )
+        )}
         , transport::MultiTransportFacilityWrapper<R>::facilityWrapper
             <OutstandingCommandsQuery,OutstandingCommandsResult>(
             "rabbitmq://127.0.0.1::guest:guest:test_query_queue"
@@ -347,7 +347,7 @@ void run_backtest(LogicChoice logicChoice, std::string const &inputFile, std::op
                 R
                 ,basic::single_pass_iteration_clock::ClockOnOrderFacility<TheEnvironment>
             >::service)
-        , std::nullopt
+        , {}
         , std::nullopt
         , std::nullopt
     };
@@ -396,7 +396,7 @@ void run_typecheck(LogicChoice logicChoice, std::optional<std::string> generateG
 
     MainLogicInput<R> combinationInput {
         r.facilityConnector(facility)
-        , std::nullopt
+        , {}
         , std::nullopt
         , std::nullopt
     };

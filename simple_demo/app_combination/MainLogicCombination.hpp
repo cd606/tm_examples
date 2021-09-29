@@ -12,7 +12,7 @@ template <class R>
 struct MainLogicInput {
     using M = typename R::AppType;
     typename R::template FacilitioidConnector<simple_demo::CalculateCommand, simple_demo::CalculateResult> commandConnector;
-    typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ConfigureCommand>, simple_demo::ConfigureResult> configWrapper;
+    std::vector<typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ConfigureCommandPOCO>, simple_demo::ConfigureResultPOCO>> configWrappers;
     typename R::template FacilityWrapper<simple_demo::OutstandingCommandsQuery, simple_demo::OutstandingCommandsResult> queryWrapper;
     typename R::template FacilityWrapper<std::tuple<std::string, simple_demo::ClearCommands>, simple_demo::ClearCommandsResult> clearCommandsWrapper;
 };
@@ -96,15 +96,24 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
             r.execute("keyify", keyify, std::move(cmd)),
             r.actionAsSink(extractResult)
         );
-        if (input.configWrapper) {
-            auto cfgFacility = M::template liftPureOnOrderFacility<
-                std::tuple<std::string, simple_demo::ConfigureCommand>
-            >(
-                boost::hana::curry<2>(std::mem_fn(&MainLogic::configure))(mainLogicPtr.get())
-            );
-            r.registerOnOrderFacility("cfgFacility", cfgFacility);
-            (*input.configWrapper)(r, cfgFacility);
-            r.markStateSharing(cfgFacility, logic, "enabled");
+        std::shared_ptr<typename M::template OnOrderFacility<
+            std::tuple<std::string, simple_demo::ConfigureCommandPOCO>
+            , simple_demo::ConfigureResultPOCO
+        >> cfgFacility;
+        for (auto const &cw : input.configWrappers) {
+            if (cw) {
+                if (!cfgFacility) {
+                    cfgFacility = M::template liftPureOnOrderFacility<
+                        std::tuple<std::string, simple_demo::ConfigureCommandPOCO>
+                    >(
+                        boost::hana::curry<2>(std::mem_fn(&MainLogic::configure))(mainLogicPtr.get())
+                    );
+                    r.registerOnOrderFacility("cfgFacility", cfgFacility);
+                    r.markStateSharing(cfgFacility, logic, "enabled");
+                    r.setMaxOutputConnectivity(cfgFacility, input.configWrappers.size());
+                }
+                (*cw)(r, cfgFacility); 
+            }
         }
         if (input.queryWrapper) {
             auto queryFacility = M::template liftPureOnOrderFacility<
@@ -235,15 +244,24 @@ inline MainLogicOutput<R> MainLogicCombination(R &r, typename R::EnvironmentType
         );
         //The following lifts also cannot be done with GL::lift
         //because overloaded operator() in boost::hana::curry is involved
-        if (input.configWrapper) {
-            auto cfgFacility = M::template liftPureOnOrderFacility<
-                std::tuple<std::string, simple_demo::ConfigureCommand>
-            >(
-                boost::hana::curry<2>(std::mem_fn(&MainLogic2::configure))(mainLogicPtr.get())
-            );
-            r.registerOnOrderFacility("cfgFacility", cfgFacility);
-            (*input.configWrapper)(r, cfgFacility);
-            r.markStateSharing(cfgFacility, logic, "enabled");
+        std::shared_ptr<typename M::template OnOrderFacility<
+            std::tuple<std::string, simple_demo::ConfigureCommandPOCO>
+            , simple_demo::ConfigureResultPOCO
+        >> cfgFacility;
+        for (auto const &cw: input.configWrappers) {
+            if (cw) {
+                if (!cfgFacility) {
+                    auto cfgFacility = M::template liftPureOnOrderFacility<
+                        std::tuple<std::string, simple_demo::ConfigureCommandPOCO>
+                    >(
+                        boost::hana::curry<2>(std::mem_fn(&MainLogic2::configure))(mainLogicPtr.get())
+                    );
+                    r.registerOnOrderFacility("cfgFacility", cfgFacility);
+                    r.markStateSharing(cfgFacility, logic, "enabled");
+                    r.setMaxOutputConnectivity(cfgFacility, input.configWrappers.size());
+                }
+                (*cw)(r, cfgFacility);
+            }
         }
         if (input.queryWrapper) {
             auto queryFacility = M::template liftPureOnOrderFacility<

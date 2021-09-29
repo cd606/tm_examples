@@ -96,14 +96,12 @@ public:
             return std::nullopt;
         }
     }
-    simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
+    simple_demo::ConfigureResultPOCO configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&cmd) {
         std::lock_guard<std::mutex> _(mutex_);
-        enabled_ = std::get<1>(cmd).enabled();
+        enabled_ = std::get<1>(cmd).enabled;
         logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled")+" by '"+std::get<0>(cmd)+"'");
         statusUpdater_(enabled_);
-        simple_demo::ConfigureResult res;
-        res.set_enabled(enabled_);
-        return res;
+        return simple_demo::ConfigureResultPOCO {enabled_};
     }
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {
         logger_("Received outstanding command query");
@@ -150,7 +148,7 @@ std::optional<simple_demo::CalculateCommand> MainLogic::runLogic(
 ) {
     return impl_->runLogic(std::move(input));
 }
-simple_demo::ConfigureResult MainLogic::configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
+simple_demo::ConfigureResultPOCO MainLogic::configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&cmd) {
     return impl_->configure(std::move(cmd));
 }
 simple_demo::OutstandingCommandsResult MainLogic::queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {
@@ -262,14 +260,12 @@ public:
             return std::nullopt;
         }
     }
-    simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
+    simple_demo::ConfigureResultPOCO configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&cmd) {
         std::lock_guard<std::mutex> _(mutex_);
-        enabled_ = std::get<1>(cmd).enabled();
+        enabled_ = std::get<1>(cmd).enabled;
         logger_(std::string("The logic is ")+(enabled_?"enabled":"disabled")+" by '"+std::get<0>(cmd)+"'");
         statusUpdater_(enabled_);
-        simple_demo::ConfigureResult res;
-        res.set_enabled(enabled_);
-        return res;
+        return simple_demo::ConfigureResultPOCO {enabled_};
     }
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {
         logger_("Received outstanding command query");
@@ -314,7 +310,7 @@ std::optional<simple_demo::CalculateCommand> MainLogic2::runLogic(
 ) {
     return impl_->runLogic(std::move(input));
 }
-simple_demo::ConfigureResult MainLogic2::configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&cmd) {
+simple_demo::ConfigureResultPOCO MainLogic2::configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&cmd) {
     return impl_->configure(std::move(cmd));
 }
 simple_demo::OutstandingCommandsResult MainLogic2::queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {

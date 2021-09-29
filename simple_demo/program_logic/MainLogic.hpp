@@ -7,6 +7,7 @@
 #include <chrono>
 #include <variant>
 #include "defs.pb.h"
+#include "simple_demo/data_structures/ConfigureStructures.hpp"
 
 class MainLogicImpl;
 
@@ -23,7 +24,7 @@ public:
     std::optional<simple_demo::CalculateCommand> runLogic(
         std::tuple<std::chrono::system_clock::time_point, std::variant<simple_demo::InputData, simple_demo::CalculateResult>> &&input
     );
-    simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);
+    simple_demo::ConfigureResultPOCO configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&);
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&);
     simple_demo::ClearCommandsResult clearCommands(std::tuple<std::string, simple_demo::ClearCommands> &&);
 };
@@ -57,7 +58,7 @@ public:
     std::optional<simple_demo::CalculateCommand> runLogic(
         std::variant<double, simple_demo::CalculateResult> &&input
     );
-    simple_demo::ConfigureResult configure(std::tuple<std::string, simple_demo::ConfigureCommand> &&);
+    simple_demo::ConfigureResultPOCO configure(std::tuple<std::string, simple_demo::ConfigureCommandPOCO> &&);
     simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&);
     simple_demo::ClearCommandsResult clearCommands(std::tuple<std::string, simple_demo::ClearCommands> &&);
 };

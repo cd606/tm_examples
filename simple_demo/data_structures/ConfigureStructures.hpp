@@ -1,0 +1,22 @@
+#ifndef DATA_STRUCTURES_CONFIGURE_STRUCTURES_HPP_
+#define DATA_STRUCTURES_CONFIGURE_STRUCTURES_HPP_
+
+#include <tm_kit/basic/SerializationHelperMacros.hpp>
+
+namespace simple_demo {
+    #define CONFIGURE_COMMAND_FIELDS \
+        ((bool, enabled))
+    #define CONFIGURE_RESULT_FIELDS \
+        ((bool, enabled))
+
+    TM_BASIC_CBOR_CAPABLE_STRUCT(ConfigureCommandPOCO, CONFIGURE_COMMAND_FIELDS);
+    TM_BASIC_CBOR_CAPABLE_STRUCT(ConfigureResultPOCO, CONFIGURE_RESULT_FIELDS);
+}
+
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(simple_demo::ConfigureCommandPOCO, CONFIGURE_COMMAND_FIELDS);
+TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(simple_demo::ConfigureResultPOCO, CONFIGURE_RESULT_FIELDS);
+
+#undef CONFIGURE_COMMAND_FIELDS
+#undef CONFIGURE_RESULT_FIELDS
+
+#endif
