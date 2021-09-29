@@ -317,20 +317,20 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.main_logic.heartbeat", std::chrono::seconds(1));
 
-    auto heartbeatForPubSource = transport::addHeartbeatSource(r);
+    auto heartbeatForPubSource = transport::addHeartbeatPublishingSource(r);
     auto extractEnabled = M::liftPure<transport::HeartbeatMessage>(
-        [](transport::HeartbeatMessage &&msg) -> basic::TypedDataWithTopic<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>> {
+        [](transport::HeartbeatMessage &&msg) -> basic::TypedDataWithTopic<simple_demo::ConfigureResultPOCO> {
             auto st = msg.status("calculation_status");
             simple_demo::ConfigureResultPOCO res {
                 st && st->status == transport::HeartbeatMessage::Status::Good
             };
-            return {"", {std::move(res)}};
+            return {"", std::move(res)};
         }
     );
     r.registerAction("extractEnabled", extractEnabled);
     r.connect(heartbeatForPubSource.clone(), r.actionAsSink(extractEnabled));
     auto enabledPubSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
-        ::oneBroadcastPublisher<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>>
+        ::oneBroadcastPublisherWithProtocol<basic::nlohmann_json_interop::Json, simple_demo::ConfigureResultPOCO>
         (
             r, "enabledPub"
             , "websocket://0.0.0.0:45678[ignoreTopic=true]"

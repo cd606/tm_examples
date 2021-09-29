@@ -152,7 +152,7 @@ void run_real_or_virtual(LogicChoice logicChoice, bool isReal, std::string const
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.main_logic.heartbeat", std::chrono::seconds(1));
 
-    auto heartbeatForPubSource = transport::addHeartbeatSource(r);
+    auto heartbeatForPubSource = transport::addHeartbeatPublishingSource(r);
     auto extractEnabled = M::liftPure<transport::HeartbeatMessage>(
         [](transport::HeartbeatMessage &&msg) -> basic::TypedDataWithTopic<basic::nlohmann_json_interop::Json<simple_demo::ConfigureResultPOCO>> {
             auto st = msg.status("calculation_status");
