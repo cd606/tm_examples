@@ -16,7 +16,7 @@
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 
-#include "defs.pb.h"
+#include "simple_demo/data_structures/InputDataStructure.hpp"
 #include "simple_demo/external_logic/DataSource.hpp"
 
 #include <iostream>
@@ -33,11 +33,13 @@ using TheEnvironment = infra::Environment<
     transport::BoostUUIDComponent,
     transport::zeromq::ZeroMQComponent,
     transport::rabbitmq::RabbitMQComponent,
+    transport::web_socket::WebSocketComponent,
+    transport::json_rest::JsonRESTComponent,
     transport::HeartbeatAndAlertComponent
 >;
 using M = infra::RealTimeApp<TheEnvironment>;
 
-class DataSourceImporter final : public M::AbstractImporter<InputData>, public DataSourceListener {
+class DataSourceImporter final : public M::AbstractImporter<InputDataPOCO>, public DataSourceListener {
 private:
     TheEnvironment *env_;
     DataSource source_;
@@ -50,14 +52,13 @@ public:
         env->sendAlert("simple_demo.data_source.info", infra::LogLevel::Info, "Data source started");
     }
     virtual void onData(DataFromSource const &data) override final {
-        InputData dataCopy;
-        dataCopy.set_value(data.value);
-        publish(M::pureInnerData<InputData>(env_, std::move(dataCopy), false));
+        publish(M::pureInnerData<InputDataPOCO>(env_, InputDataPOCO {data.value}, false));
     }
 };
 
 int main(int argc, char **argv) {
     TheEnvironment env;
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(56788, "../simple_demo/plain_executables/datasource_web");
     
     transport::initializeHeartbeatAndAlertComponent
         (&env, "simple_demo DataSource", "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]");
@@ -66,21 +67,32 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
     R r(&env);
 
-    auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputData>("input.data");
+    auto addTopic = basic::SerializationActions<M>::template addConstTopic<InputDataPOCO>("input.data");
 
     auto publisherSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>
-        ::oneBroadcastPublisher<InputData>(
+        ::oneBroadcastPublisherWithProtocol<basic::proto_interop::Proto, InputDataPOCO>(
             r
             , "input data publisher"
             , "zeromq://localhost:12345"
         );
+    auto publisherSink2 = transport::MultiTransportBroadcastPublisherManagingUtils<R>
+        ::oneBroadcastPublisherWithProtocol<std::void_t, InputDataPOCO>(
+            r
+            , "input data publisher 2"
+            , "websocket://localhost:56789[ignoreTopic=true]"
+        );
 
     auto source = M::importer(new DataSourceImporter());
+    auto toPub = r.execute("addTopic", addTopic
+            , r.importItem("source", source));
 
     r.connect(
-        r.execute("addTopic", addTopic
-            , r.importItem("source", source))
+        toPub.clone()
         , publisherSink
+    );
+    r.connect(
+        toPub.clone()
+        , publisherSink2
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.plain_executables.data_source.heartbeat", std::chrono::seconds(10));
