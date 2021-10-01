@@ -3,6 +3,7 @@
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="https://unpkg.com/cbor-web"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/libsodium-wrappers/0.5.4/sodium.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     </head>
     <body>
         <h3 id='value'>Value:</h3>
@@ -26,28 +27,30 @@
                 }
             }
         });
-        let decryptKey = sodium.crypto_generichash(sodium.crypto_generichash_BYTES, sodium.from_string("input_data_key"));
-        let ws = new WebSocket("wss://localhost:56789");
-        ws.binaryType = 'arraybuffer';
-        ws.onmessage = function(event) {
-            let rawData = new Uint8Array(event.data);
-            let data = window.cbor.decode(sodium.crypto_secretbox_open_easy(
-                rawData.slice(sodium.crypto_secretbox_NONCEBYTES)
-                , rawData.slice(0, sodium.crypto_secretbox_NONCEBYTES)
-                , decryptKey
-            ));
-            document.getElementById('value').innerText = 'Value: '+data.value;
-            if (myChart.data.labels.length < 500) {
-                myChart.data.labels.push('');
-                myChart.data.datasets[0].data.push(parseFloat(data.value));
-            } else {
-                myChart.data.labels.push('');
-                myChart.data.datasets[0].data.push(parseFloat(data.value));
-                myChart.data.datasets[0].data.shift(0);
-                myChart.data.labels.shift(0);
+        $.post("/key_query", JSON.stringify({"request":{}}), function(data) {
+            let decryptKey = sodium.crypto_generichash(sodium.crypto_generichash_BYTES, sodium.from_string(data.response));
+            let ws = new WebSocket("wss://localhost:56789");
+            ws.binaryType = 'arraybuffer';
+            ws.onmessage = function(event) {
+                let rawData = new Uint8Array(event.data);
+                let data = window.cbor.decode(sodium.crypto_secretbox_open_easy(
+                    rawData.slice(sodium.crypto_secretbox_NONCEBYTES)
+                    , rawData.slice(0, sodium.crypto_secretbox_NONCEBYTES)
+                    , decryptKey
+                ));
+                document.getElementById('value').innerText = 'Value: '+data.value;
+                if (myChart.data.labels.length < 500) {
+                    myChart.data.labels.push('');
+                    myChart.data.datasets[0].data.push(parseFloat(data.value));
+                } else {
+                    myChart.data.labels.shift(0);
+                    myChart.data.datasets[0].data.shift(0);
+                    myChart.data.labels.push('');
+                    myChart.data.datasets[0].data.push(parseFloat(data.value));
+                }
+                myChart.update();
             }
-            myChart.update();
-        }
+        });
         </script>
     </body>
 </html>

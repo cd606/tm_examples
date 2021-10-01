@@ -34,10 +34,10 @@
                 myChart.data.labels.push('');
                 myChart.data.datasets[0].data.push(parseFloat(data.value));
             } else {
+                myChart.data.labels.shift(0);
+                myChart.data.datasets[0].data.shift(0);
                 myChart.data.labels.push('');
                 myChart.data.datasets[0].data.push(parseFloat(data.value));
-                myChart.data.datasets[0].data.shift(0);
-                myChart.data.labels.shift(0);
             }
             myChart.update();
         }

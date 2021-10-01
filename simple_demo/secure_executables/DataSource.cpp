@@ -15,6 +15,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQImporterExporter.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
 
 #include "simple_demo/data_structures/InputDataStructure.hpp"
@@ -60,6 +61,8 @@ public:
     }
 };
 
+const std::string encKey = "input_data_key";
+
 int main(int argc, char **argv) {
     TheEnvironment env;
     env.transport::json_rest::JsonRESTComponent::setDocRoot(56788, "../simple_demo/secure_executables/datasource_web");
@@ -89,7 +92,7 @@ int main(int argc, char **argv) {
     );
     env.EncHookFactoryComponent<InputDataPOCO>::operator=(
         EncHookFactoryComponent<InputDataPOCO> {
-            "input_data_key"
+            encKey
         }
     );
     
@@ -129,6 +132,21 @@ int main(int argc, char **argv) {
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo.secure_executables.data_source.heartbeat", std::chrono::seconds(10));
+
+    auto keyQueryFacility = M::liftPureOnOrderFacility<basic::VoidStruct>(
+        [](basic::VoidStruct &&) {
+            return encKey;
+        }
+    );
+    r.registerOnOrderFacility("keyQuery", keyQueryFacility);
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<basic::nlohmann_json_interop::Json,basic::VoidStruct,std::string>(
+        r 
+        , keyQueryFacility
+        , "json_rest://:56788:::/key_query"
+        , "wrapper"
+        , std::nullopt
+        , false
+    );
 
     r.finalize();
 
