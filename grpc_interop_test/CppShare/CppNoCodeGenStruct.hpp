@@ -16,11 +16,21 @@ namespace grpc_interop_test {
         , std::string
         , float
     >;
+#ifdef _MSC_VER
     #define SIMPLE_REQUEST_FIELDS \
         ((uint32_t, input)) \
         ((grpc_interop_test::ReqOneOf, reqOneOf)) \
         ((std::string, name2)) \
-        ((std::vector<uint32_t>, anotherInput))
+        ((std::vector<uint32_t>, anotherInput)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::map<uint32_t,std::string>), mapInput))
+#else
+    #define SIMPLE_REQUEST_FIELDS \
+        ((uint32_t, input)) \
+        ((grpc_interop_test::ReqOneOf, reqOneOf)) \
+        ((std::string, name2)) \
+        ((std::vector<uint32_t>, anotherInput)) \
+        (((std::map<uint32_t,std::string>), mapInput))
+#endif
 
     using RespOneOf = std::variant<
         std::monostate
@@ -32,13 +42,15 @@ namespace grpc_interop_test {
         ((uint32_t, resp)) \
         ((grpc_interop_test::RespOneOf, respOneOf)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack))
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack)) \
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(dev::cd606::tm::basic::SingleLayerWrapperWithID<7,std::unordered_map<uint32_t,std::string>>), mapOutput))
 #else
     #define SIMPLE_RESPONSE_FIELDS \
         ((uint32_t, resp)) \
         ((grpc_interop_test::RespOneOf, respOneOf)) \
         (((dev::cd606::tm::basic::SingleLayerWrapperWithID<2,std::string>), name2Resp)) \
-        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack))
+        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<6,std::vector<uint32_t>>), anotherInputBack)) \
+        (((dev::cd606::tm::basic::SingleLayerWrapperWithID<7,std::unordered_map<uint32_t,std::string>>), mapOutput))
 #endif
 
     TM_BASIC_CBOR_CAPABLE_STRUCT(TestRequest, TEST_REQUEST_FIELDS);

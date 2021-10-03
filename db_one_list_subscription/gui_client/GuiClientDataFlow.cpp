@@ -1,4 +1,5 @@
 #include "GuiClientDataFlow.hpp"
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 
 void guiClientDataFlow(
     R &r
@@ -24,9 +25,9 @@ void guiClientDataFlow(
     r.environment()->setLogFilePrefix(clientName);
 
     //Now set up data subscription and unsubscription
-    auto gsFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
-        <GS::Input,GS::Output>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue")
+    auto gsFacility = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupSimpleRemoteFacilityWithProtocol<basic::CBOR,GS::Input,GS::Output>(
+        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("gsFacility", gsFacility);
     auto gsSubscriptionCmdCreator = M::constFirstPushKeyImporter<GS::Input>(
@@ -115,10 +116,12 @@ void guiClientDataFlow(
     unsubscribeSink(r, r.execute(unsubscribeDetector, gsClientOutputs.rawSubscriptionOutputs.clone()));
 
     //Now set up transactions
-    auto tiFacility = transport::rabbitmq::RabbitMQOnOrderFacility<TheEnvironment>::createTypedRPCOnOrderFacility
-        <TI::Transaction,TI::TransactionResponse>(
-        transport::ConnectionLocator::parse("127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue")
-    );
+    auto tiFacility = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupSimpleRemoteFacilityWithProtocol<
+            basic::CBOR, TI::Transaction, TI::TransactionResponse
+        >(
+            r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
+        );
     r.registerOnOrderFacility("tiFacility", tiFacility);
     auto tiKeyify = M::template kleisli<typename TI::Transaction>(
         basic::CommonFlowUtilComponents<M>::template keyify<typename TI::Transaction>()

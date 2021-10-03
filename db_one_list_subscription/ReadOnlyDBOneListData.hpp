@@ -16,7 +16,7 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(DBKey, DBKeyFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT(DBData, DBDataFields);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(DBData, DBDataFields);
 
-using DBQuery = dev::cd606::tm::basic::CBOR<dev::cd606::tm::basic::VoidStruct>;
+using DBQuery = dev::cd606::tm::basic::VoidStruct;
 using DBQueryResult = dev::cd606::tm::basic::transaction::complex_key_value_store::FullDataResult<DBKey,DBData>;
 
 #endif

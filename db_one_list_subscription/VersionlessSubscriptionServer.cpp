@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
             , GS::Input>,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
         TransactionServer::DSComponent,
         TransactionServer::THComponent
@@ -94,19 +94,36 @@ int main(int argc, char **argv) {
     R r(&env);
     auto transactionLogicCombinationRes = TransactionServer::setupTransactionServer(r, "transaction_server_components");
     
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 2);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 2);
+    
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue_2"
         , "transaction_wrapper/"
     );
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Versionless/Transaction"
+        , "transaction_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue_2"
         , "subscription_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Versionless/Subscription"
+        , "subscription_wrapper_2/"
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, MY_ID_FOR_HEARTBEAT+".heartbeat", std::chrono::seconds(1));

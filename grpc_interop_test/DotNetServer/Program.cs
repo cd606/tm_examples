@@ -36,6 +36,11 @@ namespace DotNetServer
             }
         }
         public override async Task<SimpleResponse> SimpleTest(SimpleRequest req, ServerCallContext context) {
+            foreach (var x in context.AuthContext.PeerIdentity)
+            {
+                Console.WriteLine(x.Name);
+                Console.WriteLine(x.Value);
+            }
             var resp = new SimpleResponse();
             resp.Resp = req.Input*2;
             switch (req.ReqOneofCase) {
@@ -50,6 +55,10 @@ namespace DotNetServer
             }
             resp.Name2Resp = req.Name2+":resp";
             resp.AnotherInputBack.AddRange(req.AnotherInput);
+            foreach (var item in req.MapInput) 
+            {
+                resp.MapOutput.Add(item.Key, item.Value);
+            }
             await Task.Delay(1);
             Console.WriteLine($"Req={req},Resp={resp}");
             return resp;
@@ -73,6 +82,9 @@ namespace DotNetServer
                                     , File.ReadAllText("./server.key")
                                 )
                             }
+                            , File.ReadAllText("./server.crt")
+                            +File.ReadAllText("../DotNetClient/client.crt")
+                            , true
                         ))
                         :
                         ServerCredentials.Insecure

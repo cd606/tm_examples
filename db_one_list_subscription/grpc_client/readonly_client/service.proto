@@ -1,0 +1,22 @@
+syntax = "proto3";
+package db_one_list_subscription;
+
+service Readonly {
+    rpc Query(DBQuery) returns (DBQueryResult);
+}
+message DBKey {
+    string name = 1;
+}
+message DBData {
+    int32 amount = 1;
+    double stat = 2;
+}
+message DBQuery {
+}
+message DBQueryResultEntry {
+    DBKey key = 1;
+    DBData value = 2;
+}
+message DBQueryResult {
+    repeated DBQueryResultEntry value = 1;
+}

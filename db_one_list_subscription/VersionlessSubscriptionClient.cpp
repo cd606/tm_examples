@@ -62,7 +62,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
             , SERVER_HEARTBEAT_ID+".heartbeat"
         );
     auto diFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneDistinguishedRemoteFacility<GS::Input,GS::Output>(
+        ::setupOneDistinguishedRemoteFacilityWithProtocol<basic::CBOR,GS::Input,GS::Output>(
             r 
             , heartbeatSource.clone()
             , std::regex(SERVER_HEARTBEAT_ID)
@@ -229,7 +229,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
             , SERVER_HEARTBEAT_ID+".heartbeat"
         );
     auto tiFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneNonDistinguishedRemoteFacility<TI::Transaction,TI::TransactionResponse>(
+        ::setupOneNonDistinguishedRemoteFacilityWithProtocol<basic::CBOR,TI::Transaction,TI::TransactionResponse>(
             r 
             , heartbeatSource.clone()
             , std::regex(SERVER_HEARTBEAT_ID)
@@ -275,7 +275,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     auto printResponse = M::simpleExporter<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
         [&env](M::InnerData<M::KeyedData<TI::Transaction,TI::TransactionResponse>> &&r) {
-            auto const &resp = r.timedData.value.data.value;
+            auto const &resp = r.timedData.value.data;
             std::ostringstream oss;
             oss << "Got transaction response {";
             oss << "requestDecision=" << resp.requestDecision;

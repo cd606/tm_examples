@@ -20,6 +20,7 @@ message SimpleRequest {
     }
     string Name2 = 4;
     repeated uint32 AnotherInput = 5;
+    map<uint32,string> MapInput = 6;
 }
 message SimpleResponse {
     uint32 Resp = 1;
@@ -29,4 +30,5 @@ message SimpleResponse {
     }
     string Name2Resp = 2;
     repeated uint32 AnotherInputBack=6;
+    map<uint32,string> MapOutput = 7;
 }

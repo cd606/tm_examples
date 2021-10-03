@@ -51,8 +51,8 @@ void diMain(std::string const &cmd, std::string const &idStr) {
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <GS::Input,GS::Output>(
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+        <basic::CBOR,GS::Input,GS::Output>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("facility", facility);
@@ -213,8 +213,8 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <TI::Transaction,TI::TransactionResponse>(
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
     );
 
@@ -260,7 +260,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     auto printResponse = M::simpleExporter<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
         [&env](M::InnerData<M::KeyedData<TI::Transaction,TI::TransactionResponse>> &&r) {
-            auto const &resp = r.timedData.value.data.value;
+            auto const &resp = r.timedData.value.data;
             std::ostringstream oss;
             oss << "Got transaction response {";
             oss << "globalVersion=" << resp.globalVersion;

@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent/*,
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
@@ -93,13 +93,22 @@ int main(int argc, char **argv) {
         );
     */
     r.registerOnOrderFacility("queryFacility", queryFacility);
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <DBQuery,DBQueryResult>(
+    r.setMaxOutputConnectivity(queryFacility, 2);
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,DBQuery,DBQueryResult>(
         r
         , "queryFacility"
         , transport::MultiTransportFacilityWrapper<R>::addIdentityIfNeeded(r, r.facilityConnector(queryFacility), "add_identity")
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
         , "server_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,DBQuery,DBQueryResult>(
+        r
+        , "queryFacility"
+        , transport::MultiTransportFacilityWrapper<R>::addIdentityIfNeeded(r, r.facilityConnector(queryFacility), "add_identity")
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Readonly/Query"
+        , "server_wrapper_2/"
     );
 
     transport::attachHeartbeatAndAlertComponent(r, &env, MY_ID_FOR_HEARTBEAT+".heartbeat", std::chrono::seconds(1));

@@ -71,11 +71,11 @@ public:
         cb_->onUpdate(DI::Update {
             0
             , std::vector<DI::OneUpdateItem> {
-                DI::OneFullUpdateItem {
+                {DI::OneFullUpdateItem {
                     {}
                     , 0
                     , std::move(initialData)
-                }
+                }}
             }
         });
     }
@@ -93,13 +93,13 @@ private:
 
     void triggerCallback(TI::TransactionResponse const &resp, TI::Key const &key, TI::DataDelta const &dataDelta) {
         dsComponent_->callback()->onUpdate(DI::Update {
-            resp.value.globalVersion
+            resp.globalVersion
             , std::vector<DI::OneUpdateItem> {
-                DI::OneDeltaUpdateItem {
+                {DI::OneDeltaUpdateItem {
                     key
-                    , resp.value.globalVersion
+                    , resp.globalVersion
                     , dataDelta
-                }
+                }}
             } 
         });
     }
@@ -264,15 +264,15 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
         , "transaction_wrapper/"
     );
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"

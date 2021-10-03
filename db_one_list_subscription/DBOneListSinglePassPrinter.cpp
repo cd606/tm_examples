@@ -180,11 +180,11 @@ void runSinglePass(std::string const &dbFile) {
             DI::Update update {
                 0
                 , std::vector<DI::OneUpdateItem> {
-                    DI::OneFullUpdateItem {
+                    {DI::OneFullUpdateItem {
                         basic::VoidStruct {}
                         , 0
                         , std::move(initialData)
-                    }
+                    }}
                 }
             };
             return M::InnerData<DI::Update> {
@@ -260,8 +260,8 @@ void runRealTime() {
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <GS::Input,GS::Output>(
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+        <basic::CBOR,GS::Input,GS::Output>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("facility", facility);

@@ -60,8 +60,8 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <GS::Input,GS::Output>(
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+        <basic::CBOR,GS::Input,GS::Output>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("facility", facility);
@@ -217,8 +217,8 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacility
-        <TI::Transaction,TI::TransactionResponse>(
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_cmd_transaction_queue"
     );
 

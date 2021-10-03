@@ -40,12 +40,16 @@ namespace DotNetClient
             simpleReq.Name = "abc";
             simpleReq.Name2 = "def";
             simpleReq.AnotherInput.AddRange(new uint[] {0,1,0,0,1});
+            simpleReq.MapInput.Add(0, "");
+            simpleReq.MapInput.Add(10, "abc");
             Console.WriteLine(client.SimpleTest(simpleReq));
             simpleReq = new SimpleRequest();
             simpleReq.Input = 2;
             simpleReq.Val = 0.1f;
             simpleReq.Name2 = "ghi";
             simpleReq.AnotherInput.AddRange(new uint[] {1,2,3,0,1,0});
+            simpleReq.MapInput.Add(1, "bcd");
+            simpleReq.MapInput.Add(2, "cde");
             Console.WriteLine(client.SimpleTest(simpleReq));
         }
     }

@@ -107,15 +107,15 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <TI::Transaction,TI::TransactionResponse,DI::Update>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
         , "transaction_wrapper/"
     );
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"

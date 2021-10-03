@@ -46,7 +46,7 @@ void graphBasedMain() {
             , "read_only_db_one_list_server.heartbeat"
         );
     auto remoteFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneNonDistinguishedRemoteFacility<DBQuery, DBQueryResult>(
+        ::setupOneNonDistinguishedRemoteFacilityWithProtocol<basic::CBOR, DBQuery, DBQueryResult>(
             r 
             , heartbeatSource.clone()
             , std::regex("read_only_db_one_list_server")
@@ -96,7 +96,7 @@ void directCallBasedMain() {
 
     TheEnvironment env;
     auto result = transport::OneShotMultiTransportRemoteFacilityCall<TheEnvironment>
-        ::call<DBQuery, DBQueryResult>(
+        ::callWithProtocol<basic::CBOR, DBQuery, DBQueryResult>(
             &env 
             , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_one_list_queue"
             , DBQuery {}
@@ -121,7 +121,7 @@ void heartbeatCallBasedMain() {
 
     TheEnvironment env;
     auto result = transport::OneShotMultiTransportRemoteFacilityCall<TheEnvironment>
-        ::callByHeartbeat<DBQuery, DBQueryResult>(
+        ::callWithProtocolByHeartbeat<basic::CBOR, DBQuery, DBQueryResult>(
             &env 
             , "rabbitmq://127.0.0.1::guest:guest:amq.topic[durable=true]"
             , "read_only_db_one_list_server.heartbeat"

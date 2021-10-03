@@ -105,6 +105,9 @@ int main(int argc, char **argv) {
         }, req.reqOneOf);
         resp.name2Resp = req.name2+":resp";
         std::copy(req.anotherInput.begin(), req.anotherInput.end(), std::back_inserter(resp.anotherInputBack.value));
+        for (auto const &item : req.mapInput) {
+            resp.mapOutput.value[item.first] = item.second;
+        }
         std::cerr << "Got " << req << ", returning " << resp << '\n';
         return resp;
     });
@@ -128,12 +131,14 @@ int main(int argc, char **argv) {
             , testFacility
             , "redis://localhost:6379:::testServiceQueue"
             , "testService-redis"
+            , std::nullopt
+            , true
         );
     //The second wrap will not be able to write into heartbeat message
     //since the facility is already registered with redis in the heartbeat
     //message. If the registration order needs to be reversed, but the
     //actually registered wrapper needs to the redis one still,
-    //add std::nullopt (for hooks) and false (for no registration in 
+    //add std::nullopt (for hooks) and true (for no registration in 
     //heartbeat message) to the first wrap call to avoid registration
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<basic::proto_interop::Proto,Req,Resp>
         (

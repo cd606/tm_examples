@@ -79,6 +79,8 @@ int main(int argc, char **argv) {
     }
     SimpleReq req2;
     req2.input = 1;
+    req2.mapInput[10] = "abc";
+    req2.mapInput[0] = "";
     auto result2 = transport::OneShotMultiTransportRemoteFacilityCall<Env>
         ::call<SimpleReq, SimpleResp>(
             &env 

@@ -39,14 +39,14 @@ void guiClientDataFlow(
             , SERVER_HEARTBEAT_ID+".heartbeat"
         );
     auto tiFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneNonDistinguishedRemoteFacility<TI::Transaction,TI::TransactionResponse>(
+        ::setupOneNonDistinguishedRemoteFacilityWithProtocol<basic::CBOR,TI::Transaction,TI::TransactionResponse>(
             r 
             , heartbeatSource.clone()
             , std::regex(SERVER_HEARTBEAT_ID)
             , "transaction_server_components/transaction_handler"
         );
     auto diFacilityInfo = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneDistinguishedRemoteFacility<GS::Input,GS::Output>(
+        ::setupOneDistinguishedRemoteFacilityWithProtocol<basic::CBOR,GS::Input,GS::Output>(
             r 
             , heartbeatSource.clone()
             , std::regex(SERVER_HEARTBEAT_ID)
