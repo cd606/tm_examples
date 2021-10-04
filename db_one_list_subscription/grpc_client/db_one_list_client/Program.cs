@@ -4,7 +4,7 @@ using Microsoft.Extensions.CommandLineUtils;
 using Grpc.Core;
 using DbOneListSubscription;
 
-namespace versionless_client
+namespace db_one_list_client
 {
     class Program
     {
@@ -21,13 +21,14 @@ namespace versionless_client
             public string name;
             public int amount;
             public double stat;
+            public long old_version;
             public uint old_count;
             public string id;
         }
         async Task Run(Command command, Data data)
         {
             var channel = new Channel("localhost:12345", ChannelCredentials.Insecure);
-            var client = new Versionless.VersionlessClient(channel);
+            var client = new Main.MainClient(channel);
             switch (command)
             {
                 case Command.Subscribe:
@@ -48,15 +49,12 @@ namespace versionless_client
                         var input = new TITransaction();
                         input.Input = new TITransactionVariants();
                         input.Input.UpdateAction = new UpdateAction();
+                        input.Input.UpdateAction.OldVersionSlice = data.old_version;
                         input.Input.UpdateAction.OldDataSummary = data.old_count;
-                        input.Input.UpdateAction.DataDelta = new DBDelta();                        
-                        var toUpdate = new DBKeyDataPair();
-                        toUpdate.Key = new DBKey();
-                        toUpdate.Key.Name = data.name;
-                        toUpdate.Data = new DBData();
-                        toUpdate.Data.Amount = data.amount;
-                        toUpdate.Data.Stat = data.stat;
-                        input.Input.UpdateAction.DataDelta.InsertsUpdates.Add(toUpdate);
+                        input.Input.UpdateAction.DataDelta = new DBDelta();   
+                        input.Input.UpdateAction.DataDelta.InsertsUpdates.Add(
+                            data.name, new DBData() {Amount = data.amount, Stat = data.stat}
+                        );
                         var res = client.Transaction(input);
                         Console.WriteLine(res);
                     }
@@ -66,11 +64,10 @@ namespace versionless_client
                         var input = new TITransaction();
                         input.Input = new TITransactionVariants();
                         input.Input.UpdateAction = new UpdateAction();
+                        input.Input.UpdateAction.OldVersionSlice = data.old_version;
                         input.Input.UpdateAction.OldDataSummary = data.old_count;
                         input.Input.UpdateAction.DataDelta = new DBDelta();  
-                        var toDelete = new DBKey();
-                        toDelete.Name = data.name;
-                        input.Input.UpdateAction.DataDelta.Deletes.Add(toDelete);
+                        input.Input.UpdateAction.DataDelta.Deletes.Add(data.name);
                         var res = await client.TransactionAsync(input);
                         Console.WriteLine(res);
                     }
@@ -149,6 +146,11 @@ namespace versionless_client
                 , "the stat to add/update"
                 , CommandOptionType.SingleValue
             );
+            CommandOption oldVersionOption = app.Option(
+                "-v|--old_version <version>"
+                , "the old version to update/delete"
+                , CommandOptionType.SingleValue
+            );
             CommandOption oldCountOption = app.Option(
                 "-C|--old_count <count>"
                 , "the old list count for verification in update/delete"
@@ -174,6 +176,9 @@ namespace versionless_client
                 }
                 if (statOption.HasValue()) {
                     data.stat = double.Parse(statOption.Value());
+                }
+                if (oldVersionOption.HasValue()) {
+                    data.old_version = long.Parse(oldVersionOption.Value());
                 }
                 if (oldCountOption.HasValue()) {
                     data.old_count = uint.Parse(oldCountOption.Value());

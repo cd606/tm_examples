@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
             , GS::Input>,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
         DSComponent,
         THComponent
@@ -264,6 +264,8 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 2);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 2);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
@@ -272,11 +274,25 @@ int main(int argc, char **argv) {
         , "transaction_wrapper/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Main/Transaction"
+        , "transaction_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
         , "subscription_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Main/Subscription"
+        , "subscription_wrapper_2/"
     );
     
     std::ostringstream graphOss;
