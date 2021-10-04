@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
     TheEnvironment env;
 
     auto result = transport::OneShotMultiTransportRemoteFacilityCall<TheEnvironment>
-        ::call<DBQuery, DBQueryResult>(
+        ::callWithProtocol<basic::CBOR, DBQuery, DBQueryResult>(
             &env 
             , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_queue"
             , DBQuery {std::string(argv[1])}

@@ -88,8 +88,8 @@ int main(int argc, char **argv) {
         );
     */
     r.registerOnOrderFacility("queryFacility", queryFacility);
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <DBQuery,DBQueryResult>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR, DBQuery,DBQueryResult>(
         r
         , queryFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_queue"

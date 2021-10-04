@@ -104,11 +104,11 @@ private:
 
     void triggerCallback(TI::TransactionResponse const &resp, TI::Key const &key, std::optional<TI::Data> const &data) {
         dsComponent_->callback()->onUpdate(DI::Update {
-            resp.value.globalVersion
+            resp.globalVersion
             , std::vector<DI::OneUpdateItem> {
                 { DI::OneFullUpdateItem {
                     key
-                    , resp.value.globalVersion
+                    , resp.globalVersion
                     , data
                 } } 
             } 

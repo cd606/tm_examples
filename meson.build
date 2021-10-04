@@ -25,7 +25,7 @@ protobuf_gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
   arguments : ['--proto_path=@CURRENT_SOURCE_DIR@', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
 
-#add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
+add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
 if build_machine.system() == 'windows'
     add_global_arguments('/bigobj', language: 'cpp')
@@ -36,7 +36,7 @@ endif
 #subdir('common_flow_util_tests')
 #subdir('transport_utils')
 #subdir('simple_demo')
-#subdir('db_subscription')
+subdir('db_subscription')
 subdir('db_one_list_subscription')
 #subdir('serialization_test')
 #subdir('transaction_redundancy_test')

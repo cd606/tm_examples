@@ -288,7 +288,7 @@ void tiMain(std::string const &cmd, std::string const &key, int value1, std::str
 
     auto printResponse = M::simpleExporter<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
         [&env](M::InnerData<M::KeyedData<TI::Transaction,TI::TransactionResponse>> &&r) {
-            auto const &resp = r.timedData.value.data.value;
+            auto const &resp = r.timedData.value.data;
             std::ostringstream oss;
             oss << "Got transaction response {";
             oss << "globalVersion=" << resp.globalVersion;
