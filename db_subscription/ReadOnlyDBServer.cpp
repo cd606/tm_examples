@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
         infra::TrivialExitControlComponent,
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent
     >;
     using M = infra::RealTimeApp<TheEnvironment>;
@@ -88,12 +88,20 @@ int main(int argc, char **argv) {
         );
     */
     r.registerOnOrderFacility("queryFacility", queryFacility);
+    r.setMaxOutputConnectivity(queryFacility, 2);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
-        <basic::CBOR, DBQuery,DBQueryResult>(
+        <basic::nlohmann_json_interop::Json, DBQuery,DBQueryResult>(
         r
         , queryFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_read_only_queue"
         , "server_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto, DBQuery,DBQueryResult>(
+        r
+        , queryFacility
+        , "grpc_interop://127.0.0.1:12345:::db_subscription/Readonly/Query"
+        , "server_wrapper_2/"
     );
     
     std::ostringstream graphOss;

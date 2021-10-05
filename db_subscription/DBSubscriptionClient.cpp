@@ -61,7 +61,7 @@ void diMain(std::string const &cmd, std::string const &key, std::string const &i
     R r(&env); 
 
     auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
-        <basic::CBOR,GS::Input,GS::Output>(
+        <basic::nlohmann_json_interop::Json,GS::Input,GS::Output>(
         r, "rabbitmq://127.0.0.1::guest:guest:test_db_cmd_subscription_queue"
     );
     r.registerOnOrderFacility("facility", facility);

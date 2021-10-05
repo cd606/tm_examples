@@ -1,0 +1,16 @@
+syntax = "proto3";
+package db_subscription;
+
+service Readonly {
+    rpc Query(DBKey) returns (DBQueryResult);
+}
+message DBKey {
+    string name = 1;
+}
+message DBData {
+    int32 value1 = 1;
+    string value2 = 2;
+}
+message DBQueryResult {
+    DBData data = 1;
+}

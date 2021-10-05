@@ -23,20 +23,25 @@ function start() {
         ws.binaryType = 'arraybuffer';
         ws.onmessage = function(event) {
             let rawData = new Uint8Array(event.data);
-            let data = window.cbor.decode(sodium.crypto_secretbox_open_easy(
-                rawData.slice(sodium.crypto_secretbox_NONCEBYTES)
-                , rawData.slice(0, sodium.crypto_secretbox_NONCEBYTES)
+            let data = window.cbor.decode(rawData);
+            if (data.length != 2) {
+                return;
+            }
+            let innerRawData = data[1];
+            let innerData = window.cbor.decode(sodium.crypto_secretbox_open_easy(
+                innerRawData.slice(sodium.crypto_secretbox_NONCEBYTES)
+                , innerRawData.slice(0, sodium.crypto_secretbox_NONCEBYTES)
                 , decryptKey
             ));
-            document.getElementById('value').innerText = 'Value: '+data.value;
+            document.getElementById('value').innerText = 'Value: '+innerData.value;
             if (myChart.data.labels.length < 500) {
                 myChart.data.labels.push('');
-                myChart.data.datasets[0].data.push(parseFloat(data.value));
+                myChart.data.datasets[0].data.push(parseFloat(innerData.value));
             } else {
                 myChart.data.labels.shift(0);
                 myChart.data.datasets[0].data.shift(0);
                 myChart.data.labels.push('');
-                myChart.data.datasets[0].data.push(parseFloat(data.value));
+                myChart.data.datasets[0].data.push(parseFloat(innerData.value));
             }
             myChart.update();
         }

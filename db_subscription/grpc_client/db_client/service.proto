@@ -1,0 +1,116 @@
+syntax = "proto3";
+package db_subscription;
+
+service Main {
+    rpc Transaction(TITransaction) returns (TITransactionResponse);
+    rpc Subscription(GSInput) returns (stream GSOutput);
+}
+message DBData {
+    int32 value1 = 1;
+    string value2 = 2;
+}
+enum RequestDecision {
+    Success = 0;
+    FailurePrecondition = 1;
+    FailurePermission = 2;
+    FailureConsistency = 3;
+};
+message InsertAction {
+    string key = 1;
+    DBData data = 2;
+}
+message UpdateAction {
+    string key = 1;
+    int64 oldVersionSlice = 2;
+    DBData oldDataSummary = 3;
+    DBData dataDelta = 4;
+}
+message DeleteAction {
+    string key = 1;
+    int64 oldVersionSlice = 2;
+    DBData oldDataSummary = 3;
+}
+message TITransactionResponse {
+    int64 globalVersion = 1;
+    RequestDecision requestDecision = 2;
+}
+enum TransactionSubtypes {
+    InsertActionType = 0;
+    UpdateActionType = 1;
+    DeleteActionType = 2;
+}
+message TITransactionVariants {
+    oneof Action {
+        InsertAction insertAction = 1;
+        UpdateAction updateAction = 2;
+        DeleteAction deleteAction = 3;
+    }
+}
+message TITransaction {
+    TITransactionVariants input = 1;
+}
+message Subscription {
+    repeated string keys = 1;
+}
+message Unsubscription {
+    string originalSubscriptionID = 1;
+}
+message ListSubscriptions {
+}
+message OneSubscriptionInfo {
+    string id = 1;
+    repeated string keys = 2;
+}
+message SubscriptionInfo {
+    repeated OneSubscriptionInfo subscriptions = 1;
+}
+message UnsubscribeAll {
+}
+message SnapshotRequest {
+    repeated string keys = 1;
+}
+
+message OneFullUpdateItem {
+    string groupID = 1;
+    int64 version = 2;
+    DBData data = 3;
+}
+message OneDeltaUpdateItem {
+    string key = 1;
+    int64 versionDelta = 2;
+    DBData dataDelta = 3;
+}
+message OneUpdateItem {
+    oneof TheUpdate {
+        OneFullUpdateItem fullUpdate = 1;
+        OneDeltaUpdateItem deltaUpdate = 2;
+    }
+}
+message SubscriptionUpdate {
+    int64 globalVersion = 1;
+    repeated OneUpdateItem update = 2;
+}
+message GSInputVariants {
+    oneof Data {
+        Subscription subscription = 1;
+        Unsubscription unsubscription = 2;
+        ListSubscriptions listSubscriptions = 3;
+        UnsubscribeAll unsubscribeAll = 4;
+        SnapshotRequest snapshotRequest = 5;
+    }
+}
+message GSInput {
+    GSInputVariants input = 1;
+}
+message GSOutputVariants {
+    oneof Data {
+        Subscription subscription = 1;
+        Unsubscription unsubscription = 2;
+        SubscriptionUpdate subscriptionUpdate = 3;
+        SubscriptionInfo subscriptionInfo = 4;
+        UnsubscribeAll unsubscribeAll = 5;
+    }
+}
+message GSOutput {
+    GSOutputVariants output = 1;
+}

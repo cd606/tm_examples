@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
             , GS::Input>,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
         DSComponent,
         THComponent
@@ -261,12 +261,15 @@ int main(int argc, char **argv) {
         DI, false
     >;
     auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
-        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
+        R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::Verbose
     >(
         r
         , "transaction_server_components"
         , new TF(dataStore)
     );
+
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 2);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 2);
 
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR, TI::Transaction,TI::TransactionResponse,DI::Update>(
@@ -276,11 +279,25 @@ int main(int argc, char **argv) {
         , "transaction_wrapper/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
-        <basic::CBOR, GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        <basic::proto_interop::Proto, TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_subscription/Main/Transaction"
+        , "transaction_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::nlohmann_json_interop::Json, GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_cmd_subscription_queue"
         , "subscription_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto, GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_subscription/Main/Subscription"
+        , "subscription_wrapper_2/"
     );
     
     std::ostringstream graphOss;
