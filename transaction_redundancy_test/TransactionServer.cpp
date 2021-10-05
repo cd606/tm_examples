@@ -52,14 +52,14 @@ int run(Env &env, std::string const &queueNamePrefix) {
     );
 
     transport::MultiTransportFacilityWrapper<R>
-        ::template wrap<TI::Transaction,TI::TransactionResponse,DI::Update>(
+        ::template wrapWithProtocol<basic::CBOR, TI::Transaction,TI::TransactionResponse,DI::Update>(
             r
             , transactionLogicCombinationRes.transactionFacility
             , ("redis://127.0.0.1:6379:::"+queueNamePrefix+"_transaction_queue")
             , "transaction_wrapper/"
         );
     transport::MultiTransportFacilityWrapper<R>
-        ::template wrap<GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        ::template wrapWithProtocol<basic::CBOR, GS::Input,GS::Output,GS::SubscriptionUpdate>(
             r
             , transactionLogicCombinationRes.subscriptionFacility
             , ("redis://127.0.0.1:6379:::"+queueNamePrefix+"_subscription_queue")

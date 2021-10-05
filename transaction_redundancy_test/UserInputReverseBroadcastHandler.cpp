@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     //UserInputHandler.cpp
     auto subscriptionFacility =
         transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneDistinguishedRemoteFacility<GS::Input, GS::Output>
+        ::setupOneDistinguishedRemoteFacilityWithProtocol<basic::CBOR, GS::Input, GS::Output>
         (
             r 
             , transport::MultiTransportBroadcastListenerManagingUtils<R>

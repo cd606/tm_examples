@@ -84,11 +84,11 @@ public:
         cb_->onUpdate(DI::Update {
             initialData.version
             , std::vector<DI::OneUpdateItem> {
-                DI::OneFullUpdateItem {
+                { DI::OneFullUpdateItem {
                     Key {}
                     , initialData.version
                     , initialData.enabled
-                }
+                } }
             }
         });
     }
@@ -108,13 +108,13 @@ private:
 
     void triggerCallback(TI::TransactionResponse const &resp, TI::Key const &key, TI::DataDelta const &dataDelta) {
         dsComponent_->callback()->onUpdate(DI::Update {
-            resp.value.globalVersion
+            resp.globalVersion
             , std::vector<DI::OneUpdateItem> {
-                DI::OneDeltaUpdateItem {
+                { DI::OneDeltaUpdateItem {
                     key
-                    , resp.value.globalVersion
+                    , resp.globalVersion
                     , dataDelta
-                }
+                } }
             } 
         });
     }
@@ -273,16 +273,16 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <TI::Transaction,TI::TransactionResponse>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR, TI::Transaction,TI::TransactionResponse>(
         r
         , r.getRegisteredName(transactionLogicCombinationRes.transactionFacility)
         , r.facilityConnector(transactionLogicCombinationRes.transactionFacility)
         , "rabbitmq://127.0.0.1::guest:guest:simple_demo_chain_version_enable_transaction_queue"
         , "transaction_wrapper/"
     );
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR, GS::Input,GS::Output>(
         r
         , r.getRegisteredName(transactionLogicCombinationRes.subscriptionFacility)
         , r.facilityConnector(transactionLogicCombinationRes.subscriptionFacility)

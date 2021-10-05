@@ -99,8 +99,8 @@ int main(int argc, char **argv) {
 
     auto facilities =
         transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupTwoStepRemoteFacility<
-            GS::Input, GS::Output, TI::Transaction, TI::TransactionResponse
+        ::setupTwoStepRemoteFacilityWithProtocol<
+            basic::CBOR, GS::Input, GS::Output, basic::CBOR, TI::Transaction, TI::TransactionResponse
         >(
             r 
             , transport::MultiTransportBroadcastListenerManagingUtils<R>
@@ -668,7 +668,7 @@ int main(int argc, char **argv) {
                     t1 = std::chrono::steady_clock::now();
                     first = false;
                 }
-                if (r.value.requestDecision == basic::transaction::v2::RequestDecision::Success) {
+                if (r.requestDecision == basic::transaction::v2::RequestDecision::Success) {
                     ++success;
                 } else {
                     ++fail;
@@ -688,8 +688,8 @@ int main(int argc, char **argv) {
             } else {
                 std::ostringstream oss;
                 oss << "Got transaction response {";
-                oss << "globalVersion=" << r.value.globalVersion;
-                oss << ",requestDecision=" << r.value.requestDecision;
+                oss << "globalVersion=" << r.globalVersion;
+                oss << ",requestDecision=" << r.requestDecision;
                 oss << "}";
                 env.log(infra::LogLevel::Info, oss.str());
             }

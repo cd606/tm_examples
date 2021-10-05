@@ -33,7 +33,7 @@ void enablerGUIDataFlow(
             , "simple_demo_chain_version.#.heartbeat"
         );
     auto enableServerSubscriberAndUpdater = transport::RemoteTransactionSubscriberManagingUtils<R>
-        ::createSubscriberAndUpdater<GS,TI>
+        ::createSubscriberAndUpdater<basic::CBOR,GS,TI>
         (
             r 
             , heartbeatSource.clone()
@@ -120,7 +120,7 @@ void enablerOneShotDataFlow(
     auto *env = r.environment();
 
     auto enableServerUpdater = transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::setupOneNonDistinguishedRemoteFacility<TI::Transaction,TI::TransactionResponse>
+        ::setupOneNonDistinguishedRemoteFacilityWithProtocol<basic::CBOR,TI::Transaction,TI::TransactionResponse>
         (
             r 
             , heartbeatSource.clone()
@@ -148,7 +148,7 @@ void enablerOneShotDataFlow(
     );
     auto wrapUp = M::pureExporter<M::KeyedData<TI::Transaction,TI::TransactionResponse>>(
         [env](M::KeyedData<TI::Transaction,TI::TransactionResponse> &&data) {
-            if (data.data.value.requestDecision == basic::transaction::v2::RequestDecision::Success) {
+            if (data.data.requestDecision == basic::transaction::v2::RequestDecision::Success) {
                 env->log(infra::LogLevel::Info, "Succeeded");
             } else {
                 env->log(infra::LogLevel::Info, "Failed");

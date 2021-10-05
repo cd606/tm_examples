@@ -6,7 +6,7 @@ void LocalDSComponent::initialize(LocalDSComponent::Callback *cb) {
         DI::Update {
             0
             , std::vector<DI::OneUpdateItem> {
-                DI::OneFullUpdateItem {
+                { DI::OneFullUpdateItem {
                     DI::Key {}
                     , DI::Version {
                         1
@@ -18,7 +18,7 @@ void LocalDSComponent::initialize(LocalDSComponent::Callback *cb) {
                         , {{"A", {125, 0}}, {"B", {125, 0}}}
                         , {}
                     }
-                }
+                } }
             }
         }
     );
@@ -33,11 +33,11 @@ TI::TransactionResponse LocalTHComponent::handleUpdate(std::string const &accoun
         DI::Update {
             counter_
             , std::vector<DI::OneUpdateItem> {
-                DI::OneDeltaUpdateItem {
+                { DI::OneDeltaUpdateItem {
                     DI::Key {}
                     , (updateVersionSlice?*updateVersionSlice:(TI::VersionSlice{}))
                     , dataDelta
-                }
+                } }
             }
         }
     );

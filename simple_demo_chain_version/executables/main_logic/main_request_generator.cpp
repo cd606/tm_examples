@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
         r, "onExit"
     );
     auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R>
-        ::createSubscriber<GS>
+        ::createSubscriber<basic::CBOR,GS>
         (
             r 
             , sharedHeartbeatSource.clone()

@@ -136,8 +136,8 @@ int main(int argc, char **argv) {
         , r.execute(extractCBORValue, std::move(transactionInputSource))
     );
 
-    transport::MultiTransportFacilityWrapper<R>::wrap
-        <GS::Input,GS::Output,GS::SubscriptionUpdate>(
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR, GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , ("redis://127.0.0.1:6379:::"+queueName)

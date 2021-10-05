@@ -140,7 +140,7 @@ void DSComponent::runWatchThread() {
                     for (auto const &kv : initResponse.kvs()) {
                         auto delta = createDeltaUpdate(mvccpb::Event::PUT, kv, revision);
                         if (delta) {
-                            updates.push_back(*delta);
+                            updates.push_back({std::move(*delta)});
                         }
                     }
 
@@ -173,7 +173,7 @@ void DSComponent::runWatchThread() {
                     for (auto const &ev : watchResponse.events()) {
                         auto delta = createDeltaUpdate(ev.type(), ev.kv(), revision);
                         if (delta) {
-                            updates.push_back(*delta);
+                            updates.push_back({std::move(*delta)});
                         }
                     }
 
@@ -210,11 +210,11 @@ void DSComponent::initialize(Callback *cb) {
     watchListener_->onUpdate(DI::Update {
         0
         , std::vector<DI::OneUpdateItem> {
-            DI::OneFullUpdateItem {
+            { DI::OneFullUpdateItem {
                 Key {}
                 , Version {}
                 , Data {}
-            }
+            } }
         }
     });
 
