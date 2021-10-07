@@ -1,5 +1,6 @@
 let currentInfo = {
-    version : 0
+    subscription_id : ""
+    , version : 0
     , data : []
     , subscription_ws : {}
     , transaction_ws : {}
@@ -18,6 +19,19 @@ function wrapData(data) {
     return window.cbor.encode([uuidv4(), window.cbor.encode(["browser_client", window.cbor.encode(data)])]);
 }
 
+function closeSubscription() {
+    if (currentInfo.subscription_id != "") {
+        var cmd = [
+            1
+            , {
+                originalSubscriptionID: currentInfo.subscription_id
+            }
+        ];
+        currentInfo.subscription_ws.send(wrapData(cmd));
+        currentInfo.subscription_id = "";
+    }
+}
+
 function start() {
     currentInfo.subscription_ws = new WebSocket("ws://localhost:56790");
     currentInfo.subscription_ws.binaryType = 'arraybuffer';
@@ -27,8 +41,16 @@ function start() {
     }
     currentInfo.subscription_ws.onmessage = function(event) {
         let data = window.cbor.decode(event.data);
+        if (data[0]) {
+            //no more data
+            $("div").css('background-color', 'red');
+            currentInfo.subscription_id = "";
+            return;
+        }
         let innerData = window.cbor.decode(data[1][1]);
-        if (innerData[0] == 2) {
+        if (innerData[0] == 0) {
+            currentInfo.subscription_id = data[1][0];
+        } else if (innerData[0] == 2) {
             //subscription update
             currentInfo.version = innerData[1].version;
             let updateSize = innerData[1].data.length;
@@ -101,4 +123,6 @@ function start() {
         ];
         currentInfo.transaction_ws.send(wrapData(cmd));
     });
+    $(window).on('beforeunload', closeSubscription);
+    $(window).on('unload', closeSubscription);
 }
