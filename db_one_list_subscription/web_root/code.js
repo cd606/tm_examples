@@ -39,6 +39,10 @@ function start() {
         let cmd = [0, {keys: [0]}];
         currentInfo.subscription_ws.send(wrapData(cmd));
     }
+    currentInfo.subscription_ws.onclose = function(event) {
+        $("div").css('background-color', 'red');
+        currentInfo.subscription_id = "";
+    }
     currentInfo.subscription_ws.onmessage = function(event) {
         let data = window.cbor.decode(event.data);
         if (data[0]) {
