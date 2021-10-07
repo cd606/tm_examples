@@ -248,6 +248,8 @@ int main(int argc, char **argv) {
         , static_cast<DSComponent *>(&env)
     });
 
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(56788, "../db_one_list_subscription/web_root");
+
     transport::HeartbeatAndAlertComponentInitializer<TheEnvironment,transport::rabbitmq::RabbitMQComponent>()
         (&env, "db_one_list_subscription server", transport::ConnectionLocator::parse("127.0.0.1::guest:guest:amq.topic[durable=true]"));
 
@@ -264,8 +266,8 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 2);
-    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 2);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 3);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 3);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
@@ -281,6 +283,13 @@ int main(int argc, char **argv) {
         , "transaction_wrapper_2/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "websocket://127.0.0.1:56789"
+        , "transaction_wrapper_3/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
@@ -293,6 +302,13 @@ int main(int argc, char **argv) {
         , transactionLogicCombinationRes.subscriptionFacility
         , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Main/Subscription"
         , "subscription_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "websocket://127.0.0.1:56790"
+        , "subscription_wrapper_3/"
     );
     
     std::ostringstream graphOss;

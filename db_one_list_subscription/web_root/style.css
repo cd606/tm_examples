@@ -1,0 +1,21 @@
+.data_table {
+    margin: 0 auto;
+}
+.data_table th,td {
+    border: 1px solid black;
+}
+.input_div {
+    text-align: center;
+    margin: 0 auto;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+.text_field {
+    width: 30%;
+}
+.button_div {
+    text-align: center;
+    margin: 0 auto;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}

@@ -1,0 +1,33 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="/style.css"></link>
+        <script src="https://unpkg.com/cbor-web"></script>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.1.0/uuidv4.min.js"></script>
+        <script src="/code.js"></script>
+    </head>
+    <body>
+        <table id="DataTable" class="data_table">
+            <thead>
+                <th>Name</th>
+                <th>Amount</th>
+                <th>Stat</th>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        <hr/>
+        <div class="input_div">
+            Name: <input class="text_input" id="NameField"></input>
+            Amount: <input class="text_input" id="AmountField"></input>
+            Stat: <input class="text_input" id="StatField"></input>
+        </div>
+        <div class="button_div">
+            <button id="InsUpdBtn">Insert/Update</button>
+            <button id="DelBtn">Delete</button>
+        </div>
+        <script type="text/javascript">
+            $(document).ready(start);
+        </script>
+    </body>
+</html>
