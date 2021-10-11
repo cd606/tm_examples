@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
         ::oneBroadcastPublisherWithProtocol<std::void_t, InputDataPOCO>(
             r
             , "input data publisher 2"
-            , "websocket://localhost:56789"
+            , "websocket://localhost:56789:::/data"
         );
 
     auto source = M::importer(new DataSourceImporter());

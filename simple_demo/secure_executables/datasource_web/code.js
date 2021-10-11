@@ -19,7 +19,7 @@ function start() {
     });
     $.post("/key_query", JSON.stringify({"request":{}}), function(data) {
         let decryptKey = sodium.crypto_generichash(sodium.crypto_generichash_BYTES, sodium.from_string(data.response));
-        let ws = new WebSocket("wss://localhost:56789");
+        let ws = new WebSocket("wss://localhost:56789/data");
         ws.binaryType = 'arraybuffer';
         ws.onmessage = function(event) {
             let rawData = new Uint8Array(event.data);

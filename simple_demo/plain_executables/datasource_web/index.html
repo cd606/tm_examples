@@ -25,7 +25,7 @@
                 }
             }
         });
-        let ws = new WebSocket("ws://localhost:56789");
+        let ws = new WebSocket("ws://localhost:56789/data");
         ws.binaryType = 'arraybuffer';
         ws.onmessage = function(event) {
             let data = window.cbor.decode(event.data);
