@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
         <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
         , transactionLogicCombinationRes.transactionFacility
-        , "websocket://127.0.0.1:56789"
+        , "websocket://127.0.0.1:56789:::transaction"
         , "transaction_wrapper_3/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
@@ -307,7 +307,7 @@ int main(int argc, char **argv) {
         <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
-        , "websocket://127.0.0.1:56790"
+        , "websocket://127.0.0.1:56789:::subscription"
         , "subscription_wrapper_3/"
     );
     

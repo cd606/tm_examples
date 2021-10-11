@@ -33,7 +33,7 @@ function closeSubscription() {
 }
 
 function start() {
-    currentInfo.subscription_ws = new WebSocket("ws://localhost:56790");
+    currentInfo.subscription_ws = new WebSocket("ws://localhost:56789/subscription");
     currentInfo.subscription_ws.binaryType = 'arraybuffer';
     currentInfo.subscription_ws.onopen = function(event) {
         let cmd = [0, {keys: [0]}];
@@ -77,7 +77,7 @@ function start() {
             updateTable();
         }
     }
-    currentInfo.transaction_ws = new WebSocket("ws://localhost:56789");
+    currentInfo.transaction_ws = new WebSocket("ws://localhost:56789/transaction");
     currentInfo.transaction_ws.binaryType = 'arraybuffer';
     currentInfo.transaction_ws.onmessage = function(event) {
     };
