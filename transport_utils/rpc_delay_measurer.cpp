@@ -166,9 +166,41 @@ void runClientSynchronousMode(transport::SimpleRemoteFacilitySpec const &spec, i
     env.log(infra::LogLevel::Info, "done");
 }
 
+void runClientOneShotMode(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes, bool autoDisconnect) {
+    Environment env;
+    int64_t firstTimeStamp = 0;
+    int64_t count = 0;
+    int64_t now = 0;
+
+    if (spec.index() == 0) {
+        for (int ii=0; ii<repeatTimes; ++ii) {
+            auto sentTime = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now());
+            auto data = transport::OneShotMultiTransportRemoteFacilityCall<Environment>
+                ::call<FacilityInput, FacilityOutput>(
+                    &env 
+                    , std::get<0>(spec)
+                    , FacilityInput {sentTime, ii+1}
+                    , std::nullopt 
+                    , autoDisconnect
+                ).get();
+            //env.log(infra::LogLevel::Info, std::to_string(data.data));
+            now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now());
+            count += (now-sentTime);
+            if (ii == 0) {
+                firstTimeStamp = sentTime;
+            }
+        }
+    } else {
+        env.log(infra::LogLevel::Warning, "client-sync don't use heartbeat mode beause the repeated heartbeat wait-time will distort the delay measurement");
+    }
+    env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(repeatTimes)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+        env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(repeatTimes)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+    env.log(infra::LogLevel::Info, "done");
+}
+
 int main(int argc, char **argv) {
     TCLAP::CmdLine cmd("RPC Delay Measurer", ' ', "0.0.1");
-    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server, client or client-sync", true, "", "string");
+    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server, client, client-sync, client-oneshot or client-oneshot-disconnect", true, "", "string");
     TCLAP::ValueArg<std::string> serviceDescriptorArg("d", "serviceDescriptor", "service descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatDescriptorArg("H", "heartbeatDescriptor", "heartbeat descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatTopicArg("T", "heartbeatTopic", "heartbeat topic", false, "tm.examples.heartbeats", "string");
@@ -224,6 +256,17 @@ int main(int argc, char **argv) {
                 , "facility"
             }, repeatTimesArg.getValue());
             return 0;
+        } else {
+            std::cerr << "Client-sync mode requires either service descriptor or heartbeat descriptor\n";
+            return 1;
+        }
+    } else if (modeArg.getValue() == "client-oneshot" || modeArg.getValue() == "client-oneshot-disconnect") {
+        if (serviceDescriptorArg.isSet()) {
+            runClientOneShotMode(serviceDescriptorArg.getValue(), repeatTimesArg.getValue(), (modeArg.getValue() == "client-oneshot-disconnect"));
+            return 0;
+        } else if (heartbeatDescriptorArg.isSet()) {
+            std::cerr << modeArg.getValue() << " doesn't use heartbeat mode beause the repeated heartbeat wait-time will distort the delay measurement\n";
+            return 1;
         } else {
             std::cerr << "Client-sync mode requires either service descriptor or heartbeat descriptor\n";
             return 1;
