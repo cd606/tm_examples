@@ -4,3 +4,21 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
+executable(
+    'websocket_client'
+    , ['Client.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
+executable(
+    'websocket_facility_server'
+    , ['FacilityServer.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
+executable(
+    'websocket_facility_client'
+    , ['FacilityClient.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)

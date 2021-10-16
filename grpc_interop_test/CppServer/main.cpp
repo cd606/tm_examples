@@ -13,6 +13,7 @@
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
+#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 
 #include "../CppShare/CppNoCodeGenStruct.hpp"
 
@@ -33,6 +34,7 @@ using Env = infra::Environment<
     , transport::TLSServerConfigurationComponent
     , transport::AllNetworkTransportComponents
     , transport::HeartbeatAndAlertComponent
+    , transport::ServerSideSimpleIdentityCheckerComponent<std::string, SimpleReq>
 >;
 using M = infra::RealTimeApp<Env>;
 using R = infra::AppRunner<M>;
@@ -92,7 +94,9 @@ int main(int argc, char **argv) {
     };
     auto testFacility = M::fromAbstractOnOrderFacility(new TestFacility());
     
-    auto simpleTestFacility = GL::lift(infra::LiftAsFacility {}, [](SimpleReq &&req) {
+    auto simpleTestFacility = GL::lift(infra::LiftAsFacility {}, [](std::tuple<std::string,SimpleReq> &&reqWithIdentity) {
+        std::cerr << "identity is '" << std::get<0>(reqWithIdentity) << "'\n";
+        SimpleReq const &req = std::get<1>(reqWithIdentity);
         SimpleResp resp;
         resp.resp = 2*(req.input);
         std::visit([&resp](auto const &x) {

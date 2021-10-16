@@ -118,7 +118,8 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
                 firstTimeStamp = data.timedData.value.key.key().timestamp;
             }
             ++recvCount;
-            if (data.timedData.value.key.key().data >= repeatTimes) {
+            //if (data.timedData.value.key.key().data >= repeatTimes) {
+            if (recvCount >= repeatTimes) {
                 data.environment->log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
                 data.environment->log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
                 data.environment->exit();
@@ -268,11 +269,11 @@ int main(int argc, char **argv) {
             std::cerr << modeArg.getValue() << " doesn't use heartbeat mode beause the repeated heartbeat wait-time will distort the delay measurement\n";
             return 1;
         } else {
-            std::cerr << "Client-sync mode requires either service descriptor or heartbeat descriptor\n";
+            std::cerr << "Client-oneshot mode requires either service descriptor or heartbeat descriptor\n";
             return 1;
         }
     } else {
-        std::cerr << "Mode must be server, client or client-sync\n";
+        std::cerr << "Mode must be server, client, client-sync, client-oneshot or client-oneshot-disconnect\n";
         return 1;
     }
 }

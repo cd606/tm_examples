@@ -6,34 +6,12 @@
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockImporter.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
-#include <tm_kit/basic/SerializationHelperMacros.hpp>
 
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportTouchups.hpp>
 
-#ifdef _MSC_VER
-#define DATA_FIELDS \
-    ((std::chrono::system_clock::time_point, now)) \
-    ((std::string, textData)) \
-    ((uint64_t, intData)) \
-    ((std::vector<double>, doubleData)) \
-    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::variant<int,float>), variantData)) \
-    ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(std::tuple<bool,int>), tupleData))
-#else
-#define DATA_FIELDS \
-    ((std::chrono::system_clock::time_point, now)) \
-    ((std::string, textData)) \
-    ((uint64_t, intData)) \
-    ((std::vector<double>, doubleData)) \
-    (((std::variant<int,float>), variantData)) \
-    (((std::tuple<bool,int>), tupleData))
-#endif
-
-TM_BASIC_CBOR_CAPABLE_STRUCT(Data, DATA_FIELDS);
-TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(Data, DATA_FIELDS);
-
-#undef DATA_FIELDS
+#include "Data.hpp"
 
 using namespace dev::cd606::tm;
 
@@ -83,6 +61,17 @@ int main(int argc, char **argv) {
             , std::nullopt 
             , false 
             , "cbor_websocket"
+        }
+    );
+    transport::multi_transport_touchups::PublisherTouchupWithProtocol<
+        R, std::void_t, Data
+    >(
+        r 
+        , {
+            "multicast://224.0.0.1:12345"
+            , std::nullopt 
+            , false 
+            , "cbor_multicast"
         }
     );
 

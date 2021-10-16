@@ -12,6 +12,7 @@
 #include <tm_kit/transport/grpc_interop/GrpcClientFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
+#include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 
 #include "../CppShare/CppNoCodeGenStruct.hpp"
 
@@ -31,6 +32,7 @@ using Env = infra::Environment<
     , transport::CrossGuidComponent
     , transport::TLSClientConfigurationComponent
     , transport::AllNetworkTransportComponents
+    , transport::ClientSideSimpleIdentityAttacherComponent<std::string, SimpleReq>
 >;
 using M = infra::RealTimeApp<Env>;
 using R = infra::AppRunner<M>;
@@ -118,13 +120,13 @@ int main(int argc, char **argv) {
         SimpleReq, SimpleResp
     >(
         r
-        //, "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
-        , transport::SimpleRemoteFacilitySpecByHeartbeat {
+        , "grpc_interop://localhost:34567:::grpc_interop_test/TestService/SimpleTest"
+        /*, transport::SimpleRemoteFacilitySpecByHeartbeat {
             "zeromq://localhost:12345"
             , "grpc_interop_test.heartbeat"
             , std::regex("grpc_interop_test_server")
             , "simpleTestFacility"
-        }
+        }*/
         , "facility2"
     );
     
