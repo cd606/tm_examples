@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
             , GS::Input>,
-        transport::rabbitmq::RabbitMQComponent,
+        transport::AllNetworkTransportComponents,
         transport::HeartbeatAndAlertComponent,
         DSComponent,
         THComponent
@@ -77,6 +77,8 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
+
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(56788, "../db_one_list_subscription/web_root");
 
     auto channel = grpc::CreateChannel("127.0.0.1:2379", grpc::InsecureChannelCredentials());
     env.DSComponent::operator=(DSComponent {
@@ -107,6 +109,8 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 3);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 3);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
@@ -115,11 +119,39 @@ int main(int argc, char **argv) {
         , "transaction_wrapper/"
     );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Main/Transaction"
+        , "transaction_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
+        r
+        , transactionLogicCombinationRes.transactionFacility
+        , "websocket://127.0.0.1:56789:::transaction"
+        , "transaction_wrapper_3/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
         , transactionLogicCombinationRes.subscriptionFacility
         , "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
         , "subscription_wrapper/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::proto_interop::Proto,GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "grpc_interop://127.0.0.1:12345:::db_one_list_subscription/Main/Subscription"
+        , "subscription_wrapper_2/"
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
+        <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
+        r
+        , transactionLogicCombinationRes.subscriptionFacility
+        , "websocket://127.0.0.1:56789:::subscription"
+        , "subscription_wrapper_3/"
     );
     
     std::ostringstream graphOss;
