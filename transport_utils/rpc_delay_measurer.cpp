@@ -192,16 +192,78 @@ void runClientOneShotMode(transport::SimpleRemoteFacilitySpec const &spec, int r
             }
         }
     } else {
-        env.log(infra::LogLevel::Warning, "client-sync don't use heartbeat mode beause the repeated heartbeat wait-time will distort the delay measurement");
+        env.log(infra::LogLevel::Warning, "client-oneshot don't use heartbeat mode beause the repeated heartbeat wait-time will distort the delay measurement");
     }
     env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(repeatTimes)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
         env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(repeatTimes)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
     env.log(infra::LogLevel::Info, "done");
 }
 
+void runClientSimOneShotMode(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes) {
+    Environment env;
+    R r(&env);
+    int64_t firstTimeStamp = 0;
+    int64_t count = 0;
+    int64_t now = 0;
+
+    auto facilitioidAndTrigger = transport::MultiTransportRemoteFacilityManagingUtils<R>
+        ::setupSimpleRemoteFacilitioid<FacilityInput, FacilityOutput>
+        (
+            r 
+            , spec
+            , "remoteConnection"
+        );
+
+    auto promiseMap = std::make_shared<std::unordered_map<Environment::IDType, std::shared_ptr<std::promise<FacilityOutput>>, Environment::IDHash>>();
+    r.preservePointer(promiseMap);
+
+    auto importerPair = M::triggerImporter<M::Key<FacilityInput>>();
+
+    auto startPromise = std::make_shared<std::promise<void>>();
+    r.preservePointer(startPromise);
+
+    infra::DeclarativeGraph<R>("", {
+        {"importer", std::get<0>(importerPair)}
+        , {"exporter", [promiseMap](M::KeyedData<FacilityInput,FacilityOutput> &&data) {
+            auto iter = promiseMap->find(data.key.id());
+            if (iter != promiseMap->end()) {
+                iter->second->set_value(data.data);
+                promiseMap->erase(iter);
+            }
+        }}
+        , {"importer", facilitioidAndTrigger.facility, "exporter"}
+        , {"waitForStart", [startPromise](basic::VoidStruct &&) {
+            startPromise->set_value();
+        }}
+        , {facilitioidAndTrigger.facilityFirstReady.clone(), "waitForStart"}
+    })(r);
+    r.finalize();
+
+    startPromise->get_future().wait();
+    for (int ii=0; ii<repeatTimes; ++ii) {
+        auto sentTime = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now());
+        M::Key<FacilityInput> req(
+            FacilityInput {sentTime, ii+1}
+        );
+        auto fut = promiseMap->emplace(req.id(), std::make_shared<std::promise<FacilityOutput>>()).first->second->get_future();
+        std::get<1>(importerPair)(std::move(req));
+        auto res = fut.get();
+        now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now());
+        count += (now-sentTime);
+        if (ii == 0) {
+            firstTimeStamp = sentTime;
+        }
+    }
+    env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(repeatTimes)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+        env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(repeatTimes)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+    env.log(infra::LogLevel::Info, "done");
+
+    env.exit(0);
+}
+
 int main(int argc, char **argv) {
     TCLAP::CmdLine cmd("RPC Delay Measurer", ' ', "0.0.1");
-    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server, client, client-sync, client-oneshot or client-oneshot-disconnect", true, "", "string");
+    TCLAP::ValueArg<std::string> modeArg("m", "mode", "server, client, client-sync, client-oneshot, client-oneshot-disconnect or client-sim-oneshot", true, "", "string");
     TCLAP::ValueArg<std::string> serviceDescriptorArg("d", "serviceDescriptor", "service descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatDescriptorArg("H", "heartbeatDescriptor", "heartbeat descriptor", false, "", "string");
     TCLAP::ValueArg<std::string> heartbeatTopicArg("T", "heartbeatTopic", "heartbeat topic", false, "tm.examples.heartbeats", "string");
@@ -272,8 +334,23 @@ int main(int argc, char **argv) {
             std::cerr << "Client-oneshot mode requires either service descriptor or heartbeat descriptor\n";
             return 1;
         }
+    } else if (modeArg.getValue() == "client-sim-oneshot") {
+        if (serviceDescriptorArg.isSet()) {
+            runClientSimOneShotMode(serviceDescriptorArg.getValue(), repeatTimesArg.getValue());
+            return 0;
+        } else if (heartbeatDescriptorArg.isSet()) {
+            runClientSimOneShotMode(transport::SimpleRemoteFacilitySpecByHeartbeat {
+                heartbeatDescriptorArg.getValue()
+                , heartbeatTopicArg.getValue()
+                , std::regex {heartbeatIdentityArg.getValue()}
+                , "facility"
+            }, repeatTimesArg.getValue());
+        } else {
+            std::cerr << "Client-sim-oneshot mode requires either service descriptor or heartbeat descriptor\n";
+            return 1;
+        }
     } else {
-        std::cerr << "Mode must be server, client, client-sync, client-oneshot or client-oneshot-disconnect\n";
+        std::cerr << "Mode must be server, client, client-sync, client-oneshot, client-oneshot-disconnect or client-sim-oneshot\n";
         return 1;
     }
 }
