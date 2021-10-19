@@ -133,6 +133,21 @@ int main(int argc, char **argv) {
     } else if (std::string_view(argv[2]) == "importer-sync") {
         Env env; 
         SR r(&env);
+        auto iter = r.beginImporterIterator(
+            transport::db_table_importer_exporter::DBTableImporterFactory<M>::createImporter<test_data>(session, "test_table")
+        );
+        auto endIter = r.endImporterIterator<std::vector<test_data>>();
+        while (iter != endIter) {
+            if (*iter) {
+                for (auto const &x : (*iter)->timedData.value) {
+                    std::ostringstream oss;
+                    oss << x;
+                    env.log(infra::LogLevel::Info, oss.str());
+                }
+            }
+            ++iter;
+        }
+        /*
         auto v = std::move(r.importItem(
             transport::db_table_importer_exporter::DBTableImporterFactory<M>::createImporter<test_data>(session, "test_table")
         )->front().timedData.value);
@@ -141,13 +156,16 @@ int main(int argc, char **argv) {
             oss << x;
             env.log(infra::LogLevel::Info, oss.str());
         }
+        */
     } else if (std::string_view(argv[2]) == "exporter-sync") {
         Env env; 
         SR r(&env);
         auto ex = transport::db_table_importer_exporter::DBTableExporterFactory<M>::createExporter<test_data>(session, "test_table");
+        auto iter = r.exporterIterator(ex);
         std::vector<test_data> v {{"test1", 1, 1.2}, {"test2", 2, 2.3}};
         for (auto &&x: v) {
-            r.exportItem(ex, std::move(x));
+            //r.exportItem(ex, std::move(x));
+            *iter++ = std::move(x);
         }
     } else if (std::string_view(argv[2]) == "exporter-batch-sync") {
         Env env; 

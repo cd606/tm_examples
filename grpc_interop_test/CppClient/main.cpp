@@ -11,6 +11,7 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/grpc_interop/GrpcClientFacility.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils_SynchronousRunner.hpp>
 #include <tm_kit/transport/TLSConfigurationComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 
@@ -63,13 +64,32 @@ int main(int argc, char **argv) {
     //ALL results to come back in synchronous mode, while OneShotCall
     //was designed to only return one result.
     //Also, SynchronousRunner does not work well with grpc because
-    //grpc does not return the last value marked as "final", so 
-    //SynchronousRunner loop will not exit.
+    //grpc does not return the last value marked as "final", so the
+    //only way synchronous runner exits is through an exception as
+    //shown below.
     //Therefore it is better to just use grpc-specific method for
-    //synchronous calls
+    //synchronous calls, but oneshot/synchronous runner can be used
+    //if you know their limits for grpc.
     Req req;
     req.intParam = 2;
     req.doubleListParam = std::vector<double> {1.0, 2.1, 3.2, 4.3, 5.4, 6.5, 7.6};
+
+    {
+        infra::SynchronousRunner<M> sr(&env);
+        auto synchFacility = transport::MultiTransportRemoteFacilityManagingUtils<
+            infra::SynchronousRunner<M>
+        >::setupSimpleRemoteFacility<Req,Resp>(
+            "grpc_interop://localhost:34567:::grpc_interop_test/TestService/Test"
+        );
+        auto streamer = sr.facilityStreamer(synchFacility);
+        streamer << Req {req};
+        try {
+            for (auto const &x : *streamer) {
+                std::cout << "Synchronous Runner: " << x.timedData.value.data << '\n';
+            }
+        } catch (M::NoMoreSynchronousResultException const &) {}
+    }
+
     auto result = transport::grpc_interop::GrpcClientFacilityFactory<M>
         ::runSyncClient<basic::proto_interop::Proto<Req>, basic::proto_interop::Proto<Resp>>(
             &env
