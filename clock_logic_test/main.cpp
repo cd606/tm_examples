@@ -54,7 +54,7 @@ void real_time_run(std::ostream &fileOutput) {
     env.setLogFilePrefix("clock_logic_test", true);
 
     infra::AppRunner<App> r(&env);
-    clock_logic_test_app::clockLogicMain(r, fileOutput);
+    auto fut = clock_logic_test_app::clockLogicMain(r, fileOutput);
     r.writeGraphVizDescription(std::cout, "test");
     r.finalize();
 
@@ -63,6 +63,7 @@ void real_time_run(std::ostream &fileOutput) {
             infra::withtime_utils::parseLocalTime("2020-01-01T10:01:05")
         )
     });
+    env.log(infra::LogLevel::Info, fut.get());
 }
 
 void single_pass_iteration_run(std::ostream &fileOutput) {

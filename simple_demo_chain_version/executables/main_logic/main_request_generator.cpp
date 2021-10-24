@@ -91,9 +91,9 @@ int main(int argc, char **argv) {
             , "main_program/facility_combo/facility"
         ).facility;
 
-    auto exitDataSource = transport::ExitDataSourceCreator::addExitDataSource(
+    auto exitDataSource = std::get<0>(transport::ExitDataSourceCreator::addExitDataSource(
         r, "onExit"
-    );
+    ));
     auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R>
         ::createSubscriber<basic::CBOR,GS>
         (

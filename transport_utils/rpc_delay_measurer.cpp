@@ -136,17 +136,35 @@ void runClient(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes)
 void runClientSynchronousMode(transport::SimpleRemoteFacilitySpec const &spec, int repeatTimes) {
     Environment env;
     SR r(&env);
-    int64_t firstTimeStamp = 0;
-    int64_t count = 0;
-    int64_t recvCount = 0;
-
-    auto facility =  transport::MultiTransportRemoteFacilityManagingUtils<SR>
+    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<SR>
         ::setupSimpleRemoteFacility<FacilityInput, FacilityOutput>
         (
             r 
             , spec
         );
+    
+    int64_t firstTimeStamp = 0;
+    int64_t count = 0;
+    int64_t recvCount = 0;
+    
     for (int ii=0; ii<repeatTimes; ++ii) {
+        auto streamer = r.facilityStreamer(facility);
+        streamer << FacilityInput {infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now()), ii+1};
+        auto fut = streamer->consumeUntilLastFuture();
+        if (fut.wait_for(std::chrono::milliseconds(500)) == std::future_status::ready) {
+            auto data = fut.get();
+            auto now = infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(data.timedData.timePoint);
+            count += (now-data.timedData.value.key.key().timestamp);
+            if (data.timedData.value.key.key().data == 1) {
+                firstTimeStamp = data.timedData.value.key.key().timestamp;
+            }
+            ++recvCount;
+            if (data.timedData.value.key.key().data >= repeatTimes) {
+                env.log(infra::LogLevel::Info, std::string("average delay of ")+std::to_string(recvCount)+" calls is "+std::to_string(count*1.0/repeatTimes)+" microseconds");
+                env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
+            }
+        }
+        /*
         auto data = r.placeOrderWithFacility(
             FacilityInput {infra::withtime_utils::sinceEpoch<std::chrono::microseconds>(env.now()), ii+1}
             , facility
@@ -163,6 +181,7 @@ void runClientSynchronousMode(transport::SimpleRemoteFacilitySpec const &spec, i
                 env.log(infra::LogLevel::Info, std::string("total time for ")+std::to_string(recvCount)+" calls is "+std::to_string(now-firstTimeStamp)+" microseconds");
             }
         }
+        */
     }
     env.log(infra::LogLevel::Info, "done");
 }

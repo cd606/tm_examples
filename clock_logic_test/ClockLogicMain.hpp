@@ -13,7 +13,7 @@
 namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app {
 
     template <class R>
-    void clockLogicMain(R &r, std::ostream &fileOutput) {
+    std::future<std::string> clockLogicMain(R &r, std::ostream &fileOutput) {
         using M = typename R::AppType;
         using ClockImporterExporter = typename basic::AppClockHelper<M>::Importer;
         using ClockOnOrderFacility = typename basic::AppClockHelper<M>::Facility;
@@ -110,6 +110,12 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             r
             , r.template sourceByName<typename M::template Key<std::string>>("genKey")
             , r.template sinkByName<typename M::template KeyedData<std::string,std::string>>("clockFacilityOutput")
+        );
+
+        return basic::AppRunnerUtilComponents<R>::template getTypedFutureForFirstPieceOfInput<std::string>(
+            r 
+            , r.template sourceoidByName<std::string>("recurring")
+            , "future_test"
         );
     }   
 

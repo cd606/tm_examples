@@ -114,9 +114,9 @@ int main(int argc, char **argv) {
         , "input.data"
         , "inputDataSourceComponents"
     );
-    auto exitDataSource = transport::ExitDataSourceCreator::addExitDataSource(
+    auto exitDataSource = std::get<0>(transport::ExitDataSourceCreator::addExitDataSource(
         r, "onExit"
-    );
+    ));
     auto enableServerSubscriber = transport::RemoteTransactionSubscriberManagingUtils<R>
         ::createSubscriber<basic::CBOR,GS>
         (

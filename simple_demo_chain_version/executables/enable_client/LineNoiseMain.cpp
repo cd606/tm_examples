@@ -68,9 +68,9 @@ int main(int argc, char **argv) {
     r.registerExporter("showStatus", showStatus);
 
     auto strSrc = r.execute(share, r.importItem(lineImporter));
-    auto exitSource = transport::ExitDataSourceCreator::addExitDataSource(
+    auto exitSource = std::get<0>(transport::ExitDataSourceCreator::addExitDataSource(
         r, "interrupt"
-    );
+    ));
     r.execute(exitMerger, std::move(exitSource));
     r.execute(exitMerger, r.execute(translateToExit, strSrc.clone()));
 
