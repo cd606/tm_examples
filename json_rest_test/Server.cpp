@@ -88,6 +88,19 @@ int main(int argc, char **argv) {
         , false
     );
 
+    auto facility2 = GL::liftFacility([](Req2 &&req2) -> Resp2 {
+        return Resp2 {req2.sParam+":"+std::to_string(req2.iParam)};
+    });
+    r.registerOnOrderFacility("facility2", facility2);
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<std::void_t,Req2,Resp2>(
+        r 
+        , facility2 
+        , "json_rest://:34567:::/test_facility_2"
+        , "wrapper_2"
+        , std::nullopt
+        , false
+    );
+
     r.finalize();
     infra::terminationController(infra::RunForever {});
 }

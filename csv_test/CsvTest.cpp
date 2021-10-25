@@ -183,6 +183,20 @@ int main() {
 
     std::cout << ss.str() << '\n';
 
+    test_data_2 d2_2;
+    basic::struct_field_info_utils::StructFieldInfoBasedInitializer<test_data_2>::initialize(d2_2);
+    basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvOutput_SingleValue::outputNameValuePairs(
+        d2
+        , [&d2_2](std::string const &name, std::string const &value) {
+            std::cout << name << "|||" << value << "\n";
+            basic::struct_field_info_utils::StructFieldInfoBasedSimpleCsvInput<test_data_2>::readOneNameValuePair(
+                d2_2, name, value
+            );
+        }
+    );
+    std::cout << d2_2 << "\n";
+    
+
     std::stringstream ss2;
     auto ex2 = basic::struct_field_info_utils::StructFieldInfoBasedCsvExporterFactory<M>
         ::createExporter<test_data_2>(ss2);
