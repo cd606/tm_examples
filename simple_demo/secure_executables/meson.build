@@ -73,3 +73,9 @@ executable(
     , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
     , dependencies: [common_deps, dependency('ftxui')]
 )
+executable(
+    'token_auth_query_test'
+    , ['TokenAuthQueryTest.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, dependency('ftxui')]
+)

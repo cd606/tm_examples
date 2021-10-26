@@ -90,6 +90,18 @@ int main(int argc, char **argv) {
             , "../grpc_interop_test/DotNetServer/server.key"
         }
     );
+    env.transport::json_rest::JsonRESTComponent::addTokenAuthentication(
+        56790, "user2", "abcde"
+    );
+    env.transport::TLSServerConfigurationComponent::setConfigurationItem(
+        transport::TLSServerInfoKey {
+            56790
+        }
+        , transport::TLSServerInfo {
+            "../grpc_interop_test/DotNetServer/server.crt"
+            , "../grpc_interop_test/DotNetServer/server.key"
+        }
+    );
     env.EncHookFactoryComponent<InputDataPOCO>::operator=(
         EncHookFactoryComponent<InputDataPOCO> {
             encKey
@@ -139,11 +151,20 @@ int main(int argc, char **argv) {
         }
     );
     r.registerOnOrderFacility("keyQuery", keyQueryFacility);
+    r.setMaxOutputConnectivity(keyQueryFacility, 2);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<basic::nlohmann_json_interop::Json,basic::VoidStruct,std::string>(
         r 
         , keyQueryFacility
         , "json_rest://:56788:::/key_query"
         , "wrapper"
+        , std::nullopt
+        , false
+    );
+    transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<basic::nlohmann_json_interop::Json,basic::VoidStruct,std::string>(
+        r 
+        , keyQueryFacility
+        , "json_rest://:56790:::/key_query"
+        , "wrapper_2"
         , std::nullopt
         , false
     );
