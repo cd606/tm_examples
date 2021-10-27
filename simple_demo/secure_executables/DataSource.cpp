@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
             , "../grpc_interop_test/DotNetServer/server.key"
         }
     );
+    env.transport::json_rest::JsonRESTComponent::setDocRoot(56790, "../simple_demo/secure_executables/datasource_web_token");
     env.EncHookFactoryComponent<InputDataPOCO>::operator=(
         EncHookFactoryComponent<InputDataPOCO> {
             encKey

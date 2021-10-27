@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://unpkg.com/cbor-web"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/libsodium-wrappers/0.5.4/sodium.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="/code.js"></script>
+    </head>
+    <body>
+        <div id='chart-div' style='display: none'>
+            <h3 id='value'>Value:</h3>
+            <canvas id='myChart' height="100"/>
+        </div>
+        <div id='login-div' style='text-align: center'>
+            User name:<input id='username' type='text'/>
+            Password:<input id='password' type='password'/>
+            <hr/>
+            <button id='login'>Login</button>
+        </div>
+        <script type="text/javascript">
+            $(document).ready(start);
+        </script>
+    </body>
+</html>
