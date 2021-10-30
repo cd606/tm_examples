@@ -7,6 +7,7 @@
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/CommonFlowUtils.hpp>
 
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
@@ -35,7 +36,8 @@ using SR = infra::SynchronousRunner<M>;
     ((int64_t, timestamp)) \
     ((int, data))
 #define FACILITY_OUTPUT_FIELDS \
-    ((int, data))
+    ((int, data)) \
+    ((std::string, padding))
 
 TM_BASIC_CBOR_CAPABLE_STRUCT(FacilityInput, FACILITY_INPUT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT(FacilityOutput, FACILITY_OUTPUT_FIELDS);
@@ -43,7 +45,7 @@ TM_BASIC_CBOR_CAPABLE_STRUCT(FacilityOutput, FACILITY_OUTPUT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(FacilityInput, FACILITY_INPUT_FIELDS);
 TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE_NO_FIELD_NAMES(FacilityOutput, FACILITY_OUTPUT_FIELDS);
 
-void runServer(std::string const &serviceDescriptor, transport::HeartbeatAndAlertComponentTouchupParameters const &heartbeatParam) {
+void runServer(std::string const &serviceDescriptor, transport::HeartbeatAndAlertComponentTouchupParameters const &heartbeatParam, int serverDelay) {
     Environment env;
     R r(&env);
 
@@ -53,9 +55,20 @@ void runServer(std::string const &serviceDescriptor, transport::HeartbeatAndAler
     };
 
     infra::GenericComponentLiftAndRegistration<R> _(r);
-    auto facility = _("facility", infra::LiftAsFacility{}, [](FacilityInput &&x) -> FacilityOutput {
-        return {x.data*2};
-    });
+    R::OnOrderFacilityPtr<FacilityInput,FacilityOutput> facility;
+    if (serverDelay > 0) {
+        facility = basic::CommonFlowUtilComponents<M>::simpleTaskSpawningFacility<FacilityInput,FacilityOutput>(
+            [serverDelay](FacilityInput &&x) -> FacilityOutput {
+                std::this_thread::sleep_for(std::chrono::seconds(serverDelay));
+                return {x.data*2, std::string(100000, ' ')};
+            }
+        );
+        r.registerOnOrderFacility("facility", facility);
+    } else {
+        facility = _("facility", infra::LiftAsFacility{}, [](FacilityInput &&x) -> FacilityOutput {
+            return {x.data*2, std::string(100000, ' ')};
+        });
+    }
     transport::MultiTransportFacilityWrapper<R>::wrap<FacilityInput,FacilityOutput>(
         r 
         , facility 
@@ -288,12 +301,14 @@ int main(int argc, char **argv) {
     TCLAP::ValueArg<std::string> heartbeatTopicArg("T", "heartbeatTopic", "heartbeat topic", false, "tm.examples.heartbeats", "string");
     TCLAP::ValueArg<std::string> heartbeatIdentityArg("I", "heartbeatIdentity", "heartbeat identity", false, "rpc_delay_measurer", "string");
     TCLAP::ValueArg<int> repeatTimesArg("r", "repeatTimes", "repeat times", false, 1000, "int");
+    TCLAP::ValueArg<int> serverDelayArg("D", "serverDelay", "server delay in seconds", false, 0, "int");
     cmd.add(modeArg);
     cmd.add(serviceDescriptorArg);
     cmd.add(heartbeatDescriptorArg);
     cmd.add(heartbeatTopicArg);
     cmd.add(heartbeatIdentityArg);
     cmd.add(repeatTimesArg);    
+    cmd.add(serverDelayArg);
     
     cmd.parse(argc, argv);
 
@@ -308,7 +323,7 @@ int main(int argc, char **argv) {
             , heartbeatIdentityArg.getValue()
             , std::chrono::seconds(2)
         };
-        runServer(serviceDescriptorArg.getValue(), heartbeatParam);
+        runServer(serviceDescriptorArg.getValue(), heartbeatParam, serverDelayArg.getValue());
         return 0;
     } else if (modeArg.getValue() == "client") {
         if (serviceDescriptorArg.isSet()) {

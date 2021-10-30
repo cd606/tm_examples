@@ -44,8 +44,8 @@ function handleToken(token) {
             xhr.setRequestHeader("Authorization", "Bearer "+token);
         }
     });
-    $.post("/key_query", JSON.stringify({"request":{}}), function(data) {
-        let decryptKey = sodium.crypto_generichash(sodium.crypto_generichash_BYTES, sodium.from_string(data.response));
+    $.post("/key_query", JSON.stringify({}), function(data) {
+        let decryptKey = sodium.crypto_generichash(sodium.crypto_generichash_BYTES, sodium.from_string(data));
         let ws = new WebSocket("wss://localhost:56789/data");
         ws.binaryType = 'arraybuffer';
         ws.onmessage = function(event) {

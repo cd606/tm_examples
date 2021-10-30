@@ -64,4 +64,18 @@ int main(int argc, char **argv) {
             ).get();
         std::cout << resp << '\n';
     }
+
+    auto resp = transport::OneShotMultiTransportRemoteFacilityCall<Env>
+        ::call<Req2, Resp2>
+        (
+            &env 
+            , "json_rest://localhost:34567:user2:abcde:/test_facility_2[use_get=true,no_wrap=true]"
+            , {
+                2
+                , "abc def+x()"
+            }
+            , std::nullopt 
+            , false
+        ).get();
+    std::cout << resp << '\n';
 }

@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<basic::nlohmann_json_interop::Json,basic::VoidStruct,std::string>(
         r 
         , keyQueryFacility
-        , "json_rest://:56790:::/key_query"
+        , "json_rest://:56790:::/key_query[no_wrap=true]"
         , "wrapper_2"
         , std::nullopt
         , false

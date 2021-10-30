@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol<std::void_t,Req2,Resp2>(
         r 
         , facility2 
-        , "json_rest://:34567:::/test_facility_2"
+        , "json_rest://:34567:::/test_facility_2[no_wrap=true]"
         , "wrapper_2"
         , std::nullopt
         , false

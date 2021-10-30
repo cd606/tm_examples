@@ -16,3 +16,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'keyed_update_generator_test'
+    , ['KeyedUpdateGeneratorTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
