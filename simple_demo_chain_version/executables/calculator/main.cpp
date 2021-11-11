@@ -2,6 +2,7 @@
 #include "simple_demo_chain_version/calculator_logic/ExternalCalculatorWrappedAsFacility.hpp"
 #include "simple_demo_chain_version/calculator_logic/MockExternalCalculator.hpp"
 #include "simple_demo_chain_version/security_keys/VerifyingKeys.hpp"
+#include "simple_demo_chain_version/executables/CommonInfo.hpp"
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
@@ -68,9 +69,7 @@ int main(int argc, char **argv) {
 
     //setting up the chain
 
-    std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
-    std::ostringstream chainLocatorOss;
-    chainLocatorOss << "in_shared_memory://::::" << today << "-simple-demo-chain[size=" << (100*1024*1024) << "]";
+    auto chainLocator = theChainLocator();
 
     //Please note that this object should not be allowed to go out of scope
     transport::SharedChainCreator<M> sharedChainCreator;
@@ -82,13 +81,15 @@ int main(int argc, char **argv) {
         , calculator_logic::CalculatorIdleWorker
     >(
         &env
-        , chainLocatorOss.str()
+        , chainLocator
+        , basic::simple_shared_chain::ChainPollingPolicy()
         //If very high throughput is required, then we need to use the busy-loop no-yield polling 
         //policy which will occupy full CPU (in real-time mode). If default polling policy is used
         //, then there will be a sleep of at least 1 millisecond (and most likely longer) between 
         //the polling, so the throughput will be degraded. In single-pass mode, the polling policy
         //is ignored since it is single-threaded and always uses busy polling.
         //, basic::simple_shared_chain::ChainPollingPolicy().BusyLoop(true).NoYield(true)
+        , ((argc<=1)?calculator_logic::CalculatorStateFolder():calculator_logic::CalculatorStateFolder(argv[1]))
     );
 
     auto wrappedExternalFacility = M::fromAbstractOnOrderFacility(new calculator_logic::ExternalCalculatorWrappedAsFacility<TheEnvironment>());

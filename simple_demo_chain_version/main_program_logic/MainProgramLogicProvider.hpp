@@ -54,6 +54,7 @@ namespace simple_demo_chain_version { namespace main_program_logic {
             >(
                 r.environment()
                 , chainLocatorStr
+                /*, basic::simple_shared_chain::ChainPollingPolicy().ReaderPollingWaitDuration(std::chrono::milliseconds(10))*/
             )
             , std::make_shared<MainProgramIDAndFinalFlagExtractor<typename R::EnvironmentType>>()
             , graphPrefix+"/facility_combo"

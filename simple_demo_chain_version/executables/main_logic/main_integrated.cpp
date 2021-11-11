@@ -1,6 +1,7 @@
 #include "simple_demo_chain_version/main_program_logic/MainProgramLogicProvider.hpp"
 #include "simple_demo_chain_version/security_keys/VerifyingKeys.hpp"
 #include "simple_demo_chain_version/enable_server_data/EnableServerTransactionData.hpp"
+#include "simple_demo_chain_version/executables/CommonInfo.hpp"
 
 #include <tm_kit/infra/Environments.hpp>
 #include <tm_kit/infra/TerminationController.hpp>
@@ -84,10 +85,7 @@ int main(int argc, char **argv) {
     transport::attachHeartbeatAndAlertComponent(r, &env, "simple_demo_chain_version.main_logic.heartbeat", std::chrono::seconds(1));
 
     //setting up chain
-    std::string today = infra::withtime_utils::localTimeString(std::chrono::system_clock::now()).substr(0,10);
-    std::ostringstream chainLocatorOss;
-    chainLocatorOss << "in_shared_memory://::::" << today << "-simple-demo-chain[size=" << (100*1024*1024) << "]";
-    std::string chainLocatorStr = chainLocatorOss.str();
+    auto chainLocatorStr = theChainLocator();
 
     //Please note that this object should not be allowed to go out of scope
     transport::SharedChainCreator<M> sharedChainCreator;

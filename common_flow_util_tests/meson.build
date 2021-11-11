@@ -22,3 +22,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'remove_duplicates_test'
+    , ['RemoveDuplicatesTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
