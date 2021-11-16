@@ -88,7 +88,7 @@ void guiClientDataFlow(
     auto gsUnsubscriber = M::liftPure<GuiExitEvent>(
         [gsIDPtr](GuiExitEvent &&) {
             return M::Key<GS::Input>(GS::Input {
-                GS::Unsubscription {TheEnvironment::id_to_string(*gsIDPtr)}
+                GS::Unsubscription {*gsIDPtr}
             });
         }
     );
