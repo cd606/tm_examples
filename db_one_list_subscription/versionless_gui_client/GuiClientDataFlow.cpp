@@ -110,7 +110,7 @@ void guiClientDataFlow(
                 ret.push_back(M::keyify(FacilityKey {
                     item.first
                     , GS::Input {
-                        GS::Unsubscription {TheEnvironment::id_to_string(item.second)}
+                        GS::Unsubscription {item.second}
                     }
                 }));
             }
