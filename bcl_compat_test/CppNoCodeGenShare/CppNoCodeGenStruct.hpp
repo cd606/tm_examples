@@ -3,6 +3,8 @@
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
 #include <tm_kit/transport/bcl_compat/BclStructs.hpp>
+#include <tm_kit/transport/bcl_compat/Duration.hpp>
+#include <tm_kit/transport/bcl_compat/DateTime.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -12,41 +14,57 @@ namespace bcl_compat_test{
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<6,std::string>), description)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr))
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 
     #define RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages))
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
     
     #define SMALL_QUERY_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<6,std::string>), description)) 
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<6,std::string>), description)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 
     #define SMALL_RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
-        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) 
+        ((TM_BASIC_CBOR_CAPABLE_STRUCT_PROTECT_TYPE(basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 #else
     #define QUERY_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
         (((basic::SingleLayerWrapperWithID<6,std::string>), description)) \
-        (((basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr))
+        (((basic::SingleLayerWrapperWithID<5,std::vector<float>>), floatArr)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 
     #define RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         (((basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
-        (((basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages))
+        (((basic::SingleLayerWrapperWithID<2,std::vector<std::string>>), messages)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 
     #define SMALL_QUERY_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
         ((transport::bcl_compat::BclDecimal, value)) \
-        (((basic::SingleLayerWrapperWithID<6,std::string>), description)) 
+        (((basic::SingleLayerWrapperWithID<6,std::string>), description)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 
     #define SMALL_RESULT_FIELDS \
         ((transport::bcl_compat::BclGuid<Env>, id)) \
-        (((basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) 
+        (((basic::SingleLayerWrapperWithID<3,transport::bcl_compat::BclDecimal>), value)) \
+        ((std::chrono::milliseconds, ts)) \
+        ((std::chrono::system_clock::time_point, dt))
 #endif
 
     TM_BASIC_CBOR_CAPABLE_TEMPLATE_STRUCT(((typename, Env)), QueryNoCodeGen, QUERY_FIELDS);

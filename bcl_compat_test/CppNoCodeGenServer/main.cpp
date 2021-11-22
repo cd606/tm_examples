@@ -29,17 +29,17 @@ int main(int argc, char **argv) {
         basic::proto_interop::Proto<bcl_compat_test::QueryNoCodeGen<Environment>>
     >(
         [](basic::proto_interop::Proto<bcl_compat_test::QueryNoCodeGen<Environment>> &&q) -> basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>> {
-            std::cout << q->id << '\n';
-            std::cout << *(q->value) << '\n';
-            for (auto const &f : q->floatArr.value) {
-                std::cout << '\t' << f << '\n';
-            }
-            
+            basic::PrintHelper<bcl_compat_test::QueryNoCodeGen<Environment>>::print(
+                std::cout, *q
+            );
+            std::cout << "\n";
          
             basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>> r;
             r->id = q->id;
             r->value.value = q->value*2.0;
             r->messages.value.push_back(q->description.value);
+            r->ts = q->ts;
+            r->dt = std::chrono::system_clock::now();
 
             return r;
         }

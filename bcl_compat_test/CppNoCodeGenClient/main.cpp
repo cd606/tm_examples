@@ -31,6 +31,8 @@ int main(int argc, char **argv) {
     q->value = "-0.00000000123";
     q->description.value = "cpp_client_test";
     q->floatArr.value = {1.0f, 2.0f};
+    q->ts = std::chrono::milliseconds(12345);
+    q->dt = std::chrono::system_clock::now();
 
     std::cout << q->id << '\n';
     std::cout << q->value << '\n';
@@ -45,7 +47,16 @@ int main(int argc, char **argv) {
     std::cout << '\n';
 
     basic::nlohmann_json_interop::Json<bcl_compat_test::QueryNoCodeGen<Environment> *> q1(&(*q));
-    q1.writeToStream(std::cout);
+    std::string q1Str;
+    q1.writeToString(&q1Str);
+    std::cout << q1Str;
+    std::cout << "\n\n";
+
+    std::cout << "-->Parse\n";
+    bcl_compat_test::QueryNoCodeGen<Environment> q2;
+    basic::nlohmann_json_interop::Json<bcl_compat_test::QueryNoCodeGen<Environment> *> q2_2(&q2);
+    q2_2.fromString(q1Str);
+    basic::PrintHelper<bcl_compat_test::QueryNoCodeGen<Environment>>::print(std::cout, q2);
     std::cout << "\n\n";
     
     auto resF = transport::OneShotMultiTransportRemoteFacilityCall<Environment>
@@ -63,6 +74,7 @@ int main(int argc, char **argv) {
 
     std::cout << res->id << '\n';
     std::cout << res->value.value << '\n';
+    basic::PrintHelper<bcl_compat_test::ResultNoCodeGen<Environment>>::print(std::cout, *res);
     std::cout << '\n';
 
     bcl_compat_test::SmallResultNoCodeGen<Environment> sr;

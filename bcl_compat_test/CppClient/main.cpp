@@ -12,6 +12,8 @@
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/bcl_compat/Decimal.hpp>
 #include <tm_kit/transport/bcl_compat/Guid.hpp>
+#include <tm_kit/transport/bcl_compat/Duration.hpp>
+#include <tm_kit/transport/bcl_compat/DateTime.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -36,6 +38,8 @@ int main(int argc, char **argv) {
     q.set_description("cpp_client_test");
     q.add_floatarr(1.0f);
     q.add_floatarr(2.0f);
+    transport::bcl_compat::DurationConverter::write(*q.mutable_ts(), std::chrono::milliseconds(12345));
+    transport::bcl_compat::DateTimeConverter::write(*q.mutable_dt(), std::chrono::system_clock::now());
 
     auto resF = transport::OneShotMultiTransportRemoteFacilityCall<Environment>
         ::call<
@@ -54,4 +58,13 @@ int main(int argc, char **argv) {
     std::cout << value << '\n';
     std::cout << transport::bcl_compat::GuidConverter<Environment>::read(res.id()) << '\n';
     std::cout << transport::bcl_compat::DecimalConverter::read(res.value()) << '\n';
+    std::chrono::system_clock::time_point tp;
+    transport::bcl_compat::DateTimeConverter::read(
+        tp, res.dt()
+    );
+    basic::PrintHelper<std::chrono::system_clock::time_point>::print(
+        std::cout 
+        , tp
+    );
+    std::cout << '\n';
 }

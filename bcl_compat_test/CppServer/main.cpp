@@ -12,6 +12,7 @@
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/bcl_compat/Decimal.hpp>
 #include <tm_kit/transport/bcl_compat/Guid.hpp>
+#include <tm_kit/transport/bcl_compat/DateTime.hpp>
 
 using namespace dev::cd606::tm;
 
@@ -47,6 +48,9 @@ int main(int argc, char **argv) {
             transport::bcl_compat::GuidConverter<Environment>::write(*r.mutable_id(), id);
             transport::bcl_compat::DecimalConverter::write(*r.mutable_value(), value);
             *(r.add_messages()) = q.description();
+
+            *(r.mutable_ts()) = q.ts();
+            transport::bcl_compat::DateTimeConverter::write(*(r.mutable_dt()), std::chrono::system_clock::now());
 
             return r;
         }

@@ -15,15 +15,59 @@ message Decimal {
   uint32 signScale = 3; // the number of decimal digits (bits 1-16), and the sign (bit 0)
 }
 
+message TimeSpan {
+  sint64 value = 1; // the size of the timespan (in units of the selected scale)
+  TimeSpanScale scale = 2; // the scale of the timespan [default = DAYS]
+  enum TimeSpanScale {
+    DAYS = 0;
+    HOURS = 1;
+    MINUTES = 2;
+    SECONDS = 3;
+    MILLISECONDS = 4;
+	TICKS = 5;
+
+    MINMAX = 15; // dubious
+  }
+}
+
+message DateTime {
+  sint64 value = 1; // the offset (in units of the selected scale) from 1970/01/01
+  TimeSpanScale scale = 2; // the scale of the timespan [default = DAYS]
+  DateTimeKind kind = 3; // the kind of date/time being represented [default = UNSPECIFIED]
+  enum TimeSpanScale {
+    DAYS = 0;
+    HOURS = 1;
+    MINUTES = 2;
+    SECONDS = 3;
+    MILLISECONDS = 4;
+	TICKS = 5;
+
+    MINMAX = 15; // dubious
+  }
+  enum DateTimeKind
+  {     
+     // The time represented is not specified as either local time or Coordinated Universal Time (UTC).
+     UNSPECIFIED = 0;
+     // The time represented is UTC.
+     UTC = 1;
+     // The time represented is local time.
+     LOCAL = 2;
+   }
+}
+
 message Query {
    Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
    Decimal Value = 2;
    string Description = 6;
    repeated float FloatArr = 5;
+   TimeSpan TS = 7;
+   DateTime DT = 8;
 }
 
 message Result {
    Guid ID = 1; // default value could not be applied: 00000000-0000-0000-0000-000000000000
    Decimal Value = 3;
    repeated string Messages = 2;
+   TimeSpan TS = 4;
+   DateTime DT = 5;
 }

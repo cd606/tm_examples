@@ -20,6 +20,10 @@ namespace DotNetServer
         public string Description {get; set;}
         [ProtoMember(5)]
         public List<float> FloatArr {get; set;}
+        [ProtoMember(7)]
+        public TimeSpan TS {get; set;}
+        [ProtoMember(8)]
+        public DateTime DT {get; set;}
     }
     [ProtoContract]
     public class Result
@@ -30,6 +34,10 @@ namespace DotNetServer
         public Decimal Value {get; set;}
         [ProtoMember(2)]
         public List<string> Messages {get; set;}
+        [ProtoMember(4)]
+        public TimeSpan TS {get; set;}
+        [ProtoMember(5)]
+        public DateTime DT {get; set;}
     }
     class Facility : AbstractOnOrderFacility<ClockEnv, Query, Result> 
     {
@@ -44,6 +52,13 @@ namespace DotNetServer
             {
                 Console.WriteLine($"\t{f}");
             }
+            Console.WriteLine(data.timedData.value.key.TS);
+            Console.WriteLine(data.timedData.value.key.DT.Kind);
+            if (data.timedData.value.key.DT.Kind == DateTimeKind.Utc) {
+                Console.WriteLine(data.timedData.value.key.DT.ToLocalTime());
+            } else {
+                Console.WriteLine(data.timedData.value.key.DT);
+            }
             publish(new TimedDataWithEnvironment<ClockEnv, Key<Result>>(
                 data.environment
                 , new WithTime<Key<Result>>(
@@ -54,6 +69,8 @@ namespace DotNetServer
                             ID = data.timedData.value.key.ID
                             , Value = data.timedData.value.key.Value*2.0m
                             , Messages = new List<string> {data.timedData.value.key.Description}
+                            , TS = data.timedData.value.key.TS
+                            , DT = DateTime.Now
                         }
                     )
                     , true
