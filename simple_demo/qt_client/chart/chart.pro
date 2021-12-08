@@ -31,7 +31,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 win32:CONFIG(release, debug|release): QMAKE_LFLAGS += /NODEFAULTLIB:LIBCMT
 
 VCPKGDIR = ..\..\..\..\..\..\..\vcpkg\installed\x64-windows
-#VCPKGDIR = c:\Users\diyu6\vcpkg\installed\x64-windows
 
 INCLUDEPATH += c:\include $${VCPKGDIR}\include
 LIBS += c:\lib\libtm_kit_infra.a c:\lib\libtm_kit_basic.a c:\lib\libtm_kit_transport.a
