@@ -16,7 +16,6 @@ SOURCES += \
 
 HEADERS += \
     LineSeries.hpp \
-    SignalObject.hpp \
     mainwindow.h \
     tmPart.hpp
 

@@ -11,8 +11,9 @@
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 
 #include "LineSeries.hpp"
-#include "SignalObject.hpp"
 #include "../../data_structures/InputDataStructure.hpp"
+
+#include <QMetaObject>
 
 using namespace dev::cd606::tm;
 
@@ -33,10 +34,6 @@ namespace tm_part {
     void setup(LineSeries *ls) {
         Env *env = new Env();
         R *r = new R(env);
-
-        auto so = std::make_shared<SignalObject>();
-        r->preservePointer(so);
-        QObject::connect(so.get(), &SignalObject::valueUpdated, ls, &LineSeries::addValue, Qt::QueuedConnection);
 
         auto heartbeatListener = std::get<0>(
                 transport::MultiTransportBroadcastListenerManagingUtils<R>
@@ -68,8 +65,11 @@ namespace tm_part {
 
         infra::DeclarativeGraph<R>(""
                                    , {
-                                       {"output", [so](basic::proto_interop::Proto<simple_demo::InputDataPOCO> &&d) {
-                                              so->setValue(d->value);
+                                       {"output", [ls](basic::proto_interop::Proto<simple_demo::InputDataPOCO> &&d) {
+                                            auto v = d->value;
+                                            QMetaObject::invokeMethod(ls, [ls,v]() {
+                                                ls->addValue(v);
+                                            });
                                           }}
                                        , {inputDataSource.clone(), "output"}
                                    })(*r);
