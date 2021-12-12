@@ -23,7 +23,8 @@ int main(int argc, char *argv[])
     wnd->setLayout(layout);
     w.setCentralWidget(wnd);
 
-    tm_part::setup(ls, ep);
+    bool secureServers = (argc > 1 && std::string_view(argv[1]) == "secure");
+    tm_part::setup(secureServers, ls, ep);
 
     w.show();
     return a.exec();

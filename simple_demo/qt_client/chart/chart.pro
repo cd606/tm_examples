@@ -9,6 +9,7 @@ CONFIG += c++17
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    ../../security_logic/EncHelper.cpp \
     EnablePanel.cpp \
     LineSeries.cpp \
     main.cpp \
@@ -16,6 +17,8 @@ SOURCES += \
     tmPart.cpp
 
 HEADERS += \
+    ../../security_logic/EncAndSignHookFactory.hpp \
+    ../../security_logic/EncHelper.hpp \
     EnablePanel.hpp \
     LineSeries.hpp \
     mainwindow.h \
@@ -29,11 +32,12 @@ qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
+win32:CONFIG(release, debug|release): QMAKE_CXXFLAGS += -bigobj
 win32:CONFIG(release, debug|release): QMAKE_LFLAGS += /NODEFAULTLIB:LIBCMT
 
 VCPKGDIR = ..\..\..\..\..\..\..\vcpkg\installed\x64-windows
 
-INCLUDEPATH += c:\include $${VCPKGDIR}\include
+INCLUDEPATH += c:\include $${VCPKGDIR}\include ..\..\..
 LIBS += c:\lib\libtm_kit_infra.a c:\lib\libtm_kit_basic.a c:\lib\libtm_kit_transport.a
 LIBS += $${VCPKGDIR}\lib\spdlog.lib $${VCPKGDIR}\lib\fmt.lib
 LIBS += $${VCPKGDIR}\lib\crossguid.lib

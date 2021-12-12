@@ -5,7 +5,7 @@
 #include "EnablePanel.hpp"
 
 QT_BEGIN_NAMESPACE
-namespace tm_part { extern void setup(LineSeries *ls, EnablePanel *ep); }
+namespace tm_part { extern void setup(bool secureServers, LineSeries *ls, EnablePanel *ep); }
 QT_END_NAMESPACE
 
 #endif // TMPART_HPP
