@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
 
     std::cout << "=======================\n";
     basic::struct_field_info_masking::MaskedStructView<Data,mask> {dataVec[0]} 
-        = basic::struct_field_info_masking::MaskedStructConstView<Data,mask> {dataVec[1]};
+        = basic::struct_field_info_masking::MaskedStructConstView<Data,mask2> {dataVec[1]};
     
     std::vector<basic::struct_field_info_masking::MaskedStruct<Data,mask2>> x;
     for (auto const &item : dataVec) {
