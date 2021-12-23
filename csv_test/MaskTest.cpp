@@ -2,6 +2,7 @@
 #include <tm_kit/basic/StructFieldInfoWithMaskingFilter.hpp>
 #include <tm_kit/basic/StructFieldInfoBasedCsvUtils.hpp>
 #include <tm_kit/basic/ConcatStructFieldInfo.hpp>
+#include <tm_kit/basic/StructFieldInfoBasedDynamicView.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -83,4 +84,22 @@ int main(int argc, char **argv) {
         , cs.begin()
         , cs.end()
     );
+
+    std::cout << "=======================\n";
+    std::cout << std::any_cast<double>(
+        *(basic::struct_field_info_utils::DynamicConstView<C> {cs[0]})["Data"]
+    ) << '\n';
+    (basic::struct_field_info_utils::DynamicView<C> {cs[0]})["Data"] = 1.23;
+    std::cout << std::any_cast<double>(
+        *(basic::struct_field_info_utils::DynamicView<C> {cs[0]})["Data"]
+    ) << '\n';
+    (basic::struct_field_info_utils::DynamicView<C> {cs[0]})[4] = 1.234;
+    std::cout << std::any_cast<double>(
+        *(basic::struct_field_info_utils::DynamicView<C> {cs[0]})[4]
+    ) << '\n';
+
+    std::vector<std::tuple<std::string_view, std::any>> fields;
+    (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).copyNamesAndValuesTo(std::back_inserter(fields));
+    std::cout << fields.size() << '\n';
+    std::cout << std::get<0>(fields[5]) << ' ' << std::any_cast<double>(std::get<1>(fields[5])) << '\n';
 }
