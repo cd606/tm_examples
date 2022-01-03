@@ -89,16 +89,17 @@ int main(int argc, char **argv) {
     std::cout << std::any_cast<double>(
         *(basic::struct_field_info_utils::DynamicConstView<C> {cs[0]})["Data"]
     ) << '\n';
-    (basic::struct_field_info_utils::DynamicView<C> {cs[0]})["Data"] = 1.23;
+    basic::struct_field_info_utils::DynamicView<C> dv {cs[0]};
+    dv["Data"] = 1.23;
     std::cout << std::any_cast<double>(
-        *(basic::struct_field_info_utils::DynamicView<C> {cs[0]})["Data"]
+        *dv["Data"]
     ) << '\n';
-    (basic::struct_field_info_utils::DynamicView<C> {cs[0]})[4] = 1.234;
+    dv[4] = 1.234;
     std::cout << std::any_cast<double>(
-        *(basic::struct_field_info_utils::DynamicView<C> {cs[0]})[4]
+        *dv[4]
     ) << '\n';
-    (basic::struct_field_info_utils::DynamicView<C> {cs[0]}).set<double>("Data", 1.2345);
-    std::cout << *((basic::struct_field_info_utils::DynamicView<C> {cs[0]}).get<double>(4)) << '\n';
+    dv.set<double>("Data", 1.2345);
+    std::cout << *(dv.get<double>(4)) << '\n';
 
     std::vector<std::tuple<std::string_view, std::any>> fields;
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).copyNamesAndValuesTo(std::back_inserter(fields));
