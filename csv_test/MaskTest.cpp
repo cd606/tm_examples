@@ -97,6 +97,8 @@ int main(int argc, char **argv) {
     std::cout << std::any_cast<double>(
         *(basic::struct_field_info_utils::DynamicView<C> {cs[0]})[4]
     ) << '\n';
+    (basic::struct_field_info_utils::DynamicView<C> {cs[0]}).set<double>("Data", 1.2345);
+    std::cout << *((basic::struct_field_info_utils::DynamicView<C> {cs[0]}).get<double>(4)) << '\n';
 
     std::vector<std::tuple<std::string_view, std::any>> fields;
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).copyNamesAndValuesTo(std::back_inserter(fields));
