@@ -101,11 +101,14 @@ int main(int argc, char **argv) {
     dv.set<double>("Data", 1.2345);
     std::cout << *(dv.get<double>(4)) << '\n';
 
+#if defined(_MSC_VER) || defined(__llvm__) || !defined(__GNUC__) || (__GNUC__ >= 10)
+    //GCC 9 has an issue with inserting this kind of tuple into vector through back inserter.
+    //Other compilers are ok with the code here.
     std::vector<std::tuple<std::string_view, std::any>> fields;
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).copyNamesAndValuesTo(std::back_inserter(fields));
     std::cout << fields.size() << '\n';
     std::cout << std::get<0>(fields[5]) << ' ' << std::any_cast<double>(std::get<1>(fields[5])) << '\n';
-
+#endif
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).forAllByType<double>([](std::size_t idx, std::string_view const &nm, double v) {
         std::cout << "Got " << idx << ' ' << nm << ' ' << v << '\n';
     });
