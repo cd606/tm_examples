@@ -108,6 +108,15 @@ int main(int argc, char **argv) {
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).copyNamesAndValuesTo(std::back_inserter(fields));
     std::cout << fields.size() << '\n';
     std::cout << std::get<0>(fields[5]) << ' ' << std::any_cast<double>(std::get<1>(fields[5])) << '\n';
+#else
+    std::size_t fieldCount = 0;
+    (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).forAll([&fieldCount](std::size_t idx, std::string_view const &nm, std::any const &v) {
+        ++fieldCount;
+        if (idx == 5) {
+            std::cout << nm << ' ' << std::any_cast<double>(v) << '\n';
+        }
+    });
+    std::cout << fieldCount << '\n';
 #endif
     (basic::struct_field_info_utils::DynamicConstView<C> {cs[0]}).forAllByType<double>([](std::size_t idx, std::string_view const &nm, double v) {
         std::cout << "Got " << idx << ' ' << nm << ' ' << v << '\n';

@@ -28,3 +28,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'delay_test'
+    , ['DelayTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
