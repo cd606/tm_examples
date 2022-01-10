@@ -5,6 +5,8 @@
 #include <tm_kit/infra/DeclarativeGraph.hpp>
 
 #include <tm_kit/basic/real_time_clock/ClockComponent.hpp>
+#include <tm_kit/basic/NlohmannJsonInterop.hpp>
+#include <tm_kit/basic/ProtoInterop.hpp>
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 
 #include <tm_kit/transport/SyntheticMultiTransportFacility.hpp>
@@ -30,7 +32,7 @@ void client() {
 
     auto c = transport::SyntheticMultiTransportFacility<R>
         ::client<
-            basic::CBOR, basic::CBOR 
+            basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
         >(
             r 
@@ -81,7 +83,7 @@ void server() {
     r.registerOnOrderFacility("facility", f);
     transport::SyntheticMultiTransportFacility<R>
         ::serverWithFacility<
-            basic::CBOR, basic::CBOR 
+            basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
         >(
             r 
