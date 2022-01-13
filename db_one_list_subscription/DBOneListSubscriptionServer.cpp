@@ -15,6 +15,7 @@
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
 #include <tm_kit/transport/HeartbeatAndAlertComponent.hpp>
+#include <tm_kit/transport/SyntheticMultiTransportFacility.hpp>
 
 #include "DBData.hpp"
 
@@ -266,8 +267,8 @@ int main(int argc, char **argv) {
         , new TF(dataStore)
     );
 
-    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 3);
-    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 3);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.transactionFacility, 4);
+    r.setMaxOutputConnectivity(transactionLogicCombinationRes.subscriptionFacility, 4);
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,TI::Transaction,TI::TransactionResponse,DI::Update>(
         r
@@ -289,6 +290,19 @@ int main(int argc, char **argv) {
         , "websocket://127.0.0.1:56789:::transaction"
         , "transaction_wrapper_3/"
     );
+    transport::SyntheticMultiTransportFacility<R>::serverWithFacility<
+        basic::CBOR, basic::CBOR 
+        , std::tuple<std::string, TI::Transaction>, TI::TransactionResponse
+        , true
+    >(
+        r 
+        , "transaction_wrapper_4/"
+        , "multicast://224.0.0.1:34568:::db_one_list_transaction_input"
+        , "synthetic_transaction_input"
+        , "multicast://224.0.0.1:34568:::db_one_list_transaction_output"
+        , "synthetic_transaction_output"
+        , r.facilityConnector(transactionLogicCombinationRes.transactionFacility)
+    );
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
         <basic::CBOR,GS::Input,GS::Output,GS::SubscriptionUpdate>(
         r
@@ -309,6 +323,19 @@ int main(int argc, char **argv) {
         , transactionLogicCombinationRes.subscriptionFacility
         , "websocket://127.0.0.1:56789:::subscription"
         , "subscription_wrapper_3/"
+    );
+    transport::SyntheticMultiTransportFacility<R>::serverWithFacility<
+        basic::CBOR, basic::CBOR 
+        , std::tuple<std::string, GS::Input>, GS::Output
+        , true
+    >(
+        r 
+        , "subscription_wrapper_4/"
+        , "multicast://224.0.0.1:34567:::db_one_list_subscription_input"
+        , "synthetic_subscription_input"
+        , "multicast://224.0.0.1:34567:::db_one_list_subscription_output"
+        , "synthetic_subscription_output"
+        , r.facilityConnector(transactionLogicCombinationRes.subscriptionFacility)
     );
     
     std::ostringstream graphOss;

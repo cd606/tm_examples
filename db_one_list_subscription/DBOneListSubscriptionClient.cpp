@@ -15,7 +15,9 @@
 #include <tm_kit/transport/CrossGuidComponent.hpp>
 #include <tm_kit/transport/SimpleIdentityCheckerComponent.hpp>
 #include <tm_kit/transport/rabbitmq/RabbitMQComponent.hpp>
+#include <tm_kit/transport/multicast/MulticastComponent.hpp>
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
+#include <tm_kit/transport/SyntheticMultiTransportFacility.hpp>
 
 #include "DBData.hpp"
 
@@ -26,7 +28,7 @@
 using namespace dev::cd606::tm;
 using namespace db_one_list_subscription;
 
-void diMain(std::string const &cmd, std::string const &idStr) {
+void diMain(std::string const &cmd, std::string const &idStr, bool synthetic) {
     using DI = basic::transaction::named_value_store::DI<db_data>;
     using GS = basic::transaction::named_value_store::GS<transport::CrossGuidComponent::IDType,db_data>;
     using TheEnvironment = infra::Environment<
@@ -35,6 +37,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
+        transport::multicast::MulticastComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string
             , GS::Input>
@@ -51,11 +54,38 @@ void diMain(std::string const &cmd, std::string const &idStr) {
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
-        <basic::CBOR,GS::Input,GS::Output>(
-        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
-    );
-    r.registerOnOrderFacility("facility", facility);
+    R::FacilitioidConnector<GS::Input,GS::Output> facilityConn;
+
+    if (synthetic) {
+        auto innerConn = transport::SyntheticMultiTransportFacility<R>
+            ::client<
+                basic::CBOR, basic::CBOR 
+                , std::tuple<std::string, GS::Input>, GS::Output
+                , true
+            >(
+                r 
+                , "synthetic_facility/"
+                , "multicast://224.0.0.1:34567:::db_one_list_subscription_input"
+                , "synthetic_subscription_input"
+                , "multicast://224.0.0.1:34567:::db_one_list_subscription_output"
+                , "synthetic_subscription_output"
+            );
+        facilityConn = basic::AppRunnerUtilComponents<R>
+            ::wrapTuple2FacilitioidBySupplyingDefaultValue
+                <GS::Input, GS::Output, std::string>
+            (
+                innerConn 
+                , "synthetic_facility_wrapper/"
+                , "db_one_list_subscription_client_synthetic"
+            );
+    } else {
+        auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+            <basic::CBOR,GS::Input,GS::Output>(
+            r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_subscription_queue"
+        );
+        r.registerOnOrderFacility("facility", facility);
+        facilityConn = r.facilityConnector(facility);
+    }
 
     auto printAck = M::simpleExporter<M::KeyedData<GS::Input,GS::Output>>(
         [&env](M::InnerData<M::KeyedData<GS::Input,GS::Output>> &&o) {
@@ -171,7 +201,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     >(
         r 
         , "outputHandling"
-        , R::facilityConnector(facility)
+        , facilityConn
         , std::move(keyedCommand)
     );
     r.exportItem("printAck", printAck, clientOutputs.rawSubscriptionOutputs.clone());
@@ -188,7 +218,7 @@ void diMain(std::string const &cmd, std::string const &idStr) {
     infra::terminationController(infra::RunForever {&env});
 }
 
-void tiMain(std::string const &cmd, std::string const &name, int amount, double stat, int64_t oldVersion, size_t oldDataCount) {
+void tiMain(std::string const &cmd, std::string const &name, int amount, double stat, int64_t oldVersion, size_t oldDataCount, bool synthetic) {
     using TI = basic::transaction::named_value_store::TI<db_data>;
 
     using TheEnvironment = infra::Environment<
@@ -197,6 +227,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
         basic::TimeComponentEnhancedWithSpdLogging<basic::real_time_clock::ClockComponent>,
         transport::CrossGuidComponent,
         transport::rabbitmq::RabbitMQComponent,
+        transport::multicast::MulticastComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string
             , TI::Transaction>
@@ -213,10 +244,38 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     R r(&env); 
 
-    auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
-        <basic::CBOR,TI::Transaction,TI::TransactionResponse>(
-        r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
-    );
+    R::FacilitioidConnector<TI::Transaction, TI::TransactionResponse> facilityConn;
+    
+    if (synthetic) {
+        auto innerConn = transport::SyntheticMultiTransportFacility<R>
+            ::client<
+                basic::CBOR, basic::CBOR 
+                , std::tuple<std::string, TI::Transaction>, TI::TransactionResponse
+                , true
+            >(
+                r 
+                , "transaction_facility/"
+                , "multicast://224.0.0.1:34568:::db_one_list_transaction_input"
+                , "synthetic_transaction_input"
+                , "multicast://224.0.0.1:34568:::db_one_list_transaction_output"
+                , "synthetic_transaction_output"
+            );
+        facilityConn = basic::AppRunnerUtilComponents<R>
+            ::wrapTuple2FacilitioidBySupplyingDefaultValue
+                <TI::Transaction, TI::TransactionResponse, std::string>
+            (
+                innerConn 
+                , "synthetic_facility_wrapper/"
+                , "db_one_list_subscription_client_synthetic"
+            );
+    } else {
+        auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
+            <basic::CBOR,TI::Transaction,TI::TransactionResponse>(
+            r, "rabbitmq://127.0.0.1::guest:guest:test_db_one_list_cmd_transaction_queue"
+        );
+        r.registerOnOrderFacility("facility", facility);
+        facilityConn = r.facilityConnector(facility);
+    }
 
     auto initialImporter = M::simpleImporter<basic::VoidStruct>(
         [](M::PublisherCall<basic::VoidStruct> &p) {
@@ -276,7 +335,7 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
 
     auto createdCommand = r.execute("createCommand", createCommand, r.importItem("initialImporter", initialImporter));
     auto keyedCommand = r.execute("keyify", keyify, std::move(createdCommand));
-    r.placeOrderWithFacility(std::move(keyedCommand), "facility", facility, r.exporterAsSink("printResponse", printResponse));
+    facilityConn(r, std::move(keyedCommand), r.exporterAsSink("printResponse", printResponse));
 
     std::ostringstream graphOss;
     graphOss << "The graph is:\n";
@@ -302,6 +361,7 @@ int main(int argc, char **argv) {
         ("old_version", po::value<int64_t>(), "old version for the command")
         ("old_data_count", po::value<size_t>(), "old data count for the command")
         ("id", po::value<std::string>(), "id for the command")
+        ("synthetic", "use synthetic clients")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -329,20 +389,21 @@ int main(int argc, char **argv) {
     int64_t old_version = 0;
     std::string idStr;
     size_t old_data_count = 0;
+    bool synthetic = (vm.count("synthetic") != 0);
     if (cmd == "subscribe") {
         //no param needed
-        diMain(cmd, idStr);
+        diMain(cmd, idStr, synthetic);
     } else if (cmd == "unsubscribe") {
         if (!vm.count("id")) {
             std::cerr << "Please provide id for command\n";
             return 1;
         }
         idStr = vm["id"].as<std::string>();
-        diMain(cmd, idStr);
+        diMain(cmd, idStr, synthetic);
     } else if (cmd == "list") {
-        diMain(cmd, idStr);
+        diMain(cmd, idStr, synthetic);
     } else if (cmd == "snapshot") {
-        diMain(cmd, idStr);
+        diMain(cmd, idStr, synthetic);
     } else if (cmd == "update") {
         if (!vm.count("name")) {
             std::cerr << "Please provide name for command\n";
@@ -369,7 +430,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         old_data_count = vm["old_data_count"].as<size_t>();
-        tiMain(cmd, name, amount, stat, old_version, old_data_count);
+        tiMain(cmd, name, amount, stat, old_version, old_data_count, synthetic);
     } else if (cmd == "delete") {
         if (!vm.count("name")) {
             std::cerr << "Please provide name for command\n";
@@ -382,6 +443,6 @@ int main(int argc, char **argv) {
             return 1;
         }
         old_data_count = vm["old_data_count"].as<size_t>();
-        tiMain(cmd, name, amount, stat, old_version, old_data_count);
+        tiMain(cmd, name, amount, stat, old_version, old_data_count, synthetic);
     }
 }
