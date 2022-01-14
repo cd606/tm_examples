@@ -290,9 +290,9 @@ int main(int argc, char **argv) {
         , "websocket://127.0.0.1:56789:::transaction"
         , "transaction_wrapper_3/"
     );
-    transport::SyntheticMultiTransportFacility<R>::serverWithFacility<
+    transport::SyntheticMultiTransportFacility<R>::server<
         basic::CBOR, basic::CBOR 
-        , std::tuple<std::string, TI::Transaction>, TI::TransactionResponse
+        , TI::Transaction, TI::TransactionResponse
         , true
     >(
         r 
@@ -324,9 +324,9 @@ int main(int argc, char **argv) {
         , "websocket://127.0.0.1:56789:::subscription"
         , "subscription_wrapper_3/"
     );
-    transport::SyntheticMultiTransportFacility<R>::serverWithFacility<
+    transport::SyntheticMultiTransportFacility<R>::server<
         basic::CBOR, basic::CBOR 
-        , std::tuple<std::string, GS::Input>, GS::Output
+        , GS::Input, GS::Output
         , true
     >(
         r 

@@ -57,10 +57,10 @@ void diMain(std::string const &cmd, std::string const &idStr, bool synthetic) {
     R::FacilitioidConnector<GS::Input,GS::Output> facilityConn;
 
     if (synthetic) {
-        auto innerConn = transport::SyntheticMultiTransportFacility<R>
+        facilityConn = transport::SyntheticMultiTransportFacility<R>
             ::client<
                 basic::CBOR, basic::CBOR 
-                , std::tuple<std::string, GS::Input>, GS::Output
+                , GS::Input, GS::Output
                 , true
             >(
                 r 
@@ -69,14 +69,6 @@ void diMain(std::string const &cmd, std::string const &idStr, bool synthetic) {
                 , "synthetic_subscription_input"
                 , "multicast://224.0.0.1:34567:::db_one_list_subscription_output"
                 , "synthetic_subscription_output"
-            );
-        facilityConn = basic::AppRunnerUtilComponents<R>
-            ::wrapTuple2FacilitioidBySupplyingDefaultValue
-                <GS::Input, GS::Output, std::string>
-            (
-                innerConn 
-                , "synthetic_facility_wrapper/"
-                , "db_one_list_subscription_client_synthetic"
             );
     } else {
         auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol
@@ -247,10 +239,10 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
     R::FacilitioidConnector<TI::Transaction, TI::TransactionResponse> facilityConn;
     
     if (synthetic) {
-        auto innerConn = transport::SyntheticMultiTransportFacility<R>
+        facilityConn = transport::SyntheticMultiTransportFacility<R>
             ::client<
                 basic::CBOR, basic::CBOR 
-                , std::tuple<std::string, TI::Transaction>, TI::TransactionResponse
+                , TI::Transaction, TI::TransactionResponse
                 , true
             >(
                 r 
@@ -259,14 +251,6 @@ void tiMain(std::string const &cmd, std::string const &name, int amount, double 
                 , "synthetic_transaction_input"
                 , "multicast://224.0.0.1:34568:::db_one_list_transaction_output"
                 , "synthetic_transaction_output"
-            );
-        facilityConn = basic::AppRunnerUtilComponents<R>
-            ::wrapTuple2FacilitioidBySupplyingDefaultValue
-                <TI::Transaction, TI::TransactionResponse, std::string>
-            (
-                innerConn 
-                , "synthetic_facility_wrapper/"
-                , "db_one_list_subscription_client_synthetic"
             );
     } else {
         auto facility = transport::MultiTransportRemoteFacilityManagingUtils<R>::setupSimpleRemoteFacilityWithProtocol

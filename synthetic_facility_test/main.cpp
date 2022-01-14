@@ -84,7 +84,7 @@ void server() {
     });
     r.registerOnOrderFacility("facility", f);
     transport::SyntheticMultiTransportFacility<R>
-        ::serverWithFacility<
+        ::server<
             basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
         >(
@@ -169,7 +169,7 @@ void multi_server() {
     auto f = M::fromAbstractOnOrderFacility(new F());
     r.registerOnOrderFacility("facility", f);
     transport::SyntheticMultiTransportFacility<R>
-        ::serverWithFacility<
+        ::server<
             basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
             , true
