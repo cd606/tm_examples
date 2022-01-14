@@ -36,6 +36,7 @@ void client() {
         ::client<
             basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
+            , false
         >(
             r 
             , "clientFacility"
@@ -87,6 +88,7 @@ void server() {
         ::server<
             basic::nlohmann_json_interop::Json, basic::proto_interop::Proto 
             , int, double 
+            , false
         >(
             r 
             , "serverFacility"
