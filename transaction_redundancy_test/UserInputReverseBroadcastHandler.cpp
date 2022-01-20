@@ -21,6 +21,7 @@
 #include <tm_kit/transport/MultiTransportRemoteFacilityManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastPublisherManagingUtils.hpp>
+#include <tm_kit/transport/SyntheticMultiTransportFacility.hpp>
 
 #include "TransactionInterface.hpp"
 
@@ -61,6 +62,9 @@ int main(int argc, char **argv) {
         transport::BoostUUIDComponent,
         transport::ClientSideSimpleIdentityAttacherComponent<
             std::string
+            , TI::Transaction>,
+        transport::ClientSideSimpleIdentityAttacherComponent<
+            std::string
             , GS::Input>,
         transport::redis::RedisComponent
     >;
@@ -69,6 +73,11 @@ int main(int argc, char **argv) {
     using R = infra::AppRunner<M>;
 
     TheEnvironment env;
+    env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>::operator=(
+        transport::ClientSideSimpleIdentityAttacherComponent<std::string,TI::Transaction>(
+            "transaction_redundancy_test_client"
+        )
+    );
     env.transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>::operator=(
         transport::ClientSideSimpleIdentityAttacherComponent<std::string,GS::Input>(
             "transaction_redundancy_test_client"
@@ -111,53 +120,6 @@ int main(int argc, char **argv) {
                 }
             }
         );
-    /*
-    auto facilities =
-        transport::MultiTransportRemoteFacilityManagingUtils<R>
-        ::SetupRemoteFacilities<
-            std::tuple<
-                std::tuple<std::string, GS::Input, GS::Output>
-            >
-            , std::tuple<
-            >
-        >::run(
-            r 
-            , transport::MultiTransportBroadcastListenerAddSubscription {
-                transport::MultiTransportBroadcastListenerConnectionType::Redis
-                , transport::ConnectionLocator::parse("127.0.0.1:6379")
-                , "heartbeats.transaction_test_reverse_broadcast_server"
-            }
-            , std::regex("transaction redundancy test reverse broadcast server")
-            , {
-                "transaction_server_components/subscription_handler"
-            }
-            , std::chrono::seconds(3)
-            , std::chrono::seconds(5)
-            , {
-                []() -> GS::Input {
-                    return GS::Input { GS::Subscription {
-                    { Key {} }
-                    } };
-                }
-            }
-            , {
-                [](GS::Input const &, GS::Output const &o) -> bool {
-                    return std::visit(
-                        [](auto const &x) -> bool {
-                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
-                            return ret;
-                        }, o.value
-                    );
-                }
-            }
-            , {
-                "subscription"
-            }
-            , "facilities"
-        );
-
-    auto subscriptionFacility = std::get<0>(std::get<0>(facilities));
-    */
 
     //Now we manage the subscription data
 
@@ -509,40 +471,17 @@ int main(int argc, char **argv) {
         }
     );
 
-    auto addAccount = M::liftPure<TI::Transaction>(
-        [](TI::Transaction &&t) -> basic::TypedDataWithTopic<basic::CBOR<TI::TransactionWithAccountInfo>> {
-            return {
-                "etcd_test.transaction_commands"
-                , {{"transaction_redundancy_test_client", std::move(t)}}
-            };
-        }
-    );
-    auto transactionPublisherSink = transport::MultiTransportBroadcastPublisherManagingUtils<R>::
-        oneBroadcastPublisher<basic::CBOR<TI::TransactionWithAccountInfo>>(
-            r 
-            , "transactionPublisher"
-            , "redis://127.0.0.1:6379"
-        );
     r.connect(
-        r.execute("addAccount", addAccount
-            , r.execute(
-                "transactionCommandParser", transactionCommandParser
-                , r.importItem(lineImporter)
-            ))
-        , transactionPublisherSink);
-    /*
-    auto transactionPublisher = transport::redis::RedisImporterExporter<TheEnvironment>::
-        createTypedExporter<basic::CBOR<TI::TransactionWithAccountInfo>>(
-            transport::ConnectionLocator::parse("127.0.0.1:6379")
-        );
-
-    r.exportItem("transactionPublisher", transactionPublisher
-        , r.execute("addAccount", addAccount
-            , r.execute(
-                "transactionCommandParser", transactionCommandParser
-                , r.importItem(lineImporter)
-            )));
-    */
+        r.execute(
+            "transactionCommandParser", transactionCommandParser
+            , r.importItem(lineImporter)
+        )
+        , transport::SyntheticMultiTransportFacility<R>::clientNoReply<
+            basic::CBOR, TI::Transaction, true
+        >(
+            r, "synthetic_client", "redis://127.0.0.1:6379", "etcd_test.transaction_commands"
+        )
+    );
 
     //We are done, now print the graph and run
 

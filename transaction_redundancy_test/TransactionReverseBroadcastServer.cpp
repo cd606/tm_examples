@@ -13,6 +13,7 @@
 #include <tm_kit/transport/MultiTransportBroadcastListener.hpp>
 #include <tm_kit/transport/MultiTransportBroadcastListenerManagingUtils.hpp>
 #include <tm_kit/transport/MultiTransportFacilityWrapper.hpp>
+#include <tm_kit/transport/SyntheticMultiTransportFacility.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -61,6 +62,9 @@ int main(int argc, char **argv) {
         transport::BoostUUIDComponent,
         transport::ServerSideSimpleIdentityCheckerComponent<
             std::string
+            , TI::Transaction>,
+        transport::ServerSideSimpleIdentityCheckerComponent<
+            std::string
             , GS::Input>,
         transport::redis::RedisComponent,
         transport::HeartbeatAndAlertComponent,
@@ -90,50 +94,38 @@ int main(int argc, char **argv) {
 
     R r(&env);
 
-    using TE = basic::transaction::v2::TransactionHandlingExporter<
+    using TF = basic::transaction::v2::TransactionFacility<
         M, TI, DI, basic::transaction::v2::TransactionLoggingLevel::None
         , CheckVersion
         , CheckVersionSlice
         , CheckSummary
         , ProcessCommandOnLocalData
     >;
-    auto dataStore = std::make_shared<TE::DataStore>();
+    auto dataStore = std::make_shared<typename TF::DataStore>();
     using DM = basic::transaction::current::TransactionDeltaMerger<
         DI, false, M::PossiblyMultiThreaded
         , ApplyVersionSlice
         , ApplyDataSlice
     >;
-    TE te(dataStore);
-    te.setDeltaProcessor(ProcessCommandOnLocalData([&env](std::string const &s) {
+    TF tf(dataStore);
+    tf.setDeltaProcessor(ProcessCommandOnLocalData([&env](std::string const &s) {
         env.log(infra::LogLevel::Warning, s);
     }));
-    auto transactionLogicCombinationRes = basic::transaction::v2::silentTransactionLogicCombination<
+    auto transactionLogicCombinationRes = basic::transaction::v2::transactionLogicCombination<
         R, TI, DI, DM, basic::transaction::v2::SubscriptionLoggingLevel::None
     >(
         r
         , "transaction_server_components"
-        , &te
+        , &tf
     );
 
-    auto transactionInputSource = 
-        transport::MultiTransportBroadcastListenerManagingUtils<R>
-        ::oneBroadcastListener<basic::CBOR<TI::TransactionWithAccountInfo>>
-        (
-            r 
-            , "transactionInput"
-            , "redis://127.0.0.1:6379"
-            , "etcd_test.transaction_commands"
-        );
-    auto extractCBORValue = M::liftPure<basic::CBOR<TI::TransactionWithAccountInfo>>(
-        [](basic::CBOR<TI::TransactionWithAccountInfo> &&d) {
-            return std::move(d.value);
-        }
-    );
-    r.registerAction("extractCBORValue", extractCBORValue);
-
-    transactionLogicCombinationRes.transactionHandler(
-        r
-        , r.execute(extractCBORValue, std::move(transactionInputSource))
+    transport::SyntheticMultiTransportFacility<R>::server<
+        basic::CBOR, basic::CBOR, TI::Transaction, TI::TransactionResponse, true
+    >(
+        r, "transaction_server"
+        , "redis://127.0.0.1:6379", "etcd_test.transaction_commands"
+        , "redis://127.0.0.1:6379", "etcd_test.transaction_responses"
+        , r.facilityConnector(transactionLogicCombinationRes.transactionFacility)
     );
 
     transport::MultiTransportFacilityWrapper<R>::wrapWithProtocol
