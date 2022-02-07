@@ -34,3 +34,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'ku_seq_test'
+    , ['KUSeqTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
