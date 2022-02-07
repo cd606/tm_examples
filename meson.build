@@ -28,6 +28,8 @@ protobuf_gen = generator(protoc, \
 #add_global_arguments('-DBOOST_LOG_DYN_LINK', language: 'cpp')
 
 if build_machine.system() == 'windows'
+    common_deps += declare_dependency(link_args: 'bcrypt.lib')
+    common_deps += declare_dependency(link_args: 'crypt32.lib')
     add_global_arguments('/bigobj', language: 'cpp')
     add_global_arguments('/Zc:externC-', language: 'cpp')
     add_global_arguments('-DWINVER=0x0601', language: 'cpp')
