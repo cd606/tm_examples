@@ -12,7 +12,7 @@ using namespace dev::cd606::tm;
 using Env = infra::Environment<
     infra::CheckTimeComponent<false>
     , infra::FlagExitControlComponent
-    , basic::TimeComponentEnhancedWithSpdLogging<basic::top_down_single_pass_iteration_clock::ClockComponent<int>>
+    , basic::TimeComponentEnhancedWithSpdLogging<basic::top_down_single_pass_iteration_clock::ClockComponent<int>, false>
 >;
 
 using M = infra::TopDownSinglePassIterationApp<Env>;
@@ -43,13 +43,19 @@ void notMerged(R &r) {
         , {"step1", [](std::tuple<M::TimePoint,int> &&x) -> std::optional<int> {
             return std::get<1>(x)*2;
         }}
-        , {"step2", [](std::tuple<M::TimePoint,int> &&x) -> std::optional<int> {
+        , {"step2", infra::liftAsMultiWrapper([](int &&x) -> std::vector<int> {
+            return {x*100, x*1000};
+        })}
+        , {"step3", infra::liftAsMultiWrapper([](std::tuple<M::TimePoint, int> &&x) -> std::vector<int> {
+            return {std::get<1>(x), std::get<1>(x)*100};
+        })}
+        , {"step4", [](std::tuple<M::TimePoint,int> &&x) -> std::optional<int> {
             return std::get<1>(x)+1;
         }}
         , {"exporter", [env](int &&y) -> void {
             env->log(infra::LogLevel::Info, std::to_string(y));
         }}
-        , infra::DeclarativeGraphChain {{"imp", "step1", "step2", "exporter"}}
+        , infra::DeclarativeGraphChain {{"imp", "step1", "step2", "step3", "step4", "exporter"}}
     })(r);
 }
 
@@ -61,6 +67,12 @@ void merged(R &r) {
             [](std::tuple<M::TimePoint,int> &&x) -> std::optional<int> {
                 return std::get<1>(x)*2;
             }
+            , infra::liftAsMultiWrapper([](int &&x) -> std::vector<int> {
+                return {x*100, x*1000};
+            })
+            , infra::liftAsMultiWrapper([](std::tuple<M::TimePoint, int> &&x) -> std::vector<int> {
+                return {std::get<1>(x), std::get<1>(x)*100};
+            })
             , [](std::tuple<M::TimePoint,int> &&x) -> std::optional<int> {
                 return std::get<1>(x)+1;
             }
