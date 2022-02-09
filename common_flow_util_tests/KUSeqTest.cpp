@@ -11,6 +11,7 @@ using namespace dev::cd606::tm;
 
 using Env = infra::Environment<
     infra::CheckTimeComponent<false>
+    , infra::graph_check_components::CheckActionChains
     , infra::FlagExitControlComponent
     , basic::TimeComponentEnhancedWithSpdLogging<basic::top_down_single_pass_iteration_clock::ClockComponent<int>, false>
 >;
