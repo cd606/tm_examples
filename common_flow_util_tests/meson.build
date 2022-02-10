@@ -40,3 +40,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'deliberate_cycle_test'
+    , ['DeliberateCycleTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
