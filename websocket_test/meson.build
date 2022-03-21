@@ -22,3 +22,9 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
+executable(
+    'lazy_importer_test'
+    , ['LazyImporterTest.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
