@@ -49,7 +49,7 @@ enum Mode {
 }
 
 let mode : Mode;
-let modeStr = yargs.argv.mode as string;
+let modeStr = yargs.argv['mode'] as string;
 if (modeStr == 'sender') {
     mode = Mode.Sender;
 } else if (modeStr == 'receiver') {
@@ -58,10 +58,10 @@ if (modeStr == 'sender') {
     console.error(`Unknown mode string '${mode}', must be sender or receiver`);
     process.exit(0);
 }
-let address = yargs.argv.address as string;
-let interval = Math.trunc(yargs.argv.interval as number);
-let bytes = Math.trunc(yargs.argv.bytes as number);
-let summaryPeriod = Math.trunc(yargs.argv.summaryPeriod as number);
+let address = yargs.argv['address'] as string;
+let interval = Math.trunc(yargs.argv['interval'] as number);
+let bytes = Math.trunc(yargs.argv['bytes'] as number);
+let summaryPeriod = Math.trunc(yargs.argv['summaryPeriod'] as number);
 if (mode == Mode.Sender) {
     if (interval <= 0) {
         console.error('sender interval cannot be 0');

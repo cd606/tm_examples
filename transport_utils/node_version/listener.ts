@@ -5,7 +5,7 @@ import * as yargs from 'yargs'
 import * as cbor from 'cbor'
 import * as util from 'util'
 import * as proto from 'protobufjs'
-import * as dateFormat from 'dateformat'
+import * as dateFNS from 'date-fns'
 
 yargs
     .scriptName("listener")
@@ -46,24 +46,24 @@ yargs
     })
     ;
 
-let address = yargs.argv.address as string;
-let topic = yargs.argv.topic as string;
+let address = yargs.argv['address'] as string;
+let topic = yargs.argv['topic'] as string;
 let printMode = "length";
-if (yargs.argv.printMode !== undefined) {
-    printMode = yargs.argv.printMode as string;
+if (yargs.argv['printMode'] !== undefined) {
+    printMode = yargs.argv['printMode'] as string;
 }
 let printer = function(_topic : string, _data : Buffer) {
 }
-let dateFormatStr = "yyyy-mm-dd HH:MM:ss.l";
+let dateFormatStr = "yyyy-MM-dd HH:mm:ss.SSS";
 switch (printMode) {
     case "length":
         printer = function(topic : string, data : Buffer) {
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes`);
+            console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes`);
         }
         break;
     case "string":
         printer = function(topic : string, data : Buffer) {
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': '${data}'`);
+            console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': '${data}'`);
         }
         break;
     case "cbor":
@@ -71,9 +71,9 @@ switch (printMode) {
             try {
                 let x = cbor.decode(data);
                 let xRep = util.inspect(x, {showHidden: false, depth: null, colors: true});
-                console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${xRep}`);
+                console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${xRep}`);
             } catch (e) {
-                console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes, not CBOR data`);
+                console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes, not CBOR data`);
             }
         }
         break;
@@ -84,7 +84,7 @@ switch (printMode) {
     case "bytes":
         printer = function(topic : string, data : Buffer) {
             let dataRep = util.inspect(data, {showHidden: false, depth: null, colors: true});
-            console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${dataRep}`);
+            console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${dataRep}`);
         }
         break;
     default:
@@ -100,9 +100,9 @@ switch (printMode) {
                     try {
                         let x = parser.decode(data);
                         let xRep = util.inspect(x, {showHidden: false, depth: null, colors: true});
-                        console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${xRep}`);
+                        console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${xRep}`);
                     } catch (e) {
-                        console.log(`${dateFormat(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes, not protobuf data`);
+                        console.log(`${dateFNS.format(new Date(), dateFormatStr)}: topic '${topic}': ${data.length} bytes, not protobuf data`);
                     }
                 }
             })
@@ -110,12 +110,12 @@ switch (printMode) {
         break;
 }
 let summaryPeriod = 0;
-if (yargs.argv.summaryPeriod !== undefined) {
-    summaryPeriod = parseInt(yargs.argv.summaryPeriod as string);
+if (yargs.argv['summaryPeriod'] !== undefined) {
+    summaryPeriod = parseInt(yargs.argv['summaryPeriod'] as string);
 }
 let captureFile = "";
-if (yargs.argv.captureFile !== undefined) {
-    captureFile = yargs.argv.captureFile as string;
+if (yargs.argv['captureFile'] !== undefined) {
+    captureFile = yargs.argv['captureFile'] as string;
 }
 
 let count = 0;
