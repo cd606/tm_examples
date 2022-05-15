@@ -46,3 +46,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'tuple_2_variant_test'
+    , ['Tuple2VariantTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)

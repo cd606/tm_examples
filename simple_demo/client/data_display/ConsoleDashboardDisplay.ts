@@ -21,7 +21,7 @@ yargs
         , default: false
     });
 
-let secure = yargs.argv.secure as boolean;
+let secure = yargs.argv['secure'] as boolean;
 
 let decryptKey = Buffer.alloc(sodium.crypto_generichash_BYTES);
 sodium.crypto_generichash(decryptKey, Buffer.from("input_data_key"));
