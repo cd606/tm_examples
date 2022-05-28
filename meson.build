@@ -1,9 +1,15 @@
 project('TM kit examples', 'cpp', default_options: ['cpp_std=c++17'])
 
 inc = include_directories('.')
-tm_infra_dep = dependency('tm_kit_infra')
-tm_basic_dep = dependency('tm_kit_basic')
-tm_transport_dep = dependency('tm_kit_transport')
+if get_option('buildtype') == 'debug'
+  tm_infra_dep = dependency('tm_kit_infra_debug')
+  tm_basic_dep = dependency('tm_kit_basic_debug')
+  tm_transport_dep = dependency('tm_kit_transport_debug')
+else
+  tm_infra_dep = dependency('tm_kit_infra')
+  tm_basic_dep = dependency('tm_kit_basic')
+  tm_transport_dep = dependency('tm_kit_transport')
+endif
 thread_dep = dependency('threads')
 protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
