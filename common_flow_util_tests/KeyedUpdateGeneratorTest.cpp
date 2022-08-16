@@ -61,7 +61,7 @@ int main() {
             if (!v.empty()) {
                 std::ostringstream oss;
                 oss << "Got [";
-                for (int ii=0; ii<v.size(); ++ii) {
+                for (std::size_t ii=0; ii<v.size(); ++ii) {
                     if (ii != 0) {
                         oss << ',';
                     }

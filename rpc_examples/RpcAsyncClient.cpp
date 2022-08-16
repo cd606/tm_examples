@@ -40,7 +40,7 @@ int main() {
                 , {-4, "efg"}
             };
             ++ii;
-            return {ii < values.size()-1, values[ii]};
+            return {ii < ((int) values.size())-1, values[ii]};
         }}
         , {"id", M::constFirstPushImporter<Environment::IDType>(env.new_id())}
     })(r);

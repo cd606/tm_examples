@@ -22,8 +22,6 @@ int main(int argc, char **argv) {
         , transport::CrossGuidComponent
         , transport::AllNetworkTransportComponents
     >;
-    using M = infra::RealTimeApp<Environment>;
-    using R = infra::AppRunner<M>;
 
     Environment env;
 

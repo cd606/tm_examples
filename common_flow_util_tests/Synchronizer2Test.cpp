@@ -50,8 +50,7 @@ int main() {
 
     using CFU = CommonFlowUtilComponents<M>;
     using ARU = AppRunnerUtilComponents<R>;
-    using KU = KleisliUtils<M>;
-
+    
     using IntP = std::shared_ptr<const int>;
 
     DeclarativeGraph<R>("", {
