@@ -5,8 +5,20 @@ executable(
     , dependencies: [common_deps]
 )
 executable(
+    'websocket_server_with_auth'
+    , ['ServerWithAuthentication.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
+executable(
     'websocket_client'
     , ['Client.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps]
+)
+executable(
+    'websocket_client_with_auth'
+    , ['ClientWithAuthentication.cpp']
     , include_directories: inc
     , dependencies: [common_deps]
 )
