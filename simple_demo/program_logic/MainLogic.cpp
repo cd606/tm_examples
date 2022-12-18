@@ -103,7 +103,7 @@ public:
         statusUpdater_(enabled_);
         return simple_demo::ConfigureResultPOCO {enabled_};
     }
-    simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {
+    simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&) {
         logger_("Received outstanding command query");
         simple_demo::OutstandingCommandsResult res;
         std::lock_guard<std::mutex> _(mutex_);
@@ -267,7 +267,7 @@ public:
         statusUpdater_(enabled_);
         return simple_demo::ConfigureResultPOCO {enabled_};
     }
-    simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&query) {
+    simple_demo::OutstandingCommandsResult queryOutstandingCommands(simple_demo::OutstandingCommandsQuery &&) {
         logger_("Received outstanding command query");
         simple_demo::OutstandingCommandsResult res;
         std::lock_guard<std::mutex> _(mutex_);

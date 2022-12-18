@@ -13,6 +13,13 @@ executable(
     , dependencies: [common_deps]
 )
 executable(
+    'ftxui_console_display'
+    , ['FTXUIConsoleDisplay.cpp', test_gen_out]
+    , include_directories: inc
+    , link_with: [tm_simple_demo_proto_lib]
+    , dependencies: [common_deps, dependency('ftxui')]
+)
+executable(
     'http_display_server'
     , ['HttpDisplayServer.cpp', test_gen_out]
     , include_directories: inc
