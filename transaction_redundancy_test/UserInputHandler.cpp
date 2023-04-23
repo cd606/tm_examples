@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
                 [](GS::Input const &, GS::Output const &o) -> bool {
                     return std::visit(
                         [](auto const &x) -> bool {
-                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, typename GS::Subscription>;
                             return ret;
                         }, o.value
                     );
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
                 [](GS::Input const &, GS::Output const &o) -> bool {
                     return std::visit(
                         [](auto const &x) -> bool {
-                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, GS::Subscription>;
+                            auto ret = std::is_same_v<std::decay_t<decltype(x)>, typename GS::Subscription>;
                             return ret;
                         }, o.value
                     );
@@ -297,12 +297,12 @@ int main(int argc, char **argv) {
             auto locator = std::get<0>(o.key.key());
             std::visit([&env,&ids,&id,&locator](auto &&x) {
                 using T = std::decay_t<decltype(x)>;
-                if constexpr (std::is_same_v<T, GS::Subscription>) {
+                if constexpr (std::is_same_v<T, typename GS::Subscription>) {
                     ids[locator] = id;
                     std::ostringstream oss;
                     oss << "Subscription ID for " << locator.toSerializationFormat() << " is " << id;
                     env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T, GS::Unsubscription>) {
+                } else if constexpr (std::is_same_v<T, typename GS::Unsubscription>) {
                     auto iter = ids.find(locator);
                     if (iter != ids.end() && iter->second == x.originalSubscriptionID) {
                         ids.erase(iter);
