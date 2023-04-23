@@ -84,21 +84,21 @@ void diMain(std::string const &cmd, std::string const &idStr, bool synthetic) {
             auto id = o.timedData.value.key.id();
             std::visit([&id,&env](auto const &x) {
                 using T = std::decay_t<decltype(x)>;
-                if constexpr (std::is_same_v<T,GS::Subscription>) {
+                if constexpr (std::is_same_v<T,typename GS::Subscription>) {
                     std::ostringstream oss;
                     oss << "Got subscription ack for " << env.id_to_string(id)
                         << " on " << x.keys.size() << " keys";
                     env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T,GS::Unsubscription>) {
+                } else if constexpr (std::is_same_v<T,typename GS::Unsubscription>) {
                     std::ostringstream oss;
                     oss << "Got unsubscription ack for " << env.id_to_string(x.originalSubscriptionID)
                         << " from " << env.id_to_string(id);
                     env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T,GS::SubscriptionInfo>) {
+                } else if constexpr (std::is_same_v<T,typename GS::SubscriptionInfo>) {
                     std::ostringstream oss;
                     oss << "Got subscription info " << x;
                     env.log(infra::LogLevel::Info, oss.str());
-                } else if constexpr (std::is_same_v<T,GS::UnsubscribeAll>) {
+                } else if constexpr (std::is_same_v<T,typename GS::UnsubscribeAll>) {
                     std::ostringstream oss;
                     oss << "Got unsubscribe-all ack from " << env.id_to_string(id);
                     env.log(infra::LogLevel::Info, oss.str());

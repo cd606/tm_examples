@@ -20,10 +20,10 @@ public:
         encHelper->setKey(EncHelper::keyFromString(encKey_));
         auto signer = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Signer>(signKey_);
         return dev::cd606::tm::transport::composeUserToWireHook(
-            { [encHelper](dev::cd606::tm::basic::ByteData &&d) {
+            std::optional<dev::cd606::tm::transport::UserToWireHook> { [encHelper](dev::cd606::tm::basic::ByteData &&d) {
                 return encHelper->encode(std::move(d));
             } }
-            , { [signer](dev::cd606::tm::basic::ByteData &&d) {
+            , std::optional<dev::cd606::tm::transport::UserToWireHook> { [signer](dev::cd606::tm::basic::ByteData &&d) {
                 return signer->sign(std::move(d));
             } }
         );
@@ -46,7 +46,7 @@ public:
         auto verifier = std::make_shared<dev::cd606::tm::transport::security::SignatureHelper::Verifier>();
         verifier->addKey("", verifyKey_);
         return dev::cd606::tm::transport::composeWireToUserHook(
-            { [verifier](dev::cd606::tm::basic::ByteDataView const &d) -> std::optional<dev::cd606::tm::basic::ByteData> {
+            std::optional<dev::cd606::tm::transport::WireToUserHook> { [verifier](dev::cd606::tm::basic::ByteDataView const &d) -> std::optional<dev::cd606::tm::basic::ByteData> {
                 auto res = verifier->verify(d);
                 if (res) {
                     return std::move(std::get<1>(*res));
@@ -54,7 +54,7 @@ public:
                     return std::nullopt;
                 }
             } }
-            , { [decHelper](dev::cd606::tm::basic::ByteDataView const &d) {
+            , std::optional<dev::cd606::tm::transport::WireToUserHook> { [decHelper](dev::cd606::tm::basic::ByteDataView const &d) {
                 return decHelper->decode(d);
             } }
         );
