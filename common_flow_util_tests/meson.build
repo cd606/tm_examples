@@ -52,3 +52,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'timestamped_collection_test'
+    , ['TimestampedCollectionTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
