@@ -15,6 +15,14 @@ TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_SERIALIZE(TestEnum, (Item1) (Item2) (Item3)
 */
 TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
 TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_SERIALIZE(TestEnum, ((Item1, "first item")) ((Item2, "second item")) ((Item3, "third item")) ((Item4, "fourth item")) ((Item5, "fifth item")));
+#define TEST_ENUM_2_VALUES \
+    ((a, 10)) ((b, 5)) ((c, 20))
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_VALUES(TestEnum2, TEST_ENUM_2_VALUES);
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_VALUES_SERIALIZE(TestEnum2, TEST_ENUM_2_VALUES);
+#define TEST_ENUM_3_VALUES \
+    ((a, "first one", 'A')) ((b, "second one", 5)) ((c, "third one", 'C'))
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_AND_VALUES(TestEnum3, TEST_ENUM_3_VALUES);
+TM_BASIC_CBOR_CAPABLE_ENUM_AS_STRING_WITH_ALTERNATES_AND_VALUES_SERIALIZE(TestEnum3, TEST_ENUM_3_VALUES);
 
 /*
 #define TEST_STRUCT_FIELDS \
@@ -64,7 +72,7 @@ int main(int argc, char **argv) {
     //std::cout << bytedata_utils::DirectlySerializableChecker<TriviallySerializable<std::array<double, 10>>>::IsDirectlySerializable() << '\n';
     using TestType = 
         std::tuple<
-            TestEnum //int32_t
+            TestEnum3 //TestEnum2 //TestEnum //int32_t
             , double
             , std::string
             , std::unique_ptr<ByteDataWithTopic>
@@ -89,7 +97,7 @@ int main(int argc, char **argv) {
     ;
     char buf[10] = {0x1, 0x2, 0x3, 0x4, 0x5, (char) 0xff, (char) 0xfe, (char) 0xfd, (char) 0xfc, (char) 0xfb};
     TestType t {
-        TestEnum::Item3 //-5
+	TestEnum3::a //TestEnum2::b //TestEnum::Item3 //-5
         , 2.3E7
         , "this is a test"
         , std::make_unique<ByteDataWithTopic>(
@@ -231,6 +239,7 @@ int main(int argc, char **argv) {
         }
         std::cout << "]}\n";
         std::cout << "}\n";
+        std::cout << static_cast<int>(std::get<0>(data)) << '\n';
     } else {
         std::cout << "Decode failure\n";
     }
