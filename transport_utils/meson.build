@@ -60,3 +60,9 @@ tm_rpc_delay_measurer_exe = executable(
     , include_directories: inc
     , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
 )
+tm_sender_exe = executable(
+    'tm_sender'
+    , ['sender.cpp']
+    , include_directories: inc
+    , dependencies: [common_deps, more_boost_dep, dependency('libzmq')]
+)
