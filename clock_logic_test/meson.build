@@ -10,3 +10,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'clock_stop_test'
+    , ['ClockStopTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)
