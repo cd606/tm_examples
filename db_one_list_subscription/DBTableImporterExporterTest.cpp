@@ -9,6 +9,7 @@
 #include <tm_kit/basic/SpdLoggingComponent.hpp>
 #include <tm_kit/basic/CommonFlowUtils.hpp>
 #include <tm_kit/basic/TimePointAsString.hpp>
+#include <tm_kit/basic/FixedPrecisionShortDecimal.hpp>
 
 #include <tm_kit/transport/db_table_importer_exporter/DBTableImporterFactory.hpp>
 #include <tm_kit/transport/db_table_importer_exporter/DBTableExporterFactory.hpp>
@@ -31,7 +32,7 @@ using SR = infra::SynchronousRunner<M>;
 #define TestDataFields \
     ((std::string, name)) \
     ((int32_t, amount)) \
-    ((double, stat)) \
+    ((dev::cd606::tm::basic::FixedPrecisionShortDecimal<4>, stat)) \
     ((std::chrono::system_clock::time_point, time1)) \
     ((dev::cd606::tm::basic::TimePointAsString<dev::cd606::tm::basic::time_zone_spec::Local>, time2))
 
@@ -114,8 +115,8 @@ int main(int argc, char **argv) {
         R r(&env);
         infra::DeclarativeGraph<R>("", {
             {"importer", M::constFirstPushImporter<std::vector<test_data>>({
-                {"test1", 1, 1.2, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
-                , {"test2", 2, 2.3, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
+                {"test1", 1, basic::FixedPrecisionShortDecimal<4> {1.2}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
+                , {"test2", 2, basic::FixedPrecisionShortDecimal<4> {2.3}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
             })}
             , {"dispatch", basic::CommonFlowUtilComponents<M>::dispatchOneByOne<test_data>()}
             , {"insert", transport::db_table_importer_exporter::DBTableExporterFactory<M>::createExporter<test_data>(session, "test_table")}
@@ -128,8 +129,8 @@ int main(int argc, char **argv) {
         R r(&env);
         infra::DeclarativeGraph<R>("", {
             {"importer", M::constFirstPushImporter<std::vector<test_data>>({
-                {"test1", 1, 1.2, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
-                , {"test2", 2, 2.3, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
+                {"test1", 1, basic::FixedPrecisionShortDecimal<4> {1.2}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
+                , {"test2", 2, basic::FixedPrecisionShortDecimal<4> {2.3}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
             })}
             , {"insert", transport::db_table_importer_exporter::DBTableExporterFactory<M>::createBatchExporter<test_data>(session, "test_table")}
             , {"importer", "insert"}
@@ -169,8 +170,8 @@ int main(int argc, char **argv) {
         auto ex = transport::db_table_importer_exporter::DBTableExporterFactory<M>::createExporter<test_data>(session, "test_table");
         auto iter = r.exporterIterator(ex);
         std::vector<test_data> v {
-            {"test1", 1, 1.2, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
-            , {"test2", 2, 2.3, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
+            {"test1", 1, basic::FixedPrecisionShortDecimal<4> {1.2}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
+            , {"test2", 2, basic::FixedPrecisionShortDecimal<4> {2.3}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
         };
         for (auto &&x: v) {
             //r.exportItem(ex, std::move(x));
@@ -181,8 +182,8 @@ int main(int argc, char **argv) {
         SR r(&env);
         auto ex = transport::db_table_importer_exporter::DBTableExporterFactory<M>::createBatchExporter<test_data>(session, "test_table");
         r.exportItem(ex, std::vector<test_data> {
-            {"test1", 1, 1.2, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
-            , {"test2", 2, 2.3, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
+            {"test1", 1, basic::FixedPrecisionShortDecimal<4> {1.2}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T10:00:01.123456")}}
+            , {"test2", 2, basic::FixedPrecisionShortDecimal<4> {2.3}, std::chrono::system_clock::now(), basic::TimePointAsString<basic::time_zone_spec::Local> {infra::withtime_utils::parseLocalTime("2023-01-01T11:00:02.234567")}}
         });
     }
     return 0;
