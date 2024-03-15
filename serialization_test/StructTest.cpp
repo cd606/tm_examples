@@ -1,6 +1,8 @@
 #include <tm_kit/basic/ByteData.hpp>
 #include <tm_kit/basic/PrintHelper.hpp>
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/MetaInformation.hpp>
+#include <tm_kit/basic/NlohmannJsonInterop.hpp>
 #include <iostream>
 #include <fstream>
 
@@ -90,5 +92,10 @@ int main(int argc, char **argv) {
                 std::cout << "Failure\n";
             }
         }
+    } else if (std::string_view(argv[1]) == "meta") {
+        basic::PrintHelper<basic::MetaInformation>::print(std::cout, basic::MetaInformationGenerator<T>::generate());
+        std::cout << '\n';
+        basic::nlohmann_json_interop::Json<basic::MetaInformation>(basic::MetaInformationGenerator<T>::generate()).writeToStream(std::cout);
+        std::cout << '\n';
     }
 }
