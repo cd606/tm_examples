@@ -34,7 +34,7 @@ TM_BASIC_CBOR_CAPABLE_STRUCT_SERIALIZE(MyStruct, MY_STRUCT_FIELDS);
 #undef INFO_STRUCT_FIELDS
 #undef MY_STRUCT_FIELDS
 
-using OneItem = dev::cd606::tm::basic::NamedItem<"i", int>;
+using OneItem = TM_BASIC_NAMED_ITEM_TYPE("i", int);
 
 // Redefine assert after including headers. Release builds may undefine the assert macro and result
 // in -Wunused-variable warnings.
