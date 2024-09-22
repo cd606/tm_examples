@@ -19,28 +19,28 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
         using TheEnvironment = typename R::EnvironmentType;
         using FileComponent = typename basic::template ByteDataWithTopicRecordFileImporterExporter<M>;
 
-        using namespace dev::cd606::tm::infra;
+        //using namespace dev::cd606::tm::infra;
 
         auto importer1 = ClockImporterExporter::template createRecurringClockImporter<std::string>(
-            withtime_utils::parseLocalTime("2020-01-01T10:00:00.0121")
-            , withtime_utils::parseLocalTime("2020-01-01T10:01:00.012")
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:00.0121")
+            , infra::withtime_utils::parseLocalTime("2020-01-01T10:01:00.012")
             , std::chrono::seconds(5)
             , [](typename TheEnvironment::TimePointType const &tp) {
-                return "RECURRING "+withtime_utils::localTimeString(tp);
+                return "RECURRING "+infra::withtime_utils::localTimeString(tp);
             }
         );
         auto importer2 = ClockImporterExporter::template createRecurringClockImporter<std::string>(
-            withtime_utils::parseLocalTime("2020-01-01T10:00:12")
-            , withtime_utils::parseLocalTime("2020-01-01T10:00:28")
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:12")
+            , infra::withtime_utils::parseLocalTime("2020-01-01T10:00:28")
             , std::chrono::seconds(16)
             , [](typename TheEnvironment::TimePointType const &tp) {
-                return "ONESHOT "+withtime_utils::localTimeString(tp);
+                return "ONESHOT "+infra::withtime_utils::localTimeString(tp);
             }
         );
         auto importer3 = ClockImporterExporter::template createOneShotClockImporter<std::string>(
-            withtime_utils::parseLocalTime("2020-01-01T10:00:27")
+            infra::withtime_utils::parseLocalTime("2020-01-01T10:00:27")
             , [](typename TheEnvironment::TimePointType const &tp) {
-                return "ONESHOT "+withtime_utils::localTimeString(tp);
+                return "ONESHOT "+infra::withtime_utils::localTimeString(tp);
             }
         );
 
@@ -65,7 +65,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             }
             , [](typename TheEnvironment::TimePointType const &tp, typename TheEnvironment::DurationType const &, std::size_t thisIdx, std::size_t total, std::string &&inputStr) -> std::vector<std::string> {
                 std::ostringstream oss;
-                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << withtime_utils::localTimeString(tp);
+                oss << std::string("CALLBACK (") << thisIdx << " out of " << total << ") " << infra::withtime_utils::localTimeString(tp);
                 return {oss.str()};
             }
             , "clockFacility"
@@ -79,14 +79,14 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , {"print", [](typename M::template InnerData<std::string> &&s) {
                 std::ostringstream oss;
                 oss << s.timedData;
-                s.environment->log(LogLevel::Info, oss.str());
+                s.environment->log(infra::LogLevel::Info, oss.str());
             } }
             , {"print2", [](typename M::template InnerData<typename M::template KeyedData<std::string,std::string>> &&s) {
                 std::ostringstream oss;
                 oss << s.timedData;
-                s.environment->log(LogLevel::Info, oss.str());
+                s.environment->log(infra::LogLevel::Info, oss.str());
             } }
-            , {"converter", withtime_utils::keyify<std::string, typename M::EnvironmentType>}
+            , {"converter", infra::withtime_utils::keyify<std::string, typename M::EnvironmentType>}
             , {"clockFacilityOutput", [](typename M::template KeyedData<std::string,std::string> &&s2) -> std::string {
                 return s2.key.key()+" --- "+s2.data;
             } }
@@ -98,7 +98,7 @@ namespace dev { namespace cd606 { namespace tm { namespace clock_logic_test_app 
             , {"addTopic", addTopic}
             , {"facility", facility}
             //connections
-            , DeclarativeGraphChain {{"recurring", "addTopic", "serialize", "fileSink"}}
+            , infra::DeclarativeGraphChain {{"recurring", "addTopic", "serialize", "fileSink"}}
             , {"recurring", "print"}
             , {"oneShot1", "converter"}, {"converter", "facility", "print2"}
             , {"clockFacilityOutput", "print"}
