@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
          
             basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>> r;
             r->id = q->id;
-            r->value.value = q->value*2.0;
+            r->value.value = q->value*(transport::bcl_compat::BclDecimal) 2.0;
             r->messages.value.push_back(q->description.value);
             r->ts = q->ts;
             r->dt = std::chrono::system_clock::now();
