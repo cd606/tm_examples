@@ -33,10 +33,10 @@ int main(int argc, char **argv) {
                 std::cout, *q
             );
             std::cout << "\n";
-         
+
             basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>> r;
             r->id = q->id;
-            r->value.value = q->value*2.0;
+            r->value.value = q->value*transport::bcl_compat::BclDecimal("2.0");
             r->messages.value.push_back(q->description.value);
             r->ts = q->ts;
             r->dt = std::chrono::system_clock::now();
@@ -46,13 +46,13 @@ int main(int argc, char **argv) {
     );
     r.registerOnOrderFacility("facility", facility);
     transport::MultiTransportFacilityWrapper<R>::wrap<
-        basic::proto_interop::Proto<bcl_compat_test::QueryNoCodeGen<Environment>> 
+        basic::proto_interop::Proto<bcl_compat_test::QueryNoCodeGen<Environment>>
         , basic::proto_interop::Proto<bcl_compat_test::ResultNoCodeGen<Environment>>
     >(
         //r, facility, "redis://127.0.0.1:6379:::bcl_test_queue", "wrapper/"
         r, facility, "rabbitmq://127.0.0.1::guest:guest:bcl_test_queue", "wrapper/"
     );
-    
+
     r.finalize();
     infra::terminationController(infra::RunForever {});
 
