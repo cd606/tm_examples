@@ -145,10 +145,12 @@ public:
     }
     TI::TransactionResponse handleInsert(std::string const &account, TI::Key const &key, TI::Data const &data) override final {
         if (session_) {
+	    auto const &val1 = data.value1();	
+	    auto const &val2 = data.value2();	
             (*session_) << "INSERT INTO test_table(name, value1, value2) VALUES(:name, :val1, :val2)"
                         , soci::use(key, "name")
-                        , soci::use(data.value1(), "val1")
-                        , soci::use(data.value2(), "val2");
+                        , soci::use(val1, "val1")
+                        , soci::use(val2, "val2");
             TI::TransactionResponse resp {++globalVersion_, basic::transaction::v2::RequestDecision::Success};
             triggerCallback(resp, key, data);
             return resp;
@@ -158,10 +160,12 @@ public:
     }
     TI::TransactionResponse handleUpdate(std::string const &account, TI::Key const &key, std::optional<TI::VersionSlice> const &updateVersionSlice, TI::ProcessedUpdate const &processedUpdate) override final {
         if (session_) {
+	    auto const &val1 = processedUpdate.value1();
+	    auto const &val2 = processedUpdate.value2();
             (*session_) << "UPDATE test_table SET value1 = :val1, value2 = :val2 WHERE name = :name"
                         , soci::use(key, "name")
-                        , soci::use(processedUpdate.value1(), "val1")
-                        , soci::use(processedUpdate.value2(), "val2");
+                        , soci::use(val1, "val1")
+                        , soci::use(val2, "val2");
             TI::TransactionResponse resp {++globalVersion_, basic::transaction::v2::RequestDecision::Success};
             triggerCallback(resp, key, processedUpdate);
             return resp;
