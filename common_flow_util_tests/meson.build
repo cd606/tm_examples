@@ -58,3 +58,9 @@ executable(
     , include_directories: inc
     , dependencies: common_deps
 )
+executable(
+    'mem_test'
+    , ['MemTest.cpp']
+    , include_directories: inc
+    , dependencies: common_deps
+)

@@ -129,17 +129,25 @@ int main() {
     fd->amount = 1;
     fd->inside.i = -10;
     fd->moreData[2].stat = 0.5;
-    std::cout << *fd << '\n';
 
     std::string flatStr;
-    fd.writeToString(&flatStr);
+    std::cout << "Will do flatpack serialization\n";
+    std::cout << *fd << '\n';
+    flatStr = basic::bytedata_utils::RunSerializer<decltype(fd)>::apply(fd);
+    //fd.writeToString(&flatStr);
 
     basic::bytedata_utils::printByteDataDetails(std::cout, basic::ByteDataView {flatStr});
     std::cout << '\n';
 
-    basic::struct_field_info_utils::FlatPack<flatpack_test_data> fd1;
-    if (fd1.fromString(flatStr)) {
-        std::cout << *fd1 << '\n';
+    std::cout << "Will do flatpack deserialization\n";
+    std::optional<basic::struct_field_info_utils::FlatPack<flatpack_test_data>> fd1 = basic::bytedata_utils::RunDeserializer<decltype(fd)>::apply(flatStr);
+
+    //if (fd1.fromString(flatStr)) {
+    if (fd1) {
+        std::cout << "Success!\n";
+        std::cout << *(*fd1) << '\n';
+    } else {
+        std::cout << "Failure!\n";
     }
    
     test_data d;
