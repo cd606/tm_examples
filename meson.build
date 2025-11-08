@@ -20,7 +20,21 @@ protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
 redis_dep = [dependency('hiredis')]
 nng_dep = [dependency('nngpp')]
-boost_log_dep = dependency('boost', modules : ['log','log_setup', 'regex', 'random', 'system', 'thread', 'filesystem'])
+boost_modules = ['log', 'log_setup', 'random', 'thread', 'filesystem']
+
+# Try adding 'system'
+boost_log_dep = dependency('boost',
+  modules : boost_modules + ['system'],
+  required : false
+)
+
+# If Boost with 'system' not found, retry without it
+if not boost_log_dep.found()
+  boost_log_dep = dependency('boost',
+    modules : boost_modules,
+    required : true
+  )
+endif
 spd_dep = dependency('spdlog')
 crossguid_dep = dependency('crossguid')
 nlohmann_json_dep = dependency('nlohmann-json')
