@@ -48,10 +48,16 @@ int main() {
     std::vector<std::tuple<
         std::string, std::string, bool
     >> descriptors {
+        /*
         {"redis://127.0.0.1:6379:::rpc_example_simple", "SIMPLE RPC", false}
         , {"redis://127.0.0.1:6379:::rpc_example_client_stream", "CLIENT STREAM RPC", true}
         , {"redis://127.0.0.1:6379:::rpc_example_server_stream", "SERVER STREAM RPC", false}
         , {"redis://127.0.0.1:6379:::rpc_example_both_stream", "BOTH STREAM RPC", true}
+        */
+       {"nats://127.0.0.1:4222:::rpc_example_simple", "SIMPLE RPC", false}
+        , {"nats://127.0.0.1:4222:::rpc_example_client_stream", "CLIENT STREAM RPC", true}
+        , {"nats://127.0.0.1:4222:::rpc_example_server_stream", "SERVER STREAM RPC", false}
+        , {"nats://127.0.0.1:4222:::rpc_example_both_stream", "BOTH STREAM RPC", true}
     };
     for (auto const &desc : descriptors) {
         infra::DeclarativeGraph<R>("", {

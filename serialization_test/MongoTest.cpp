@@ -10,7 +10,9 @@
 #include <bsoncxx/json.hpp>
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
+#if __has_include(<mongocxx/stdx.hpp>)
 #include <mongocxx/stdx.hpp>
+#endif
 #include <mongocxx/uri.hpp>
 
 #include <tm_kit/basic/NlohmannJsonInterop.hpp>

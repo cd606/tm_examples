@@ -46,7 +46,8 @@ int main() {
         transport::MultiTransportFacilityWrapper<R>::wrap<rpc_examples::Input,rpc_examples::Output>(
             r 
             , f
-            , "redis://127.0.0.1:6379:::rpc_example_"+std::get<1>(spec)
+            //, "redis://127.0.0.1:6379:::rpc_example_"+std::get<1>(spec)
+            , "nats://127.0.0.1:4222:::rpc_example_"+std::get<1>(spec)
             , std::get<1>(spec)+"_wrapper"
         );
     }

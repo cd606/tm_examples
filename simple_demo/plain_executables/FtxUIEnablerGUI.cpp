@@ -17,6 +17,7 @@
     #define FTXUI_OLD_STYLE_COMPONENT 0
 #endif
 #include <ftxui/component/screen_interactive.hpp>
+#include "prebuild/FtxuiInfo.hpp"
 
 #if FTXUI_OLD_STYLE_COMPONENT == 1
 class EnablerGUIComponent : public ftxui::Component {
@@ -88,7 +89,11 @@ public:
             displayText_ = L"Disabled";
         }
     }
+#if (defined(FTXUI_COMPONENT_BASE_HAS_ON_RENDER_FOR_MACRO) && FTXUI_COMPONENT_BASE_HAS_ON_RENDER_FOR_MACRO)
+    ftxui::Element OnRender() override {
+#else        
     ftxui::Element Render() override {
+#endif
         return ftxui::vbox({
             ftxui::text(displayText_) | ftxui::hcenter
             , ftxui::hbox({

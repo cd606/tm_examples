@@ -68,7 +68,7 @@ executable(
 
 executable(
     'ftxui_enabler'
-    , ['FtxUIEnablerGUI.cpp', test_gen_out]
+    , ['FtxUIEnablerGUI.cpp', test_gen_out, prebuild_ftxui_info_header]
     , include_directories: inc
     , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
     , dependencies: [common_deps, dependency('ftxui')]
