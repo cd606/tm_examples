@@ -10,12 +10,14 @@ executable(
     , include_directories: inc
     , dependencies: [common_deps]
 )
-executable(
-    'mongo_test'
-    , ['MongoTest.cpp']
-    , include_directories: inc
-    , dependencies: [common_deps, dependency('libmongocxx-static'), dependency('libbsoncxx')]
-)
+if build_machine.system() == 'windows'
+  executable(
+      'mongo_test'
+      , ['MongoTest.cpp']
+      , include_directories: inc
+      , dependencies: [common_deps, dependency('libmongocxx-static'), dependency('libbsoncxx')]
+  )
+endif
 executable(
     'variant_test'
     , ['VariantTest.cpp']
