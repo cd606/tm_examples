@@ -1,6 +1,8 @@
 #ifdef _MSC_VER
 #define WIN32
-#define WINVER 0x0400
+#ifndef WINVER
+#define WINVER 0x0601
+#endif
 #define __WXMSW__
 #define WXUSINGDLL
 #define wxUSE_GUI 1
