@@ -88,7 +88,7 @@ public:
             displayText_ = L"Disabled";
         }
     }
-    ftxui::Element Render() override {
+    ftxui::Element OnRender() override {
         return ftxui::vbox({
             ftxui::text(displayText_) | ftxui::hcenter
             , ftxui::hbox({

@@ -14,7 +14,7 @@ executable(
     'mongo_test'
     , ['MongoTest.cpp']
     , include_directories: inc
-    , dependencies: [common_deps, dependency('libmongocxx-static')]
+    , dependencies: [common_deps, dependency('libmongocxx-static'), dependency('libbsoncxx')]
 )
 executable(
     'variant_test'

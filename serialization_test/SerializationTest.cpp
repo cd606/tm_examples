@@ -5,6 +5,7 @@
 #include <iomanip>
 
 #include <tm_kit/basic/SerializationHelperMacros.hpp>
+#include <tm_kit/basic/StructFieldInfoBasedTraverse.hpp>
 
 using namespace dev::cd606::tm::basic;
 using namespace dev::cd606::tm::infra;
@@ -167,7 +168,7 @@ int main(int argc, char **argv) {
     //auto decoded = bytedata_utils::RunDeserializer<TestType>::apply(encoded);
     if (decoded) {
         std::cout << "Decode success\n";
-        TestType const &data = std::get<0>(*decoded);
+        TestType &data = std::get<0>(*decoded);
         //TestType const &data = decoded->value;
         //TestType const &data = *decoded;
         PrintHelper<TestType>::print(std::cout, data);
@@ -240,6 +241,13 @@ int main(int argc, char **argv) {
         std::cout << "]}\n";
         std::cout << "}\n";
         std::cout << static_cast<int>(std::get<0>(data)) << '\n';
+
+        auto f = [](std::string const &x) {
+            std::cout << "Handling " << x << '\n';
+        };
+        struct_field_info_utils::StructFieldInfoBasedTraverse<TestType>::fold(data, f);
+        PrintHelper<TestType>::print(std::cout, data);
+        std::cout << '\n';
     } else {
         std::cout << "Decode failure\n";
     }
