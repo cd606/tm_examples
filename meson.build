@@ -19,6 +19,7 @@ thread_dep = dependency('threads')
 protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
 redis_dep = [dependency('hiredis')]
+nats_dep = [dependency('libnats')]
 nng_dep = [dependency('nngpp')]
 boost_modules = ['log', 'log_setup', 'random', 'thread', 'filesystem']
 
@@ -43,7 +44,7 @@ if build_machine.system() == 'windows'
   rt_link_args += ['-lws2_32']
 endif
 rt_dep = declare_dependency(link_args: rt_link_args)
-common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep, nlohmann_json_dep, rt_dep]
+common_deps = [tm_infra_dep, tm_basic_dep, tm_transport_dep, thread_dep, protobuf_dep, redis_dep, nats_dep, nng_dep, boost_log_dep, spd_dep, crossguid_dep, nlohmann_json_dep, rt_dep]
 
 
 protobuf_gen = generator(protoc, \
@@ -65,6 +66,7 @@ if build_machine.system() == 'windows'
     add_global_link_arguments('/NODEFAULTLIB:libcmt.lib', language: 'cpp')
 endif
 
+subdir('prebuild')
 subdir('clock_logic_test')
 subdir('common_flow_util_tests')
 subdir('transport_utils')

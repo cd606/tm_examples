@@ -20,7 +20,7 @@ executable(
 )
 executable(
     'ftxui_enable_client'
-    , ['FTXUIMain.cpp']
+    , ['FTXUIMain.cpp', prebuild_ftxui_info_header]
     , include_directories: [inc]
     , link_with: [enable_client_gui_library]
     , dependencies: [common_deps, dependency('ftxui')]

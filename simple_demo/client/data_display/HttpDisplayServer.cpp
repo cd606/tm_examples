@@ -53,7 +53,7 @@ public:
                         std::lock_guard<std::mutex> _(*valueStorageMutex_);
                         oss << std::fixed << std::setprecision(6) << *valueStorage_;
                     }
-                    
+
                     auto *res = new http::response<http::string_body> {http::status::ok, req_.version()};
                     res->set(http::field::server, BOOST_BEAST_VERSION_STRING);
                     res->set(http::field::content_type, "text/plain");
@@ -133,6 +133,10 @@ int main(int argc, char **argv) {
     //we don't need the termination controller here because the main loop
     //is taken over by io_service.run()
 
-    boost::asio::io_context::work work(io_service);
+    #if BOOST_VERSION >= 108700
+        auto work_guard = boost::asio::make_work_guard(io_service);
+    #else
+        boost::asio::io_context::work work(io_service);
+    #endif
     io_service.run();
 }
