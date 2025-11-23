@@ -18,7 +18,7 @@ endif
 thread_dep = dependency('threads')
 protoc = find_program('protoc')
 protobuf_dep = dependency('protobuf')
-redis_dep = [dependency('hiredis')]
+redis_dep = [dependency('hiredis'), dependency('hiredis_ssl', required: false)]
 nats_dep = [dependency('libnats')]
 nng_dep = [dependency('nngpp')]
 boost_modules = ['log', 'log_setup', 'random', 'thread', 'filesystem']
