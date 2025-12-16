@@ -1,0 +1,17 @@
+{
+    "name": "clock_logic_test",
+    "private": true,
+    "type": "commonjs",
+    "scripts": {
+        "build": "tsc",
+        "start": "node build/main.js"
+    },
+    "dependencies": {
+        "@dev_cd606/tm_basic": "file:../../../tm_basic/node_lib",
+        "@dev_cd606/tm_infra": "file:../../../tm_infra/node_lib"
+    },
+    "devDependencies": {
+        "@types/node": "^25.0.2",
+        "typescript": "^5.9.3"
+    }
+}
