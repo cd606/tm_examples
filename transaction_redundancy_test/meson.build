@@ -1,5 +1,5 @@
 transaction_redundancy_test_dep = [
-    dependency('linenoise-ng')
+    linenoise_dep
     , dependency('libetcdcpp')
     , dependency('boost', modules: ['program_options'])
 #    , dependency('google_cloud_cpp_common')
@@ -14,7 +14,7 @@ executable(
     , dependencies: [common_deps, transaction_redundancy_test_dep]
 )
 # to make it easier to go between Linux and Windows
-# , as of now, this example uses pre-generated protobuf 
+# , as of now, this example uses pre-generated protobuf
 # headers and sources
 executable(
     'transaction_server'
