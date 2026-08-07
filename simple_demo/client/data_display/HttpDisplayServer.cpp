@@ -17,7 +17,11 @@ namespace http = boost::beast::http;
 
 class ConnectionHandler {
 private:
+#if BOOST_VERSION >= 108700
     boost::asio::io_context *svc_;
+#else
+    boost::asio::io_service *svc_;
+#endif
     tcp::acceptor *acceptor_;
     tcp::socket socket_;
     boost::beast::flat_buffer buffer_;
@@ -26,7 +30,11 @@ private:
     std::mutex *valueStorageMutex_;
     std::string path_;
 public:
+#if BOOST_VERSION >= 108700
     ConnectionHandler(boost::asio::io_context *svc, tcp::acceptor *acceptor, double *valueStorage, std::mutex *valueStorageMutex, std::string const &path)
+#else
+    ConnectionHandler(boost::asio::io_service *svc, tcp::acceptor *acceptor, double *valueStorage, std::mutex *valueStorageMutex, std::string const &path)
+#endif
         :
         svc_(svc), acceptor_(acceptor)
         , socket_(*svc), buffer_(), req_()
@@ -95,7 +103,11 @@ int main(int argc, char **argv) {
         return 0;
     }
     int port = (argc>=3)?std::atoi(argv[2]):23456;
+#if BOOST_VERSION >= 108700
     boost::asio::io_context io_service;
+#else
+    boost::asio::io_service io_service;
+#endif
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
     double valueStorage;
     std::mutex valueStorageMutex;
