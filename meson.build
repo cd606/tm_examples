@@ -5,6 +5,8 @@ add_project_arguments(
   language: 'cpp'
 )
 
+subdir('external')
+
 inc = include_directories('.')
 if get_option('buildtype') == 'debug'
   tm_infra_dep = dependency('tm_kit_infra_debug')

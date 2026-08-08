@@ -39,29 +39,40 @@ secure_gui_library = static_library(
     , dependencies: [common_deps]
 )
 
-executable(
-    'fltk_enabler'
-    , ['FltkEnablerGUI.cpp', test_gen_out]
-    , include_directories: inc
-    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
-    , dependencies: [common_deps, dependency('fltk')]
-    , gui_app: true
-)
-
-if build_machine.system() == 'windows'
-    wx = dependency('wxwidgets-vcpkg')
+fltk_dep = dependency('fltk', required: false)
+if fltk_dep.found()
+    executable(
+        'fltk_enabler'
+        , ['FltkEnablerGUI.cpp', test_gen_out]
+        , include_directories: inc
+        , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
+        , dependencies: [common_deps, fltk_dep]
+        , gui_app: true
+    )
+    message('Building secure fltk_enabler (FLTK found)')
 else
-    wx = dependency('wxwidgets')
+    message('Skipping secure fltk_enabler (FLTK not found)')
 endif
 
-executable(
-    'wx_enabler'
-    , ['WxEnablerGUI.cpp', test_gen_out]
-    , include_directories: inc
-    , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
-    , dependencies: [common_deps, wx]
-    , gui_app: true
-)
+if build_machine.system() == 'windows'
+    wx = dependency('wxwidgets-vcpkg', required: false)
+else
+    wx = dependency('wxwidgets', required: false)
+endif
+
+if wx.found()
+    executable(
+        'wx_enabler'
+        , ['WxEnablerGUI.cpp', test_gen_out]
+        , include_directories: inc
+        , link_with: [tm_simple_demo_proto_lib, tm_simple_demo_security_logic_lib, secure_gui_library]
+        , dependencies: [common_deps, wx]
+        , gui_app: true
+    )
+    message('Building secure wx_enabler (wxWidgets found)')
+else
+    message('Skipping secure wx_enabler (wxWidgets not found)')
+endif
 
 #FTXUI library is from https://github.com/ArthurSonzogni/FTXUI
 #it can easily be built with cmake
